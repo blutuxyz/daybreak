@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Daybreak"
 include(":app")
+include(":untis")
