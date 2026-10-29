@@ -1,3 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Daybreak</string>
+
+    <string name="nav_timetable">Stundenplan</string>
+    <string name="nav_settings">Einstellungen</string>
+
+    <string name="action_today">Heute</string>
+    <string name="action_refresh">Aktualisieren</string>
+    <string name="action_retry">Erneut versuchen</string>
+    <string name="action_close">Schließen</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_save">Speichern</string>
+    <string name="action_back">Zurück</string>
+
+    <string name="language_german">Deutsch</string>
+    <string name="language_english">English</string>
+
+    <string name="error_network">Keine Verbindung zu WebUntis. Die zuletzt gespeicherten Daten bleiben verfügbar.</string>
+    <string name="error_auth">Anmeldung fehlgeschlagen. Prüfe Server, Schule, Benutzername und Schlüssel.</string>
+    <string name="error_second_factor">Für dieses Konto ist ein zweiter Faktor erforderlich.</string>
+    <string name="error_no_student">Mit diesem Konto ist keine Schülerin und kein Schüler verknüpft.</string>
+    <string name="error_parse">WebUntis hat eine unerwartete Antwort geliefert.</string>
+    <string name="error_generic">Etwas ist schiefgelaufen. Bitte versuche es erneut.</string>
+
+    <string name="login_hero_title">Daybreak</string>
+    <string name="login_hero_subtitle">Dein Stundenplan. Klar, ruhig und immer dabei.</string>
+    <string name="login_title">Anmelden</string>
+    <string name="login_subtitle">Verbinde Daybreak mit deinem WebUntis-Konto.</string>
+    <string name="login_tab_qr">QR-Code</string>
+    <string name="login_tab_manual">Manuell</string>
+    <string name="login_tab_password">Passwort</string>
+    <string name="login_qr_scan_title">Mit QR-Code anmelden</string>
+    <string name="login_qr_help">Scanne den QR-Code aus WebUntis unter Profil → Freigaben → Zugriff über Untis Mobile. Der Schlüssel wird verschlüsselt gespeichert.</string>
+    <string name="login_scan_qr">QR-Code scannen</string>
+    <string name="login_qr_payload">QR-Code-Inhalt</string>
+    <string name="login_qr_payload_hint">untis://setschool?…</string>
+    <string name="login_toggle_visibility">Sichtbarkeit umschalten</string>
+    <string name="login_qr_manual_hint">Du kannst den QR-Code-Inhalt auch aus der Zwischenablage einfügen.</string>
+    <string name="login_server">Server</string>
+    <string name="login_server_hint">schule.webuntis.com</string>
+    <string name="login_school">Schule</string>
+    <string name="login_username">Benutzername</string>
+    <string name="login_secret">Schlüssel</string>
+    <string name="login_password">Passwort</string>
+    <string name="login_second_factor">Bestätigungscode</string>
+    <string name="login_second_factor_hint">Wird nur bei aktivierter Zwei-Faktor-Authentifizierung benötigt.</string>
+    <string name="login_manual_hint">Du findest Server, Schule und Schlüssel im Untis-Mobile-QR-Code.</string>
+    <string name="login_password_hint">Daybreak verwendet dein Passwort nur einmalig, um den Zugangsschlüssel abzurufen. Das Passwort wird nicht gespeichert.</string>
+    <string name="login_button">Anmelden</string>
+    <string name="login_loading">Anmeldung läuft…</string>
+    <string name="login_unofficial">Daybreak ist nicht mit Untis GmbH verbunden. Die inoffizielle mobile API kann sich ändern.</string>
+    <string name="login_error_invalid_qr">Der Inhalt ist kein gültiger Untis-Mobile-QR-Code.</string>
+    <string name="login_error_invalid_input">Bitte fülle alle benötigten Felder aus.</string>
+    <string name="login_error_storage">Der Schlüssel konnte nicht sicher gespeichert werden. Bitte versuche es erneut.</string>
+    <string name="login_error_scanner">Der QR-Scanner ist nicht verfügbar. Füge den QR-Code-Inhalt stattdessen manuell ein.</string>
+    <string name="login_choose_student_title">Schülerin oder Schüler wählen</string>
+    <string name="login_choose_student_body">Für dieses Konto sind mehrere Personen hinterlegt. Wessen Stundenplan möchtest du sehen?</string>
+
+    <string name="timetable_title">Stundenplan</string>
+    <string name="timetable_day">Tag</string>
+    <string name="timetable_week">Woche</string>
+    <string name="today">Heute</string>
+    <string name="tomorrow">Morgen</string>
+    <string name="yesterday">Gestern</string>
+    <string name="timetable_calendar_week">KW %1$d</string>
+    <string name="timetable_week_subtitle">KW %1$d · %2$s – %3$s</string>
+    <string name="timetable_last_sync">Zuletzt aktualisiert um %1$s</string>
+    <plurals name="timetable_lesson_count">
+        <item quantity="one">%1$d Stunde</item>
+        <item quantity="other">%1$d Stunden</item>
+    </plurals>
+    <string name="timetable_no_lessons">Keine Stunden</string>
+    <string name="timetable_empty_today_title">Heute ist frei</string>
+    <string name="timetable_empty_title">Keine Stunden</string>
+    <string name="timetable_empty_week_title">Diese Woche ist frei</string>
+    <string name="timetable_empty_body">Genieß die Zeit – oder schau später noch einmal vorbei.</string>
+    <string name="timetable_load_error">Stundenplan konnte nicht geladen werden</string>
+    <string name="timetable_offline">Offline · %1$s</string>
+    <string name="timetable_swipe_hint">Wische horizontal, um den Tag zu wechseln.</string>
+    <string name="now">Jetzt</string>
+
+    <string name="lesson_unknown_subject">Unterricht</string>
+    <string name="lesson_cancelled">Entfall</string>
+    <string name="lesson_room_changed">Raumwechsel</string>
+    <string name="lesson_teacher_changed">Vertretung</string>
+    <string name="lesson_substitution">Vertretung</string>
+    <string name="lesson_changed">Geändert</string>
+    <string name="lesson_regular">Regulär</string>
+    <string name="lesson_past">Vorbei</string>
+    <string name="lesson_room_change_detail">Raum %1$s → %2$s</string>
+    <string name="room_value">Raum %1$s</string>
+    <string name="label_room">Raum</string>
+    <string name="label_teacher">Lehrkraft</string>
+    <string name="label_previous_teacher">Ursprüngliche Lehrkraft</string>
+    <string name="label_class">Klasse</string>
+    <string name="label_group">Gruppe</string>
+    <string name="label_topic">Thema</string>
+    <string name="label_substitution">Vertretung</string>
+    <string name="label_info">Information</string>
+
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_language">Sprache</string>
+    <string name="settings_sync">Synchronisierung</string>
+    <string name="settings_sync_enabled">Automatisch synchronisieren</string>
+    <string name="settings_sync_enabled_desc">Hält Stundenplan, Widget und Benachrichtigungen aktuell.</string>
+    <string name="settings_sync_interval">Intervall</string>
+    <string name="settings_notifications">Benachrichtigungen</string>
+    <string name="settings_notifications_enabled">Bei Änderungen benachrichtigen</string>
+    <string name="settings_notifications_desc">Wenn sich eine Stunde, ein Raum oder eine Lehrkraft ändert.</string>
+    <string name="settings_manual_sync">Jetzt synchronisieren</string>
+    <string name="settings_last_sync">Letzte Synchronisierung</string>
+    <string name="settings_last_sync_never">Noch nie</string>
+    <string name="settings_debug">Debug</string>
+    <string name="settings_debug_title">Debug-Protokoll</string>
+    <string name="settings_debug_desc">Letzte Rohantworten der WebUntis-API ansehen.</string>
+    <string name="settings_about">Über Daybreak</string>
+    <string name="settings_about_text">Daybreak ist ein inoffizieller, schlanker Stundenplan-Client für WebUntis. Die Zugangsdaten bleiben auf deinem Gerät. Kein API-Schlüssel erforderlich.</string>
+    <string name="settings_logout">Abmelden</string>
+    <string name="settings_logout_title">Wirklich abmelden?</string>
+    <string name="settings_logout_message">Zugangsschlüssel, Cache und Debug-Protokoll werden von diesem Gerät entfernt.</string>
+    <string name="settings_logout_confirm">Abmelden</string>
+    <string name="settings_interval_dialog_title">Synchronisierungsintervall</string>
+    <string name="settings_notification_permission_denied">Ohne Benachrichtigungsberechtigung können keine Änderungen gemeldet werden.</string>
+    <string name="sync_interval_minutes">%1$d Minuten</string>
+
+    <string name="debug_title">Debug-Protokoll</string>
+    <string name="debug_subtitle">Rohdaten der letzten API-Antworten. Anfragen und Zugangsdaten werden nicht protokolliert.</string>
+    <string name="debug_empty_title">Noch keine Antworten</string>
+    <string name="debug_empty">Sobald du synchronisierst, erscheinen hier die letzten JSON-Antworten.</string>
+    <string name="debug_copy">Kopieren</string>
+    <string name="debug_copied">In die Zwischenablage kopiert</string>
+    <string name="debug_show_more">Mehr anzeigen</string>
+    <string name="debug_show_less">Weniger anzeigen</string>
+    <string name="debug_clear">Löschen</string>
+    <string name="debug_clear_title">Protokoll löschen?</string>
+    <string name="debug_clear_message">Alle gespeicherten Rohantworten werden entfernt.</string>
+
+    <string name="notification_channel_name">Stundenplanänderungen</string>
+    <string name="notification_channel_description">Meldet Entfall, Raum- und Vertretungsänderungen.</string>
+    <string name="notification_title">Stundenplan geändert</string>
+    <plurals name="notification_summary">
+        <item quantity="one">%1$d Änderung im Stundenplan</item>
+        <item quantity="other">%1$d Änderungen im Stundenplan</item>
+    </plurals>
+    <string name="notification_more_changes">+ %1$d weitere</string>
+    <string name="notification_cancelled">%1$s um %2$s entfällt</string>
+    <string name="notification_room_changed">%1$s: Raum %2$s → %3$s</string>
+    <string name="notification_teacher_changed">%1$s: %2$s statt %3$s</string>
+    <string name="notification_substitution">%1$s um %2$s wurde geändert</string>
+    <string name="notification_added">%1$s um %2$s ist neu</string>
+
+    <string name="widget_name">Daybreak</string>
+    <string name="widget_description">Heutige Stunden und die nächste Stunde.</string>
+    <string name="widget_app_name">Daybreak</string>
+    <string name="widget_now">JETZT</string>
+    <string name="widget_next_lesson">NÄCHSTE STUNDE</string>
+    <string name="widget_next_on_day">NÄCHSTER TAG: %1$s</string>
+    <string name="widget_no_lessons">Keine Stunden mehr</string>
+    <string name="widget_open_app">Zum Aktualisieren öffnen</string>
+    <string name="widget_login_prompt">Bei Daybreak anmelden, um deinen Stundenplan zu sehen.</string>
+    <string name="widget_room">Raum %1$s</string>
 </resources>

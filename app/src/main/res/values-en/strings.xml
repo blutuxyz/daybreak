@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daybreak</string>
+
+    <string name="nav_timetable">Timetable</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="action_today">Today</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_back">Back</string>
+
+    <string name="language_german">Deutsch</string>
+    <string name="language_english">English</string>
+
+    <string name="error_network">Could not reach WebUntis. Your last synced data is still available.</string>
+    <string name="error_auth">Sign-in failed. Check the server, school, username and key.</string>
+    <string name="error_second_factor">This account requires a second factor.</string>
+    <string name="error_no_student">No student is linked to this account.</string>
+    <string name="error_parse">WebUntis returned an unexpected response.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+
+    <string name="login_hero_title">Daybreak</string>
+    <string name="login_hero_subtitle">Your timetable. Clear, calm and always with you.</string>
+    <string name="login_title">Sign in</string>
+    <string name="login_subtitle">Connect Daybreak to your WebUntis account.</string>
+    <string name="login_tab_qr">QR code</string>
+    <string name="login_tab_manual">Manually</string>
+    <string name="login_tab_password">Password</string>
+    <string name="login_qr_scan_title">Sign in with a QR code</string>
+    <string name="login_qr_help">Scan the QR code from WebUntis under Profile → Shares → Access via Untis Mobile. The key is stored encrypted.</string>
+    <string name="login_scan_qr">Scan QR code</string>
+    <string name="login_qr_payload">QR code content</string>
+    <string name="login_qr_payload_hint">untis://setschool?…</string>
+    <string name="login_toggle_visibility">Toggle visibility</string>
+    <string name="login_qr_manual_hint">You can also paste the QR code content from the clipboard.</string>
+    <string name="login_server">Server</string>
+    <string name="login_server_hint">school.webuntis.com</string>
+    <string name="login_school">School</string>
+    <string name="login_username">Username</string>
+    <string name="login_secret">Key</string>
+    <string name="login_password">Password</string>
+    <string name="login_second_factor">Verification code</string>
+    <string name="login_second_factor_hint">Only needed when two-factor authentication is enabled.</string>
+    <string name="login_manual_hint">You can find the server, school and key in the Untis Mobile QR code.</string>
+    <string name="login_password_hint">Daybreak uses your password once to derive the access key. The password itself is not stored.</string>
+    <string name="login_button">Sign in</string>
+    <string name="login_loading">Signing in…</string>
+    <string name="login_unofficial">Daybreak is not affiliated with Untis GmbH. The unofficial mobile API may change.</string>
+    <string name="login_error_invalid_qr">This is not a valid Untis Mobile QR code.</string>
+    <string name="login_error_invalid_input">Please fill in all required fields.</string>
+    <string name="login_error_storage">The key could not be stored securely. Please try again.</string>
+    <string name="login_error_scanner">The QR scanner is unavailable. Paste the QR code content manually instead.</string>
+    <string name="login_choose_student_title">Choose a student</string>
+    <string name="login_choose_student_body">Several people are linked to this account. Whose timetable would you like to see?</string>
+
+    <string name="timetable_title">Timetable</string>
+    <string name="timetable_day">Day</string>
+    <string name="timetable_week">Week</string>
+    <string name="today">Today</string>
+    <string name="tomorrow">Tomorrow</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="timetable_calendar_week">Week %1$d</string>
+    <string name="timetable_week_subtitle">Week %1$d · %2$s – %3$s</string>
+    <string name="timetable_last_sync">Last updated at %1$s</string>
+    <plurals name="timetable_lesson_count">
+        <item quantity="one">%1$d lesson</item>
+        <item quantity="other">%1$d lessons</item>
+    </plurals>
+    <string name="timetable_no_lessons">No lessons</string>
+    <string name="timetable_empty_today_title">Nothing scheduled today</string>
+    <string name="timetable_empty_title">No lessons</string>
+    <string name="timetable_empty_week_title">Nothing scheduled this week</string>
+    <string name="timetable_empty_body">Enjoy your time — or check back later.</string>
+    <string name="timetable_load_error">Could not load the timetable</string>
+    <string name="timetable_offline">Offline · %1$s</string>
+    <string name="timetable_swipe_hint">Swipe horizontally to change the day.</string>
+    <string name="now">Now</string>
+
+    <string name="lesson_unknown_subject">Lesson</string>
+    <string name="lesson_cancelled">Cancelled</string>
+    <string name="lesson_room_changed">Room change</string>
+    <string name="lesson_teacher_changed">Substitution</string>
+    <string name="lesson_substitution">Substitution</string>
+    <string name="lesson_changed">Changed</string>
+    <string name="lesson_regular">Regular</string>
+    <string name="lesson_past">Finished</string>
+    <string name="lesson_room_change_detail">Room %1$s → %2$s</string>
+    <string name="room_value">Room %1$s</string>
+    <string name="label_room">Room</string>
+    <string name="label_teacher">Teacher</string>
+    <string name="label_previous_teacher">Original teacher</string>
+    <string name="label_class">Class</string>
+    <string name="label_group">Group</string>
+    <string name="label_topic">Topic</string>
+    <string name="label_substitution">Substitution</string>
+    <string name="label_info">Information</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_sync">Synchronisation</string>
+    <string name="settings_sync_enabled">Sync automatically</string>
+    <string name="settings_sync_enabled_desc">Keeps timetable, widget and notifications up to date.</string>
+    <string name="settings_sync_interval">Interval</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_enabled">Notify me about changes</string>
+    <string name="settings_notifications_desc">When a lesson, room or teacher changes.</string>
+    <string name="settings_manual_sync">Sync now</string>
+    <string name="settings_last_sync">Last sync</string>
+    <string name="settings_last_sync_never">Never</string>
+    <string name="settings_debug">Debug</string>
+    <string name="settings_debug_title">Debug log</string>
+    <string name="settings_debug_desc">Inspect the latest raw WebUntis API responses.</string>
+    <string name="settings_about">About Daybreak</string>
+    <string name="settings_about_text">Daybreak is an unofficial, focused timetable client for WebUntis. Your credentials stay on this device. No API key is required.</string>
+    <string name="settings_logout">Sign out</string>
+    <string name="settings_logout_title">Sign out?</string>
+    <string name="settings_logout_message">The access key, cache and debug log will be removed from this device.</string>
+    <string name="settings_logout_confirm">Sign out</string>
+    <string name="settings_interval_dialog_title">Sync interval</string>
+    <string name="settings_notification_permission_denied">Without notification permission, timetable changes cannot be reported.</string>
+    <string name="sync_interval_minutes">%1$d minutes</string>
+
+    <string name="debug_title">Debug log</string>
+    <string name="debug_subtitle">Raw data from the latest API responses. Requests and credentials are never logged.</string>
+    <string name="debug_empty_title">No responses yet</string>
+    <string name="debug_empty">Once you sync, the latest JSON responses will appear here.</string>
+    <string name="debug_copy">Copy</string>
+    <string name="debug_copied">Copied to clipboard</string>
+    <string name="debug_show_more">Show more</string>
+    <string name="debug_show_less">Show less</string>
+    <string name="debug_clear">Clear</string>
+    <string name="debug_clear_title">Clear log?</string>
+    <string name="debug_clear_message">All stored raw responses will be removed.</string>
+
+    <string name="notification_channel_name">Timetable changes</string>
+    <string name="notification_channel_description">Reports cancellations, room changes and substitutions.</string>
+    <string name="notification_title">Timetable changed</string>
+    <plurals name="notification_summary">
+        <item quantity="one">%1$d timetable change</item>
+        <item quantity="other">%1$d timetable changes</item>
+    </plurals>
+    <string name="notification_more_changes">+ %1$d more</string>
+    <string name="notification_cancelled">%1$s at %2$s is cancelled</string>
+    <string name="notification_room_changed">%1$s: room %2$s → %3$s</string>
+    <string name="notification_teacher_changed">%1$s: %2$s instead of %3$s</string>
+    <string name="notification_substitution">%1$s at %2$s changed</string>
+    <string name="notification_added">%1$s at %2$s is new</string>
+
+    <string name="widget_name">Daybreak</string>
+    <string name="widget_description">Today\'s lessons and the next lesson.</string>
+    <string name="widget_app_name">Daybreak</string>
+    <string name="widget_now">NOW</string>
+    <string name="widget_next_lesson">NEXT LESSON</string>
+    <string name="widget_next_on_day">NEXT: %1$s</string>
+    <string name="widget_no_lessons">No more lessons</string>
+    <string name="widget_open_app">Open to refresh</string>
+    <string name="widget_login_prompt">Sign in to Daybreak to see your timetable.</string>
+    <string name="widget_room">Room %1$s</string>
+</resources>

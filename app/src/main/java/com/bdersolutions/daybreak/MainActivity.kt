@@ -1,47 +1,33 @@
 package com.bdersolutions.daybreak
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import com.bdersolutions.daybreak.ui.DaybreakRoot
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyStoredLanguage()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val container = (application as DaybreakApplication).container
         setContent {
             DaybreakTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                DaybreakRoot(container)
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    DaybreakTheme {
-        Greeting("Android")
+    private fun applyStoredLanguage() {
+        val application = application as? DaybreakApplication ?: return
+        val language = application.container.settingsRepository.current().language
+        val desired = language.tag
+        if (AppCompatDelegate.getApplicationLocales().toLanguageTags() != desired) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(desired))
+        }
     }
 }
