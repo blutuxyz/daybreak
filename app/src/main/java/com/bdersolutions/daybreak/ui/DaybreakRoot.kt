@@ -6,7 +6,17 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,6 +32,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,8 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,15 +75,42 @@ import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DaybreakRoot(container: AppContainer) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
-    val currentSession = session
-    if (currentSession == null) {
-        val loginViewModel: LoginViewModel = viewModel(factory = LoginViewModel.Factory(container))
-        LoginScreen(viewModel = loginViewModel)
-    } else {
-        LoggedInContent(container = container, session = currentSession)
+    val motion = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = session,
+        contentKey = { it?.studentId ?: 0L },
+        modifier = Modifier.fillMaxSize(),
+        transitionSpec = {
+            (
+                fadeIn(motion.slowEffectsSpec<Float>()) +
+                    scaleIn(
+                        animationSpec = motion.defaultSpatialSpec(),
+                        initialScale = 0.94f,
+                    )
+                )
+                .togetherWith(
+                    fadeOut(motion.fastEffectsSpec<Float>()) +
+                        scaleOut(
+                            animationSpec = motion.fastSpatialSpec(),
+                            targetScale = 1.02f,
+                        ),
+                )
+                .using(SizeTransform(clip = false))
+        },
+        label = "session",
+    ) { currentSession ->
+        if (currentSession == null) {
+            val loginViewModel: LoginViewModel = viewModel(
+                factory = LoginViewModel.Factory(container),
+            )
+            LoginScreen(viewModel = loginViewModel)
+        } else {
+            LoggedInContent(container = container, session = currentSession)
+        }
     }
 }
 
@@ -125,6 +166,7 @@ private fun LoggedInContent(
         factory = SettingsViewModel.Factory(container),
     )
 
+    val motion = MaterialTheme.motionScheme
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -136,12 +178,30 @@ private fun LoggedInContent(
             )
         },
     ) { innerPadding ->
-        Box(
+        AnimatedContent(
+            targetState = selectedTab,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-        ) {
-            when (selectedTab) {
+            transitionSpec = {
+                val direction = if (targetState > initialState) 1 else -1
+                val slide = motion.defaultSpatialSpec<IntOffset>()
+                val scale = motion.fastSpatialSpec<Float>()
+                val fade = motion.fastEffectsSpec<Float>()
+                (
+                    slideInHorizontally(slide) { width -> direction * width / 8 } +
+                        fadeIn(fade) +
+                        scaleIn(scale, initialScale = 0.98f)
+                    )
+                    .togetherWith(
+                        slideOutHorizontally(slide) { width -> -direction * width / 8 } +
+                            fadeOut(fade),
+                    )
+                    .using(SizeTransform(clip = false))
+            },
+            label = "tabContent",
+        ) { tab ->
+            when (tab) {
                 0 -> TimetableScreen(viewModel = timetableViewModel)
                 else -> SettingsScreen(
                     viewModel = settingsViewModel,
@@ -165,6 +225,7 @@ private fun DaybreakBottomBar(
         BottomBarItem(
             selected = selectedTab == 0,
             icon = Icons.Outlined.CalendarMonth,
+            selectedIcon = Icons.Filled.CalendarMonth,
             label = androidx.compose.ui.res.stringResource(R.string.nav_timetable),
             onClick = { onSelect(0) },
             modifier = Modifier.weight(1f),
@@ -173,6 +234,7 @@ private fun DaybreakBottomBar(
         BottomBarItem(
             selected = selectedTab == 1,
             icon = Icons.Outlined.Settings,
+            selectedIcon = Icons.Filled.Settings,
             label = androidx.compose.ui.res.stringResource(R.string.nav_settings),
             onClick = { onSelect(1) },
             modifier = Modifier.weight(1f),
@@ -185,17 +247,19 @@ private fun DaybreakBottomBar(
 private fun RowScope.BottomBarItem(
     selected: Boolean,
     icon: ImageVector,
+    selectedIcon: ImageVector,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val motion = MaterialTheme.motionScheme
     val container by animateColorAsState(
         targetValue = if (selected) {
             MaterialTheme.colorScheme.primary
         } else {
             Color.Transparent
         },
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        animationSpec = motion.defaultEffectsSpec(),
         label = "bottomBarContainer",
     )
     val content by animateColorAsState(
@@ -204,9 +268,21 @@ private fun RowScope.BottomBarItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        animationSpec = motion.defaultEffectsSpec(),
         label = "bottomBarContent",
     )
+    val labelAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.72f,
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "bottomBarLabelAlpha",
+    )
+    val labelShift by animateFloatAsState(
+        targetValue = if (selected) 0f else -2f,
+        animationSpec = motion.fastSpatialSpec(),
+        label = "bottomBarLabelShift",
+    )
+    val iconFade = motion.fastEffectsSpec<Float>()
+    val iconScale = motion.defaultSpatialSpec<Float>()
     Surface(
         onClick = onClick,
         modifier = modifier.height(56.dp),
@@ -221,16 +297,36 @@ private fun RowScope.BottomBarItem(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-            )
+            AnimatedContent(
+                targetState = selected,
+                transitionSpec = {
+                    (
+                        fadeIn(iconFade) +
+                            scaleIn(iconScale, initialScale = 0.7f)
+                        )
+                        .togetherWith(
+                            fadeOut(iconFade) +
+                                scaleOut(iconScale, targetScale = 0.7f),
+                        )
+                        .using(SizeTransform(clip = false))
+                },
+                label = "bottomBarIcon",
+            ) { isSelected ->
+                Icon(
+                    imageVector = if (isSelected) selectedIcon else icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
             Spacer(Modifier.width(9.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
+                modifier = Modifier.graphicsLayer {
+                    alpha = labelAlpha
+                    translationY = labelShift
+                },
             )
         }
     }
