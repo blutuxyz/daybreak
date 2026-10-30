@@ -45,6 +45,10 @@
                 android:resource="@xml/daybreak_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.WidgetRefreshReceiver"
+            android:exported="false" />
+
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode_ui" />
