@@ -1,7 +1,25 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,6 +35,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +44,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
@@ -46,6 +67,7 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -61,12 +83,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +99,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +109,8 @@ import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
+import com.bdersolutions.daybreak.ui.components.rememberPressScale
+import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
 import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.warningAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
@@ -96,6 +123,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlin.math.max
@@ -126,70 +154,101 @@ fun TimetableScreen(
         }
     }
 
-    key(mode) {
-        val today = remember { LocalDate.now() }
-        val dayOrigin = remember { today.minusDays(DAY_START_OFFSET.toLong()) }
-        val weekOrigin = remember {
-            today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-                .minusWeeks(WEEK_START_OFFSET.toLong())
-        }
-        val pagerState = rememberPagerState(
-            initialPage = if (mode == 0) DAY_START_OFFSET else WEEK_START_OFFSET,
-            pageCount = { if (mode == 0) DAY_PAGE_COUNT else WEEK_PAGE_COUNT },
-        )
-        val scope = rememberCoroutineScope()
-        val now = rememberNow()
-        val selectedDate = if (mode == 0) {
-            dayOrigin.plusDays(pagerState.currentPage.toLong())
+    val today = remember { LocalDate.now() }
+    val dayOrigin = remember { today.minusDays(DAY_START_OFFSET.toLong()) }
+    val weekOrigin = remember {
+        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            .minusWeeks(WEEK_START_OFFSET.toLong())
+    }
+    val dayPager = rememberPagerState(
+        initialPage = DAY_START_OFFSET,
+        pageCount = { DAY_PAGE_COUNT },
+    )
+    val weekPager = rememberPagerState(
+        initialPage = WEEK_START_OFFSET,
+        pageCount = { WEEK_PAGE_COUNT },
+    )
+    val pagerState = if (mode == 0) dayPager else weekPager
+    val scope = rememberCoroutineScope()
+    val now = rememberNow()
+    val selectedDate = if (mode == 0) {
+        dayOrigin.plusDays(pagerState.currentPage.toLong())
+    } else {
+        weekOrigin.plusWeeks(pagerState.currentPage.toLong())
+    }
+    val todayWeekStart = remember(today) {
+        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    }
+    val isOnToday = if (mode == 0) {
+        selectedDate == today
+    } else {
+        selectedDate == todayWeekStart
+    }
+    val motion = MaterialTheme.motionScheme
+
+    LaunchedEffect(mode, dayPager.currentPage, weekPager.currentPage) {
+        val activeDate = if (mode == 0) {
+            dayOrigin.plusDays(dayPager.currentPage.toLong())
         } else {
-            weekOrigin.plusWeeks(pagerState.currentPage.toLong())
+            weekOrigin.plusWeeks(weekPager.currentPage.toLong())
         }
+        viewModel.ensureWeek(activeDate)
+    }
 
-        LaunchedEffect(pagerState.currentPage, mode) {
-            viewModel.ensureWeek(selectedDate)
-        }
-
-        Scaffold(
-            modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = {
-                LargeFlexibleTopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.app_name),
-                            maxLines = 1,
-                        )
-                    },
-                    subtitle = {
-                        Text(
-                            text = currentSession.studentName.ifBlank {
-                                currentSession.displayName
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    actions = {
-                        RefreshAction(
-                            loading = status.isLoading,
-                            onClick = { viewModel.refresh(selectedDate) },
-                        )
-                    },
-                    scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
-                )
-            },
-            floatingActionButton = {
+    Scaffold(
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            LargeFlexibleTopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        maxLines = 1,
+                    )
+                },
+                subtitle = {
+                    Text(
+                        text = currentSession.studentName.ifBlank {
+                            currentSession.displayName
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                actions = {
+                    RefreshAction(
+                        loading = status.isLoading,
+                        onClick = { viewModel.refresh(selectedDate) },
+                    )
+                },
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+            )
+        },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = !isOnToday,
+                enter = scaleIn(
+                    animationSpec = motion.defaultSpatialSpec(),
+                    initialScale = 0.8f,
+                ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
+                exit = scaleOut(
+                    animationSpec = motion.fastSpatialSpec(),
+                    targetScale = 0.8f,
+                ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
+                label = "todayFab",
+            ) {
                 ExtendedFloatingActionButton(
                     onClick = {
                         scope.launch {
                             pagerState.animateScrollToPage(
                                 if (mode == 0) DAY_START_OFFSET else WEEK_START_OFFSET,
+                                animationSpec = motion.defaultSpatialSpec(),
                             )
                         }
                     },
@@ -198,29 +257,60 @@ fun TimetableScreen(
                     icon = { Icon(Icons.Outlined.Today, contentDescription = null) },
                     text = { Text(stringResource(R.string.action_today)) },
                 )
-            },
-        ) { innerPadding ->
-            Column(
+            }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            ViewModeSwitcher(
+                mode = mode,
+                onModeChange = { mode = it },
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+            )
+            AnimatedContent(
+                targetState = mode,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                ViewModeSwitcher(
-                    mode = mode,
-                    onModeChange = { mode = it },
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
-                )
+                    .fillMaxWidth()
+                    .weight(1f),
+                transitionSpec = {
+                    val direction = if (targetState > initialState) 1 else -1
+                    val slide = motion.defaultSpatialSpec<IntOffset>()
+                    val scale = motion.defaultSpatialSpec<Float>()
+                    val fade = motion.fastEffectsSpec<Float>()
+                    (
+                        slideInHorizontally(slide) { width -> direction * width / 5 } +
+                            fadeIn(fade) +
+                            scaleIn(scale, initialScale = 0.97f)
+                        )
+                        .togetherWith(
+                            slideOutHorizontally(slide) { width -> -direction * width / 5 } +
+                                fadeOut(fade) +
+                                scaleOut(scale, targetScale = 0.99f),
+                        )
+                        .using(SizeTransform(clip = false))
+                },
+                label = "timetableMode",
+            ) { targetMode ->
+                val targetPager = if (targetMode == 0) dayPager else weekPager
                 HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
+                    state = targetPager,
+                    modifier = Modifier.fillMaxSize(),
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = targetPager,
+                        pagerSnapDistance = PagerSnapDistance.atMost(1),
+                        snapAnimationSpec = motion.defaultSpatialSpec(),
+                        snapPositionalThreshold = 0.35f,
+                    ),
                 ) { page ->
-                    val pageDate = when {
-                        mode == 0 -> dayOrigin.plusDays(page.toLong())
-                        else -> weekOrigin.plusWeeks(page.toLong())
+                    val pageDate = if (targetMode == 0) {
+                        dayOrigin.plusDays(page.toLong())
+                    } else {
+                        weekOrigin.plusWeeks(page.toLong())
                     }
-                    if (mode == 0) {
+                    if (targetMode == 0) {
                         DayPage(
                             date = pageDate,
                             today = today,
@@ -228,6 +318,16 @@ fun TimetableScreen(
                             cache = cache,
                             status = status,
                             onRetry = { viewModel.refresh(pageDate) },
+                            onSelectDate = { targetDate ->
+                                scope.launch {
+                                    dayPager.animateScrollToPage(
+                                        page =
+                                            DAY_START_OFFSET +
+                                                ChronoUnit.DAYS.between(today, targetDate).toInt(),
+                                        animationSpec = motion.defaultSpatialSpec(),
+                                    )
+                                }
+                            },
                         )
                     } else {
                         WeekPage(
@@ -256,24 +356,38 @@ private fun ViewModeSwitcher(
     onModeChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val dayInteraction = remember { MutableInteractionSource() }
+    val weekInteraction = remember { MutableInteractionSource() }
+    val dayScale by rememberPressScale(dayInteraction)
+    val weekScale by rememberPressScale(weekInteraction)
     ButtonGroup(
         modifier = modifier.fillMaxWidth(),
     ) {
         ToggleButton(
             checked = mode == 0,
             onCheckedChange = { if (it) onModeChange(0) },
+            interactionSource = dayInteraction,
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp),
+                .height(48.dp)
+                .graphicsLayer {
+                    scaleX = dayScale
+                    scaleY = dayScale
+                },
         ) {
             Text(stringResource(R.string.timetable_day))
         }
         ToggleButton(
             checked = mode == 1,
             onCheckedChange = { if (it) onModeChange(1) },
+            interactionSource = weekInteraction,
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp),
+                .height(48.dp)
+                .graphicsLayer {
+                    scaleX = weekScale
+                    scaleY = weekScale
+                },
         ) {
             Text(stringResource(R.string.timetable_week))
         }
@@ -286,20 +400,68 @@ private fun RefreshAction(
     loading: Boolean,
     onClick: () -> Unit,
 ) {
+    var wasLoading by remember { mutableStateOf(loading) }
+    var success by remember { mutableStateOf(false) }
+    LaunchedEffect(loading) {
+        if (loading) {
+            success = false
+        } else if (wasLoading) {
+            success = true
+            delay(900)
+            success = false
+        }
+        wasLoading = loading
+    }
+    val visual = when {
+        loading -> RefreshVisual.Loading
+        success -> RefreshVisual.Success
+        else -> RefreshVisual.Idle
+    }
+    val fade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val scale = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     IconButton(
         onClick = onClick,
         enabled = !loading,
         modifier = Modifier.size(48.dp),
     ) {
-        if (loading) {
-            LoadingIndicator(modifier = Modifier.size(24.dp))
-        } else {
-            Icon(
-                Icons.Outlined.Refresh,
-                contentDescription = stringResource(R.string.action_refresh),
-            )
+        AnimatedContent(
+            targetState = visual,
+            transitionSpec = {
+                (
+                    fadeIn(fade) +
+                        scaleIn(scale, initialScale = 0.55f)
+                    )
+                    .togetherWith(
+                        fadeOut(fade) +
+                            scaleOut(scale, targetScale = 0.55f),
+                    )
+                    .using(SizeTransform(clip = false))
+            },
+            label = "refreshVisual",
+        ) { state ->
+            Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                when (state) {
+                    RefreshVisual.Loading -> LoadingIndicator(modifier = Modifier.size(24.dp))
+                    RefreshVisual.Success -> Icon(
+                        Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+
+                    RefreshVisual.Idle -> Icon(
+                        Icons.Outlined.Refresh,
+                        contentDescription = stringResource(R.string.action_refresh),
+                    )
+                }
+            }
         }
     }
+}
+
+private enum class RefreshVisual {
+    Idle,
+    Loading,
+    Success,
 }
 
 @Composable
@@ -310,6 +472,7 @@ private fun DayPage(
     cache: TimetableCache,
     status: TimetableSyncStatus,
     onRetry: () -> Unit,
+    onSelectDate: (LocalDate) -> Unit,
 ) {
     val context = LocalContext.current
     val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -338,6 +501,11 @@ private fun DayPage(
                         date = date,
                         isToday = isToday,
                         lessonCount = lessons.size,
+                    )
+                    DayStrip(
+                        date = date,
+                        today = today,
+                        onSelectDate = onSelectDate,
                     )
                     if (status.lastError != null) {
                         OfflineBanner(
@@ -377,6 +545,7 @@ private fun DayPage(
                                 periodStarts = periodStarts,
                                 isToday = isToday,
                                 now = now,
+                                revealKey = weekStart,
                                 onLessonClick = { selectedLesson = it },
                             )
                         }
@@ -436,13 +605,156 @@ private fun DayHeaderLine(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
-        if (isToday) {
-            Spacer(Modifier.width(8.dp))
-            AccentBadge(
-                text = stringResource(R.string.today),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        AnimatedVisibility(
+            visible = isToday,
+            enter = scaleIn(
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                initialScale = 0.7f,
+            ) + fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+            exit = scaleOut(
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                targetScale = 0.7f,
+            ) + fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+            label = "todayChip",
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(8.dp))
+                AccentBadge(
+                    text = stringResource(R.string.today),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayStrip(
+    date: LocalDate,
+    today: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    val locale = currentLocale(LocalContext.current)
+    val weekStart = remember(date) {
+        date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    }
+    val days = remember(weekStart) { (0L..6L).map { weekStart.plusDays(it) } }
+    val selectedIndex = days.indexOf(date).coerceAtLeast(0)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        val chipWidth = maxWidth / days.size
+        val indicatorWidth = chipWidth * 0.34f
+        val targetX = chipWidth * selectedIndex + (chipWidth - indicatorWidth) / 2f
+        val indicatorSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Dp>()
+        val animatedX by animateDpAsState(
+            targetValue = targetX,
+            animationSpec = indicatorSpec,
+            label = "dayStripIndicator",
+        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                days.forEach { day ->
+                    DayChip(
+                        date = day,
+                        selected = day == date,
+                        isToday = day == today,
+                        locale = locale,
+                        onClick = { onSelectDate(day) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .offset(x = animatedX)
+                    .width(indicatorWidth)
+                    .height(3.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
             )
+        }
+    }
+}
+
+@Composable
+private fun DayChip(
+    date: LocalDate,
+    selected: Boolean,
+    isToday: Boolean,
+    locale: Locale,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val container by animateColorAsState(
+        targetValue = if (selected) scheme.primary else Color.Transparent,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "dayChipContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) {
+            scheme.onPrimary
+        } else if (isToday) {
+            scheme.primary
+        } else {
+            scheme.onSurface
+        },
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "dayChipContent",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.06f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "dayChipScale",
+    )
+    Column(
+        modifier = modifier
+            .height(50.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = date.format(DateTimeFormatter.ofPattern("EEE", locale))
+                .replaceFirstChar { it.titlecase(locale) }
+                .take(3),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) scheme.primary else scheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(2.dp))
+        Surface(
+            shape = CircleShape,
+            color = container,
+            contentColor = content,
+            border = if (isToday && !selected) {
+                BorderStroke(1.dp, scheme.primary)
+            } else {
+                null
+            },
+            modifier = Modifier
+                .size(30.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }
@@ -454,6 +766,7 @@ private fun DayTimeline(
     periodStarts: List<LocalTime>,
     isToday: Boolean,
     now: LocalDateTime,
+    revealKey: Any?,
     onLessonClick: (UntisLesson) -> Unit,
 ) {
     val pxPerMinute = 1.5.dp
@@ -488,6 +801,11 @@ private fun DayTimeline(
                 pxPerMinute = pxPerMinute,
             )
             val nowTime = now.toLocalTime()
+            val animatedNowMinutes by animateFloatAsState(
+                targetValue = minutesBetween(range.start, nowTime).toFloat(),
+                animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+                label = "nowLine",
+            )
             val currentBlock = if (isToday) {
                 blocks.filter {
                     !nowTime.isBefore(it.start) && nowTime.isBefore(it.end)
@@ -495,34 +813,53 @@ private fun DayTimeline(
             } else {
                 null
             }
-            blocks.forEach { block ->
-                val top = pxPerMinute * minutesBetween(range.start, block.start)
-                val blockHeight = max(
-                    34f,
-                    pxPerMinute.value * minutesBetween(block.start, block.end) - 3f,
-                ).dp
-                val columnWidth = maxWidth / block.columnCount
-                val current = block == currentBlock
-                DayLessonBlock(
-                    block = block,
-                    current = current,
-                    progress = if (current) {
-                        block.progressAt(nowTime)
-                    } else {
-                        0f
-                    },
-                    onClick = { onLessonClick(block.lesson) },
-                    modifier = Modifier
-                        .width(columnWidth - 4.dp)
-                        .height(blockHeight)
-                        .offset(
-                            x = columnWidth * block.column + 2.dp,
-                            y = top,
-                        ),
-                )
+            blocks.forEachIndexed { index, block ->
+                key(block.lesson.id, block.start, block.end) {
+                    val targetTop = pxPerMinute * minutesBetween(range.start, block.start)
+                    val targetHeight = max(
+                        34f,
+                        pxPerMinute.value * minutesBetween(block.start, block.end) - 3f,
+                    ).dp
+                    val animatedTop by animateDpAsState(
+                        targetValue = targetTop,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "lessonTop",
+                    )
+                    val animatedHeight by animateDpAsState(
+                        targetValue = targetHeight,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "lessonHeight",
+                    )
+                    val reveal by rememberStaggeredReveal(revealKey, index)
+                    val columnWidth = maxWidth / block.columnCount
+                    val current = block == currentBlock
+                    DayLessonBlock(
+                        block = block,
+                        current = current,
+                        progress = if (current) {
+                            block.progressAt(nowTime)
+                        } else {
+                            0f
+                        },
+                        onClick = { onLessonClick(block.lesson) },
+                        modifier = Modifier
+                            .width(columnWidth - 4.dp)
+                            .height(animatedHeight)
+                            .offset(
+                                x = columnWidth * block.column + 2.dp,
+                                y = animatedTop,
+                            )
+                            .graphicsLayer {
+                                alpha = reveal
+                                val scale = 0.94f + 0.06f * reveal
+                                scaleX = scale
+                                scaleY = scale
+                            },
+                    )
+                }
             }
             if (isToday && nowTime >= range.start && nowTime < range.end) {
-                val y = pxPerMinute * minutesBetween(range.start, nowTime)
+                val y = pxPerMinute * animatedNowMinutes
                 Row(
                     modifier = Modifier
                         .offset(y = y - 9.dp)
@@ -658,6 +995,8 @@ private fun DayLessonBlock(
 ) {
     val context = LocalContext.current
     val lesson = block.lesson
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressScale by rememberPressScale(interactionSource)
     val subject = lesson.subject.ifBlank {
         stringResource(R.string.lesson_unknown_subject)
     }
@@ -677,12 +1016,16 @@ private fun DayLessonBlock(
     }
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.graphicsLayer {
+            scaleX = pressScale
+            scaleY = pressScale
+        },
         shape = RoundedCornerShape(if (block.lessons.size > 1) 18.dp else 14.dp),
         color = tone.container,
         contentColor = tone.onContainer,
         border = border,
         tonalElevation = if (current) 3.dp else 0.dp,
+        interactionSource = interactionSource,
     ) {
         Column(
             modifier = Modifier
@@ -740,9 +1083,19 @@ private fun DayLessonBlock(
                 }
             }
             if (current) {
+                val animatedProgress = remember { Animatable(progress) }
+                LaunchedEffect(progress) {
+                    animatedProgress.animateTo(
+                        targetValue = progress,
+                        animationSpec = tween(
+                            durationMillis = 30_000,
+                            easing = LinearEasing,
+                        ),
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 LinearWavyProgressIndicator(
-                    progress = { progress },
+                    progress = { animatedProgress.value },
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
@@ -859,6 +1212,7 @@ private fun WeekPage(
                                             range = range,
                                             periodStarts = periodStarts,
                                             pxPerMinute = pxPerMinute,
+                                            revealKey = weekStart,
                                             onLessonClick = { selectedLesson = it },
                                             modifier = Modifier.weight(1f),
                                         )
@@ -1043,6 +1397,7 @@ private fun WeekDayColumn(
     range: TimelineRange,
     periodStarts: List<LocalTime>,
     pxPerMinute: Dp,
+    revealKey: Any?,
     onLessonClick: (UntisLesson) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1073,26 +1428,45 @@ private fun WeekDayColumn(
             } else {
                 null
             }
-            blocks.forEach { block ->
-                val top = pxPerMinute * minutesBetween(range.start, block.start)
-                val blockHeight = max(
-                    24f,
-                    pxPerMinute.value * minutesBetween(block.start, block.end) - 2f,
-                ).dp
-                val columnWidth = maxWidth / block.columnCount
-                val current = block == currentBlock
-                WeekLessonBlock(
-                    block = block,
-                    current = current,
-                    onClick = { onLessonClick(block.lesson) },
-                    modifier = Modifier
-                        .width(maxOf(columnWidth - 2.dp, 14.dp))
-                        .height(blockHeight)
-                        .offset(
-                            x = columnWidth * block.column + 1.dp,
-                            y = top,
-                        ),
-                )
+            blocks.forEachIndexed { index, block ->
+                key(block.lesson.id, block.start, block.end) {
+                    val targetTop = pxPerMinute * minutesBetween(range.start, block.start)
+                    val targetHeight = max(
+                        24f,
+                        pxPerMinute.value * minutesBetween(block.start, block.end) - 2f,
+                    ).dp
+                    val animatedTop by animateDpAsState(
+                        targetValue = targetTop,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "weekLessonTop",
+                    )
+                    val animatedHeight by animateDpAsState(
+                        targetValue = targetHeight,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "weekLessonHeight",
+                    )
+                    val reveal by rememberStaggeredReveal(revealKey, index)
+                    val columnWidth = maxWidth / block.columnCount
+                    val current = block == currentBlock
+                    WeekLessonBlock(
+                        block = block,
+                        current = current,
+                        onClick = { onLessonClick(block.lesson) },
+                        modifier = Modifier
+                            .width(maxOf(columnWidth - 2.dp, 14.dp))
+                            .height(animatedHeight)
+                            .offset(
+                                x = columnWidth * block.column + 1.dp,
+                                y = animatedTop,
+                            )
+                            .graphicsLayer {
+                                alpha = reveal
+                                val scale = 0.94f + 0.06f * reveal
+                                scaleX = scale
+                                scaleY = scale
+                            },
+                    )
+                }
             }
         }
         Box(
@@ -1112,6 +1486,8 @@ private fun WeekLessonBlock(
     modifier: Modifier = Modifier,
 ) {
     val lesson = block.lesson
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressScale by rememberPressScale(interactionSource)
     val subject = lesson.subject.ifBlank {
         stringResource(R.string.lesson_unknown_subject)
     }
@@ -1130,11 +1506,15 @@ private fun WeekLessonBlock(
     }
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.graphicsLayer {
+            scaleX = pressScale
+            scaleY = pressScale
+        },
         shape = RoundedCornerShape(9.dp),
         color = tone.container,
         contentColor = tone.onContainer,
         border = border,
+        interactionSource = interactionSource,
     ) {
         Box(
             modifier = Modifier
@@ -1518,9 +1898,26 @@ private fun LessonDetailsSheet(
         lesson.date.format(DateTimeFormatter.ofPattern(pattern, locale))
             .replaceFirstChar { it.titlecase(locale) }
     }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+    var closing by remember { mutableStateOf(false) }
+    val closeSheet: () -> Unit = remember(scope, sheetState) {
+        {
+            if (!closing) {
+                closing = true
+                scope.launch {
+                    sheetState.hide()
+                }.invokeOnCompletion {
+                    if (!sheetState.isVisible) currentOnDismiss()
+                }
+            }
+        }
+    }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = closeSheet,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
@@ -1651,7 +2048,7 @@ private fun LessonDetailsSheet(
 
             Spacer(Modifier.height(18.dp))
             FilledTonalButton(
-                onClick = onDismiss,
+                onClick = closeSheet,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
