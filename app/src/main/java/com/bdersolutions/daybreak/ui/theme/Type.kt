@@ -1,69 +1,94 @@
 package com.bdersolutions.daybreak.ui.theme
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val Typography = Typography(
-    displaySmall = TextStyle(
+private val Base = Typography()
+
+/**
+ * Bolder, more expressive type scale. The emphasized variants are used for the
+ * hero moments (day header, login wordmark, big counts) while the baseline
+ * styles stay readable for dense timetable content.
+ */
+val Typography: Typography = Base.copy(
+    displayLarge = Base.displayLarge.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Black,
+        letterSpacing = (-1.2).sp,
+    ),
+    displayMedium = Base.displayMedium.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Black,
+        letterSpacing = (-1.0).sp,
+    ),
+    displaySmall = Base.displaySmall.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Black,
+        letterSpacing = (-0.8).sp,
+    ),
+    headlineLarge = Base.headlineLarge.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.ExtraBold,
+        letterSpacing = (-0.6).sp,
+    ),
+    headlineMedium = Base.headlineMedium.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.ExtraBold,
+        letterSpacing = (-0.4).sp,
+    ),
+    headlineSmall = Base.headlineSmall.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.ExtraBold,
+    ),
+    titleLarge = Base.titleLarge.copy(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
-        fontSize = 36.sp,
-        lineHeight = 42.sp,
-        letterSpacing = (-0.5).sp,
     ),
-    headlineMedium = TextStyle(
+    titleMedium = Base.titleMedium.copy(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
     ),
-    headlineSmall = TextStyle(
+    titleSmall = Base.titleSmall.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+    ),
+    labelLarge = Base.labelLarge.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+    ),
+    labelMedium = Base.labelMedium.copy(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
     ),
-    titleLarge = TextStyle(
+    displaySmallEmphasized = Base.displaySmallEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
+        fontWeight = FontWeight.Black,
+        letterSpacing = (-0.8).sp,
     ),
-    titleMedium = TextStyle(
+    headlineLargeEmphasized = Base.headlineLargeEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp,
+        fontWeight = FontWeight.Black,
     ),
-    bodyLarge = TextStyle(
+    headlineMediumEmphasized = Base.headlineMediumEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.25.sp,
+        fontWeight = FontWeight.ExtraBold,
     ),
-    bodyMedium = TextStyle(
+    headlineSmallEmphasized = Base.headlineSmallEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontWeight = FontWeight.Black,
     ),
-    labelLarge = TextStyle(
+    titleLargeEmphasized = Base.titleLargeEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp,
+        fontWeight = FontWeight.ExtraBold,
     ),
-    labelMedium = TextStyle(
+    titleMediumEmphasized = Base.titleMediumEmphasized.copy(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
+        fontWeight = FontWeight.ExtraBold,
+    ),
+    labelLargeEmphasized = Base.labelLargeEmphasized.copy(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
     ),
 )
