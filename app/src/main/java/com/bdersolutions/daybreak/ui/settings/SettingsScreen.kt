@@ -5,6 +5,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,11 +66,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +85,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.toUserMessage
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -104,6 +115,7 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showIntervalDialog by remember { mutableStateOf(false) }
+    var aboutExpanded by rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -187,9 +199,8 @@ fun SettingsScreen(
                         title = stringResource(R.string.language_german),
                         onClick = { viewModel.setLanguage(AppLanguage.GERMAN) },
                         trailing = {
-                            RadioButton(
+                            SpringRadioButton(
                                 selected = currentLanguage == AppLanguage.GERMAN,
-                                onClick = null,
                             )
                         },
                     )
@@ -199,9 +210,8 @@ fun SettingsScreen(
                         title = stringResource(R.string.language_english),
                         onClick = { viewModel.setLanguage(AppLanguage.ENGLISH) },
                         trailing = {
-                            RadioButton(
+                            SpringRadioButton(
                                 selected = currentLanguage == AppLanguage.ENGLISH,
-                                onClick = null,
                             )
                         },
                     )
@@ -216,7 +226,7 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_sync_enabled),
                         subtitle = stringResource(R.string.settings_sync_enabled_desc),
                         trailing = {
-                            Switch(
+                            SpringSwitch(
                                 checked = settings.syncEnabled,
                                 onCheckedChange = viewModel::setSyncEnabled,
                             )
@@ -272,7 +282,7 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_notifications_enabled),
                         subtitle = stringResource(R.string.settings_notifications_desc),
                         trailing = {
-                            Switch(
+                            SpringSwitch(
                                 checked = settings.notificationsEnabled,
                                 onCheckedChange = { enabled ->
                                     if (enabled && Build.VERSION.SDK_INT >= 33 &&
@@ -319,9 +329,47 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),
-                        subtitle = stringResource(R.string.settings_about_text),
-                        subtitleMaxLines = 6,
+                        onClick = { aboutExpanded = !aboutExpanded },
+                        trailing = {
+                            val rotation by animateFloatAsState(
+                                targetValue = if (aboutExpanded) 90f else 0f,
+                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                                label = "aboutChevron",
+                            )
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.graphicsLayer {
+                                    rotationZ = rotation
+                                },
+                            )
+                        },
                     )
+                    AnimatedVisibility(
+                        visible = aboutExpanded,
+                        enter = expandVertically(
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        ) + fadeIn(
+                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        ),
+                        exit = shrinkVertically(
+                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                        ) + fadeOut(
+                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                        ),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_about_text),
+                            modifier = Modifier.padding(
+                                start = 66.dp,
+                                end = 16.dp,
+                                bottom = 14.dp,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -380,9 +428,8 @@ fun SettingsScreen(
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(
+                            SpringRadioButton(
                                 selected = selected == interval,
-                                onClick = null,
                             )
                             Text(
                                 text = stringResource(R.string.sync_interval_minutes, interval),
@@ -511,13 +558,61 @@ private fun SectionLabel(text: String) {
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SpringSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val scale = remember { Animatable(1f) }
+    val animationsEnabled = motionAnimationsEnabled()
+    val spring = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    LaunchedEffect(checked) {
+        if (!animationsEnabled) {
+            scale.snapTo(1f)
+            return@LaunchedEffect
+        }
+        scale.snapTo(0.9f)
+        scale.animateTo(1f, animationSpec = spring)
+    }
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = Modifier.graphicsLayer {
+            scaleX = scale.value
+            scaleY = scale.value
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SpringRadioButton(selected: Boolean) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "radioScale",
+    )
+    RadioButton(
+        selected = selected,
+        onClick = null,
+        modifier = Modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
+    )
+}
+
 @Composable
 private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .animateContentSize(
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            ),
         content = content,
     )
 }
