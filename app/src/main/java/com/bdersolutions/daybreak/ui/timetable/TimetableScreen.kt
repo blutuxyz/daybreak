@@ -415,7 +415,14 @@ private fun DayHeaderLine(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "·",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
             text = androidx.compose.ui.res.pluralStringResource(
                 R.plurals.timetable_lesson_count,
@@ -890,7 +897,14 @@ private fun WeekHeaderLine(
             modifier = Modifier.weight(1f, fill = false),
             maxLines = 1,
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "·",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
             text = androidx.compose.ui.res.pluralStringResource(
                 R.plurals.timetable_lesson_count,
