@@ -156,11 +156,16 @@
     <string name="notification_added">%1$s at %2$s is new</string>
 
     <string name="widget_name">Daybreak</string>
-    <string name="widget_description">Today\'s lessons and the next lesson.</string>
+    <string name="widget_description">Today\'s lessons, next lesson and changes.</string>
     <string name="widget_app_name">Daybreak</string>
     <string name="widget_now">NOW</string>
     <string name="widget_next_lesson">NEXT LESSON</string>
     <string name="widget_next_on_day">NEXT: %1$s</string>
+    <string name="widget_free_today">Today free</string>
+    <string name="widget_next_school_day">Next lessons: %1$s</string>
+    <string name="widget_last_sync_short">Updated %1$s</string>
+    <string name="widget_now_remaining">Now: %1$s · %2$d min left</string>
+    <string name="widget_after">Next: %1$s, %2$s</string>
     <string name="widget_no_lessons">No more lessons</string>
     <string name="widget_open_app">Open to refresh</string>
     <string name="widget_login_prompt">Sign in to Daybreak to see your timetable.</string>

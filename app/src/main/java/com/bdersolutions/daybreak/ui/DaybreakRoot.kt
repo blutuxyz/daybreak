@@ -74,10 +74,14 @@ import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DaybreakRoot(container: AppContainer) {
+fun DaybreakRoot(
+    container: AppContainer,
+    initialDate: LocalDate? = null,
+) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
     AnimatedContent(
@@ -109,7 +113,11 @@ fun DaybreakRoot(container: AppContainer) {
             )
             LoginScreen(viewModel = loginViewModel)
         } else {
-            LoggedInContent(container = container, session = currentSession)
+            LoggedInContent(
+                container = container,
+                session = currentSession,
+                initialDate = initialDate,
+            )
         }
     }
 }
@@ -119,6 +127,7 @@ fun DaybreakRoot(container: AppContainer) {
 private fun LoggedInContent(
     container: AppContainer,
     session: DaybreakSession,
+    initialDate: LocalDate?,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
@@ -202,7 +211,11 @@ private fun LoggedInContent(
             label = "tabContent",
         ) { tab ->
             when (tab) {
-                0 -> TimetableScreen(viewModel = timetableViewModel)
+                0 -> TimetableScreen(
+                    viewModel = timetableViewModel,
+                    initialDate = initialDate,
+                )
+
                 else -> SettingsScreen(
                     viewModel = settingsViewModel,
                     onOpenDebug = { showDebug = true },

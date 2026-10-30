@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.bdersolutions.daybreak.ui.DaybreakRoot
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
+import java.time.LocalDate
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,9 +16,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as DaybreakApplication).container
+        val widgetDate = intent.getStringExtra(EXTRA_WIDGET_DATE)?.let { raw ->
+            runCatching { LocalDate.parse(raw) }.getOrNull()
+        }
         setContent {
             DaybreakTheme {
-                DaybreakRoot(container)
+                DaybreakRoot(container = container, initialDate = widgetDate)
             }
         }
     }
@@ -29,5 +33,9 @@ class MainActivity : AppCompatActivity() {
         if (AppCompatDelegate.getApplicationLocales().toLanguageTags() != desired) {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(desired))
         }
+    }
+
+    companion object {
+        const val EXTRA_WIDGET_DATE = "com.bdersolutions.daybreak.widget.DATE"
     }
 }

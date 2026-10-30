@@ -137,6 +137,7 @@ private const val WEEK_START_OFFSET = 52
 @Composable
 fun TimetableScreen(
     viewModel: TimetableViewModel,
+    initialDate: LocalDate? = null,
     modifier: Modifier = Modifier,
 ) {
     val cache by viewModel.cache.collectAsStateWithLifecycle()
@@ -155,13 +156,19 @@ fun TimetableScreen(
     }
 
     val today = remember { LocalDate.now() }
+    val initialDayPage = remember(initialDate, today) {
+        initialDate?.let { date ->
+            (DAY_START_OFFSET + ChronoUnit.DAYS.between(today, date).toInt())
+                .coerceIn(0, DAY_PAGE_COUNT - 1)
+        } ?: DAY_START_OFFSET
+    }
     val dayOrigin = remember { today.minusDays(DAY_START_OFFSET.toLong()) }
     val weekOrigin = remember {
         today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .minusWeeks(WEEK_START_OFFSET.toLong())
     }
     val dayPager = rememberPagerState(
-        initialPage = DAY_START_OFFSET,
+        initialPage = initialDayPage,
         pageCount = { DAY_PAGE_COUNT },
     )
     val weekPager = rememberPagerState(
