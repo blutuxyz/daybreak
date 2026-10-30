@@ -31,11 +31,13 @@
     <string name="login_tab_manual">Manuell</string>
     <string name="login_tab_password">Passwort</string>
     <string name="login_qr_scan_title">Mit QR-Code anmelden</string>
-    <string name="login_qr_help">Scanne den QR-Code aus WebUntis unter Profil → Freigaben → Zugriff über Untis Mobile. Der Schlüssel wird verschlüsselt gespeichert.</string>
+    <string name="login_qr_help">Scanne den QR-Code aus WebUntis unter Profil → Freigaben. Der Schlüssel wird verschlüsselt gespeichert.</string>
+    <string name="login_webuntis_path">Profil → Freigaben</string>
     <string name="login_scan_qr">QR-Code scannen</string>
     <string name="login_qr_payload">QR-Code-Inhalt</string>
     <string name="login_qr_payload_hint">untis://setschool?…</string>
     <string name="login_toggle_visibility">Sichtbarkeit umschalten</string>
+    <string name="login_or_paste">oder Inhalt einfügen</string>
     <string name="login_qr_manual_hint">Du kannst den QR-Code-Inhalt auch aus der Zwischenablage einfügen.</string>
     <string name="login_server">Server</string>
     <string name="login_server_hint">schule.webuntis.com</string>
@@ -71,6 +73,7 @@
         <item quantity="other">%1$d Stunden</item>
     </plurals>
     <string name="timetable_no_lessons">Keine Stunden</string>
+    <string name="timetable_free">Frei</string>
     <string name="timetable_empty_today_title">Heute ist frei</string>
     <string name="timetable_empty_title">Keine Stunden</string>
     <string name="timetable_empty_week_title">Diese Woche ist frei</string>
@@ -82,6 +85,8 @@
 
     <string name="lesson_unknown_subject">Unterricht</string>
     <string name="lesson_cancelled">Entfall</string>
+    <string name="lesson_room_short">Raum</string>
+    <string name="lesson_substitution_short">Vertr.</string>
     <string name="lesson_room_changed">Raumwechsel</string>
     <string name="lesson_teacher_changed">Vertretung</string>
     <string name="lesson_substitution">Vertretung</string>
