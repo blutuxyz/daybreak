@@ -1,5 +1,19 @@
 package com.bdersolutions.daybreak.ui.login
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,12 +58,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.toShape
+import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.center
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -60,14 +82,18 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.untis.UntisChild
+import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
+import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import androidx.graphics.shapes.Morph
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -102,6 +128,40 @@ fun LoginScreen(
             state.password.isNotBlank() &&
             (!state.requiresSecondFactor || state.secondFactor.isNotBlank())
     } && !state.loading
+    val motion = MaterialTheme.motionScheme
+    val revealSun by rememberStaggeredReveal(
+        key = "loginEntrance",
+        index = 0,
+        staggerMillis = 80,
+    )
+    val revealTitle by rememberStaggeredReveal(
+        key = "loginEntrance",
+        index = 1,
+        staggerMillis = 80,
+    )
+    val revealForm by rememberStaggeredReveal(
+        key = "loginEntrance",
+        index = 2,
+        staggerMillis = 80,
+    )
+    val revealFooter by rememberStaggeredReveal(
+        key = "loginEntrance",
+        index = 3,
+        staggerMillis = 80,
+    )
+    val errorShake = remember { Animatable(0f) }
+    val animationsEnabled = motionAnimationsEnabled()
+    LaunchedEffect(state.error) {
+        if (state.error == null || !animationsEnabled) {
+            errorShake.snapTo(0f)
+            return@LaunchedEffect
+        }
+        repeat(3) {
+            errorShake.animateTo(10f, animationSpec = tween(45))
+            errorShake.animateTo(-10f, animationSpec = tween(45))
+        }
+        errorShake.animateTo(0f, animationSpec = tween(45))
+    }
 
     Scaffold(
         modifier = modifier,
@@ -141,96 +201,193 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                SunMark()
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = revealSun
+                        translationY = (1f - revealSun) * 28f
+                    },
+                ) {
+                    SunMark()
+                }
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.login_hero_title),
-                    style = MaterialTheme.typography.displaySmallEmphasized,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.login_hero_subtitle),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
+                Column(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = revealTitle
+                        translationY = (1f - revealTitle) * 22f
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.login_hero_title),
+                        style = MaterialTheme.typography.displaySmallEmphasized,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.login_hero_subtitle),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
 
             Spacer(Modifier.height(26.dp))
-            Text(
-                text = stringResource(R.string.login_title),
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.login_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(14.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = revealForm
+                        translationY = (1f - revealForm) * 20f
+                    },
+            ) {
+                Text(
+                    text = stringResource(R.string.login_title),
+                    style = MaterialTheme.typography.headlineSmallEmphasized,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.login_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(14.dp))
 
-            LoginModeSwitcher(
-                mode = state.mode,
-                onModeChange = viewModel::onModeChange,
-            )
+                LoginModeSwitcher(
+                    mode = state.mode,
+                    onModeChange = viewModel::onModeChange,
+                )
 
-            Spacer(Modifier.height(18.dp))
-            when (state.mode) {
-                LoginMode.QR -> QrFields(state = state, viewModel = viewModel)
-                LoginMode.MANUAL -> ManualFields(state = state, viewModel = viewModel)
-                LoginMode.PASSWORD -> PasswordFields(state = state, viewModel = viewModel)
+                Spacer(Modifier.height(18.dp))
+                AnimatedContent(
+                    targetState = state.mode,
+                    modifier = Modifier.fillMaxWidth(),
+                    transitionSpec = {
+                        val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                        val slide = motion.defaultSpatialSpec<IntOffset>()
+                        val fade = motion.fastEffectsSpec<Float>()
+                        (
+                            slideInHorizontally(slide) { width -> direction * width / 6 } +
+                                fadeIn(fade)
+                            )
+                            .togetherWith(
+                                slideOutHorizontally(slide) { width -> -direction * width / 6 } +
+                                    fadeOut(fade),
+                            )
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "loginMode",
+                ) { mode ->
+                    when (mode) {
+                        LoginMode.QR -> QrFields(state = state, viewModel = viewModel)
+                        LoginMode.MANUAL -> ManualFields(state = state, viewModel = viewModel)
+                        LoginMode.PASSWORD -> PasswordFields(state = state, viewModel = viewModel)
+                    }
+                }
             }
 
             state.error?.let { failure ->
                 Spacer(Modifier.height(14.dp))
-                LoginErrorCard(failure = failure, detail = state.errorDetail)
-            }
-
-            if (state.mode != LoginMode.QR || state.qrPayload.isNotBlank()) {
-                Spacer(Modifier.height(18.dp))
-                Button(
-                    onClick = viewModel::submit,
-                    enabled = canSubmit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = CircleShape,
-                    colors = if (state.mode == LoginMode.QR) {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    } else {
-                        ButtonDefaults.buttonColors()
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        translationX = errorShake.value
                     },
                 ) {
-                    if (state.loading) {
-                        LoadingIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = LocalContentColor.current,
-                        )
-                        Spacer(Modifier.size(10.dp))
-                        Text(stringResource(R.string.login_loading))
-                    } else {
-                        Text(
-                            text = stringResource(R.string.login_button),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
+                    LoginErrorCard(failure = failure, detail = state.errorDetail)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = state.mode != LoginMode.QR || state.qrPayload.isNotBlank(),
+                enter = scaleIn(
+                    animationSpec = motion.defaultSpatialSpec(),
+                    initialScale = 0.86f,
+                ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
+                exit = scaleOut(
+                    animationSpec = motion.fastSpatialSpec(),
+                    targetScale = 0.86f,
+                ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
+                label = "signInButton",
+            ) {
+                Column {
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        onClick = viewModel::submit,
+                        enabled = canSubmit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = CircleShape,
+                        colors = if (state.mode == LoginMode.QR) {
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        } else {
+                            ButtonDefaults.buttonColors()
+                        },
+                    ) {
+                        AnimatedContent(
+                            targetState = state.loading,
+                            transitionSpec = {
+                                (
+                                    fadeIn(motion.fastEffectsSpec<Float>()) +
+                                        scaleIn(
+                                            motion.fastSpatialSpec(),
+                                            initialScale = 0.7f,
+                                        )
+                                    )
+                                    .togetherWith(
+                                        fadeOut(motion.fastEffectsSpec<Float>()) +
+                                            scaleOut(
+                                                motion.fastSpatialSpec(),
+                                                targetScale = 0.7f,
+                                            ),
+                                    )
+                            },
+                            label = "signInContent",
+                        ) { loading ->
+                            if (loading) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    LoadingIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = LocalContentColor.current,
+                                    )
+                                    Spacer(Modifier.size(10.dp))
+                                    Text(stringResource(R.string.login_loading))
+                                }
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.login_button),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(Modifier.height(22.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = stringResource(R.string.login_unofficial),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = revealFooter
+                        translationY = (1f - revealFooter) * 16f
+                    },
+            ) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.login_unofficial),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 
@@ -246,19 +403,53 @@ fun LoginScreen(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SunMark() {
-    val shape = MaterialShapes.VerySunny.toShape()
-    Box(
-        modifier = Modifier
-            .size(92.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+    val morph = remember {
+        Morph(
+            start = MaterialShapes.Sunny,
+            end = MaterialShapes.VerySunny,
+        )
+    }
+    val motionEnabled = motionAnimationsEnabled()
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(motionEnabled) {
+        if (!motionEnabled) {
+            progress.snapTo(0f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 4_200,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+            progress.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = 4_200,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+    }
+    val containerColor = MaterialTheme.colorScheme.primaryContainer
+    val dotColor = MaterialTheme.colorScheme.primary
+    val path = remember { Path() }
+    val matrix = remember { Matrix() }
+    Canvas(modifier = Modifier.size(96.dp)) {
+        path.rewind()
+        morph.toPath(progress = progress.value, path = path)
+        matrix.reset()
+        val scale = size.minDimension * 0.82f
+        matrix.scale(x = scale, y = scale)
+        path.transform(matrix)
+        path.translate(size.center - path.getBounds().center)
+        drawPath(path = path, color = containerColor)
+        drawCircle(
+            color = dotColor,
+            radius = size.minDimension * 0.22f,
+            center = size.center,
         )
     }
 }
