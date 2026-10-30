@@ -263,6 +263,8 @@ private fun SunMark() {
     }
 }
 
+// See ViewModeSwitcher: use the expressive composable-child overload because
+// the overflow-aware overload does not accept ToggleButton children directly.
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

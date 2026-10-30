@@ -245,6 +245,9 @@ fun TimetableScreen(
     }
 }
 
+// The newer overflow-aware ButtonGroup overload takes a non-composable scope
+// and cannot host ToggleButtons directly. Keep the expressive composable-child
+// overload so the toggle shape morph and spring motion stay intact.
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
