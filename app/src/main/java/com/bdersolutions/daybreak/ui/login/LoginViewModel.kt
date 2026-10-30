@@ -207,11 +207,15 @@ class LoginViewModel(
             AppLanguage.GERMAN -> AppLanguage.ENGLISH
             AppLanguage.ENGLISH -> AppLanguage.GERMAN
         }
-        settingsRepository.setLanguage(next)
+        setLanguage(next)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        settingsRepository.setLanguage(language)
         AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(Locale.forLanguageTag(next.tag).toLanguageTag()),
+            LocaleListCompat.forLanguageTags(Locale.forLanguageTag(language.tag).toLanguageTag()),
         )
-        _state.value = _state.value.copy(language = next)
+        _state.value = _state.value.copy(language = language)
     }
 
     private fun launchSecretLogin(server: String, school: String, username: String, secret: String) {
