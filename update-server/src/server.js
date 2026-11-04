@@ -1,11 +1,14 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
+import { pickLanguage, renderPage } from './page.js';
 import { isSafeTag } from './version.js';
 
 /**
  * The HTTP API the app talks to.
  *
+ *   GET  /                  the download page for people who do not have the app yet
+ *   GET  /download         redirects to the newest APK
  *   GET  /health            liveness check
  *   GET  /v1/latest         the newest release: version, changelog, APK link, size and SHA-256
  *   GET  /v1/releases       the release history with changelogs (?limit=, default 20)
@@ -49,6 +52,45 @@ export function buildServer({ config, releases, apks, logger = false }) {
   };
 
   app.get('/health', async () => ({ ok: true }));
+
+  app.get('/', async (request, reply) => {
+    const lang = pickLanguage(request.headers['accept-language']);
+    reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'no-cache')
+      .header('Vary', 'Accept-Language')
+      .header(
+        'Content-Security-Policy',
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+      )
+      .header('X-Content-Type-Options', 'nosniff');
+    let list;
+    try {
+      list = (await releases.list()).filter((release) => release.apk);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send(renderPage({ app: config.appName, lang, status: 'unavailable' }));
+    }
+    if (list.length === 0) {
+      return reply.code(404).send(renderPage({ app: config.appName, lang, status: 'empty' }));
+    }
+    const [latest, ...older] = await Promise.all(
+      list.slice(0, 11).map((release) => describe(release, request, { ensure: false })),
+    );
+    return reply.send(renderPage({ app: config.appName, lang, latest, older }));
+  });
+
+  app.get('/download', async (request, reply) => {
+    let latest;
+    try {
+      latest = await releases.latest();
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: 'upstream_unavailable' });
+    }
+    if (!latest) return reply.code(404).send({ error: 'no_release' });
+    return reply.header('Cache-Control', 'no-cache').redirect(`/v1/apk/${latest.tag}`, 302);
+  });
 
   app.get('/v1/latest', async (request, reply) => {
     let latest;

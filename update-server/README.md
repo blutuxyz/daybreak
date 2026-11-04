@@ -17,6 +17,8 @@ GitHub release  ──►  update-server (Coolify)  ──►  Daybreak app
 | `GET /v1/releases?limit=20` | The release history with every changelog. |
 | `GET /v1/apk/:tag` | The APK. Supports `Range`, so an interrupted download resumes. |
 | `POST /v1/refresh` | Asks GitHub right now. Needs `Authorization: Bearer <REFRESH_TOKEN>`. Off when `REFRESH_TOKEN` is not set. |
+| `GET /` | A download page for people who do not have the app yet: a download button, install steps, the latest release notes, and earlier versions. It is German or English, depending on the browser. Share this address. |
+| `GET /download` | Redirects to the newest APK, so one stable link always works. |
 | `GET /health` | `{ "ok": true }`, for Coolify's health check. |
 
 The server asks GitHub at most every `CACHE_TTL_SECONDS` (5 minutes), uses the ETag so an unchanged
