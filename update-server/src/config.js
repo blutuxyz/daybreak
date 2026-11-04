@@ -9,6 +9,8 @@ export function loadConfig(env = process.env) {
      * for this.
      */
     host: env.LISTEN_HOST ?? '::',
+    /** The app's name on the download page. */
+    appName: env.APP_NAME ?? 'Daybreak',
     /** The GitHub repository whose releases are served, as "owner/name". */
     repo: env.GITHUB_REPO ?? 'blutuxyz/daybreak',
     /** The GitHub API address. Change it for GitHub Enterprise, or to point tests at a fake. */

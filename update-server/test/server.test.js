@@ -156,3 +156,62 @@ test('parseRange reads the forms an HTTP client sends', () => {
   assert.equal(parseRange('bytes=200-', 100), 'invalid');
   assert.equal(parseRange('items=1-2', 100), 'invalid');
 });
+
+test('the download page shows the newest version, its notes and earlier versions', async () => {
+  const { app } = await setup({
+    releasesBody: [
+      githubRelease('v1.1.0', { body: '## New\n- **Bold** and `code`\n- <script>alert(1)</script>' }),
+      githubRelease('v1.0.0', { body: '- First' }),
+    ],
+  });
+
+  const response = await app.inject({ method: 'GET', url: '/', headers: { ...headers, 'accept-language': 'en-US' } });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers['content-type'], /text\/html/);
+  assert.match(response.headers['content-security-policy'], /default-src 'none'/);
+  assert.match(response.body, /<html lang="en">/);
+  assert.match(response.body, /href="\/download"/);
+  assert.match(response.body, /<strong>Bold<\/strong>/);
+  assert.match(response.body, /<code>code<\/code>/);
+  assert.match(response.body, /href="\/v1\/apk\/v1\.0\.0"/);
+  // Release notes are text, never markup.
+  assert.ok(!response.body.includes('<script>alert'));
+  assert.match(response.body, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+});
+
+test('the download page speaks German to a German browser', async () => {
+  const { app } = await setup();
+
+  const response = await app.inject({ method: 'GET', url: '/', headers: { 'accept-language': 'de-CH,de;q=0.9' } });
+
+  assert.match(response.body, /<html lang="de">/);
+  assert.match(response.body, /Für Android herunterladen/);
+});
+
+test('the download page says so when there is no release yet', async () => {
+  const { app } = await setup({ releasesBody: [] });
+
+  const response = await app.inject({ method: 'GET', url: '/' });
+
+  assert.equal(response.statusCode, 404);
+  assert.match(response.body, /no release yet/);
+  assert.ok(!response.body.includes('href="/download"'));
+});
+
+test('/download redirects to the newest APK', async () => {
+  const { app } = await setup();
+
+  const response = await app.inject({ method: 'GET', url: '/download' });
+
+  assert.equal(response.statusCode, 302);
+  assert.equal(response.headers.location, '/v1/apk/v1.1.0');
+});
+
+test('/download is a 404 without a release', async () => {
+  const { app } = await setup({ releasesBody: [] });
+
+  const response = await app.inject({ method: 'GET', url: '/download' });
+
+  assert.equal(response.statusCode, 404);
+});
