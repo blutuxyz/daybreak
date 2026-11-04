@@ -4,9 +4,11 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
-import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 
 /**
  * Public entry point of the :untis module. The rest of the app never deals with
@@ -71,7 +73,43 @@ class UntisApi(
         session: UntisSession,
         startDate: LocalDate,
         endDate: LocalDate,
-    ): UntisTimetable {
+    ): UntisTimetable = requestTimetable(
+        session = session,
+        id = session.studentId,
+        type = session.studentType.ifBlank { "STUDENT" }.uppercase(),
+        startDate = startDate,
+        endDate = endDate,
+    )
+
+    /** Timetable of a class, teacher or room, as the same WebUntis account may see it. */
+    suspend fun fetchElementTimetable(
+        session: UntisSession,
+        element: UntisElement,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): UntisTimetable = requestTimetable(
+        session = session,
+        id = element.id,
+        type = element.type.name,
+        startDate = startDate,
+        endDate = endDate,
+    )
+
+    /** Classes, teachers, rooms and absence reasons, read from the master data of one week. */
+    suspend fun fetchDirectory(session: UntisSession, date: LocalDate): UntisDirectory {
+        val week = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return fetchTimetable(session, week, week.plusDays(6)).directory
+    }
+
+    /**
+     * The student's absences in a date range. Both excused and unexcused absences are
+     * requested explicitly, since the server does not return them by default.
+     */
+    suspend fun fetchAbsences(
+        session: UntisSession,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<UntisAbsence> {
         require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
         val safeServer = normalizeInputs(session.server, session.school, session.username)
         if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
@@ -80,6 +118,37 @@ class UntisApi(
         val params = JsonArray().apply {
             add(JsonObject().apply {
                 addProperty("id", session.studentId)
+                addProperty("type", type)
+                addProperty("startDate", utisDate(startDate))
+                addProperty("endDate", utisDate(endDate))
+                addProperty("includeExcused", true)
+                addProperty("includeUnExcused", true)
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = rpc.call(
+            server = safeServer,
+            school = session.school,
+            method = "getStudentAbsences2017",
+            params = params,
+        )
+        return SchoolDataParser.absences(result)
+    }
+
+    private suspend fun requestTimetable(
+        session: UntisSession,
+        id: Long,
+        type: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): UntisTimetable {
+        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("id", id)
                 addProperty("type", type)
                 addProperty("startDate", utisDate(startDate))
                 addProperty("endDate", utisDate(endDate))
@@ -187,6 +256,8 @@ class UntisApi(
                 addProperty("type", type)
                 addProperty("startDate", utisDate(absenceStart))
                 addProperty("endDate", utisDate(absenceEnd))
+                addProperty("includeExcused", true)
+                addProperty("includeUnExcused", true)
                 add("auth", auth(session.username, session.secret))
             },
             describe = ::shapeOf,

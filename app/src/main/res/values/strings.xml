@@ -198,4 +198,28 @@
     <string name="probe_start">Testaufrufe starten</string>
     <string name="probe_running">Läuft…</string>
     <string name="probe_no_session">Keine aktive Anmeldung. Bitte zuerst anmelden.</string>
+    <!-- Timetable targets and absences -->
+    <string name="nav_absences">Fehlstunden</string>
+    <string name="target_own">Mein Stundenplan</string>
+    <string name="target_class">Klasse %1$s</string>
+    <string name="target_teacher">Lehrkraft %1$s</string>
+    <string name="target_picker_title">Stundenplan wählen</string>
+    <string name="target_picker_search">Klasse, Lehrkraft oder Raum suchen</string>
+    <string name="target_section_classes">Klassen</string>
+    <string name="target_section_teachers">Lehrkräfte</string>
+    <string name="target_section_rooms">Räume</string>
+    <string name="target_no_results">Keine Treffer</string>
+    <string name="absences_title">Fehlstunden</string>
+    <string name="absences_since">Seit %1$s</string>
+    <string name="absences_total">Gesamt</string>
+    <string name="absences_count">%1$d Einträge</string>
+    <string name="absences_excused">Entschuldigt</string>
+    <string name="absences_unexcused">Unentschuldigt</string>
+    <string name="absences_excused_short">Entsch.</string>
+    <string name="absences_unexcused_short">Unentsch.</string>
+    <string name="absences_filter_all">Alle</string>
+    <string name="absences_empty">Keine Fehlstunden in diesem Zeitraum</string>
+    <string name="absences_reason_unknown">Ohne Angabe</string>
+    <string name="absences_duration_hm">%1$d h %2$d min</string>
+    <string name="absences_duration_m">%1$d min</string>
 </resources>

@@ -34,6 +34,7 @@ internal object TimetableParser {
         return UntisTimetable(
             lessons = lessons,
             masterDataTimestamp = master.longOrNull("timeStamp", "timestamp") ?: 0L,
+            directory = SchoolDataParser.directory(root),
         )
     }
 
@@ -206,7 +207,7 @@ internal object TimetableParser {
         return result.toLong()
     }
 
-    private fun parseCombinedDateTime(element: JsonElement?): Pair<LocalDate, LocalTime>? {
+    internal fun parseCombinedDateTime(element: JsonElement?): Pair<LocalDate, LocalTime>? {
         val value = element?.asPlainStringOrNull() ?: return null
         val match = DATE_TIME.find(value.trim()) ?: return null
         return try {

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
+import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.session.DaybreakSession
@@ -38,6 +39,7 @@ class SettingsViewModel(
     private val lessonNotificationManager: LessonNotificationManager,
     private val rawLogStore: RawLogStore,
     private val widgetUpdater: WidgetUpdater,
+    private val schoolData: SchoolDataRepository,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
@@ -112,6 +114,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.clear()
+                schoolData.clear()
                 rawLogStore.clear()
                 widgetUpdater.update()
             }
@@ -130,6 +133,7 @@ class SettingsViewModel(
                 lessonNotificationManager = container.lessonNotificationManager,
                 rawLogStore = container.rawLogStore,
                 widgetUpdater = container.widgetUpdater,
+                schoolData = container.schoolData,
             ) as T
         }
     }
