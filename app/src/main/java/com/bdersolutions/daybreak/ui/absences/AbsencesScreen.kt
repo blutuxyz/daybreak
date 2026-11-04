@@ -78,6 +78,7 @@ fun AbsencesScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val sinceText = remember(viewModel.schoolYearStart) {
@@ -139,6 +140,9 @@ fun AbsencesScreen(
             is AbsencesUiState.Loaded -> AbsenceList(
                 absences = current.absences,
                 reasons = current.reasons,
+                categories = categories,
+                onSaveCategory = viewModel::saveCategory,
+                onDeleteCategory = viewModel::deleteCategory,
                 contentPadding = innerPadding,
             )
         }
@@ -149,6 +153,9 @@ fun AbsencesScreen(
 private fun AbsenceList(
     absences: List<UntisAbsence>,
     reasons: Map<Long, String>,
+    categories: CategoriesUiState,
+    onSaveCategory: (id: String?, name: String, subject: String, maxLessons: Int) -> Unit,
+    onDeleteCategory: (id: String) -> Unit,
     contentPadding: PaddingValues,
 ) {
     var filter by rememberSaveable { mutableStateOf(AbsenceFilter.ALL) }
@@ -163,18 +170,18 @@ private fun AbsenceList(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "summary") {
-            AbsenceSummary(absences = absences)
+            AbsenceSummaryPager(
+                absences = absences,
+                categories = categories,
+                onSave = onSaveCategory,
+                onDelete = onDeleteCategory,
+            )
         }
         item(key = "filters") {
-            val totalTime = remember(absences) {
-                absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
-            }
-            val excusedTime = remember(absences) {
-                absences.filter { it.excused }.fold(Duration.ZERO) { sum, absence ->
-                    sum + absence.duration
-                }
-            }
-            val unexcusedTime = totalTime - excusedTime
+            val totals = remember(absences) { absenceTotals(absences) }
+            val totalTime = totals.total
+            val excusedTime = totals.excused
+            val unexcusedTime = totals.unexcused
             // The chips carry their counts, so they can be wider than a phone. They scroll rather
             // than squeezing the labels.
             Row(
@@ -245,11 +252,14 @@ private fun AbsenceList(
  * and the most recent absence.
  */
 @Composable
-private fun AbsenceSummary(absences: List<UntisAbsence>) {
-    val total = absences.fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
-    val excusedTime = absences.filter { it.excused }
-        .fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
-    val unexcusedTime = total.minus(excusedTime)
+internal fun AbsenceSummary(
+    absences: List<UntisAbsence>,
+    modifier: Modifier = Modifier,
+) {
+    val totals = remember(absences) { absenceTotals(absences) }
+    val total = totals.total
+    val excusedTime = totals.excused
+    val unexcusedTime = totals.unexcused
     val excusedShare = if (total.isZero) {
         0f
     } else {
@@ -262,7 +272,7 @@ private fun AbsenceSummary(absences: List<UntisAbsence>) {
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {

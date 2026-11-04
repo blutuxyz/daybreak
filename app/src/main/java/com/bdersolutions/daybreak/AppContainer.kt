@@ -1,9 +1,11 @@
 package com.bdersolutions.daybreak
 
 import android.content.Context
+import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
+import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.security.SecretVault
@@ -28,6 +30,12 @@ class AppContainer(context: Context) {
         api = untisApi,
     )
     val schoolData = SchoolDataRepository(untisApi, sessionStore)
+    val absenceLessonHistory = AbsenceLessonHistory(
+        store = AbsenceLessonStore(appContext),
+        timetable = timetableRepository,
+        sessionStore = sessionStore,
+        api = untisApi,
+    )
     val lessonNotificationManager = LessonNotificationManager(appContext, settingsRepository)
     val syncScheduler = SyncScheduler(appContext)
     val widgetUpdater = WidgetUpdater(appContext)

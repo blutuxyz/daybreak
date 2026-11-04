@@ -250,4 +250,26 @@
     <string name="absences_reason_unknown">No reason given</string>
     <string name="absences_duration_hm">%1$d h %2$d min</string>
     <string name="absences_duration_m">%1$d min</string>
+    <string name="absences_add_category">Add category</string>
+    <string name="absences_manage">Manage</string>
+    <string name="absences_page_label">Page %1$d of %2$d</string>
+    <string name="category_new_title">New category</string>
+    <string name="category_edit_title">Edit category</string>
+    <string name="category_name">Name</string>
+    <string name="category_subject">Subject</string>
+    <string name="category_subject_in_use">Already in a category</string>
+    <string name="category_max">Maximum missed lessons</string>
+    <string name="category_usage">%1$d of %2$d lessons</string>
+    <string name="category_remaining">%1$d lessons left</string>
+    <string name="category_limit_reached">Limit reached</string>
+    <string name="category_over">%1$d lessons over the limit</string>
+    <string name="category_loading">Counting missed lessons…</string>
+    <string name="category_missing_subject">This subject is no longer in your timetable.</string>
+    <string name="category_partial">Some weeks could not be loaded, so the count may be too low.</string>
+    <string name="category_manage_title">Manage categories</string>
+    <string name="category_manage_empty">No categories yet. Add one to track the limit for a subject.</string>
+    <string name="category_row_summary">%1$s · max. %2$d lessons</string>
+    <string name="category_delete">Delete</string>
+    <string name="category_delete_title">Delete category?</string>
+    <string name="category_delete_message">“%1$s” will be removed. Your absences are not affected.</string>
 </resources>

@@ -250,4 +250,26 @@
     <string name="absences_reason_unknown">Ohne Angabe</string>
     <string name="absences_duration_hm">%1$d h %2$d min</string>
     <string name="absences_duration_m">%1$d min</string>
+    <string name="absences_add_category">Kategorie hinzufügen</string>
+    <string name="absences_manage">Verwalten</string>
+    <string name="absences_page_label">Seite %1$d von %2$d</string>
+    <string name="category_new_title">Neue Kategorie</string>
+    <string name="category_edit_title">Kategorie bearbeiten</string>
+    <string name="category_name">Name</string>
+    <string name="category_subject">Fach</string>
+    <string name="category_subject_in_use">Schon in einer Kategorie</string>
+    <string name="category_max">Maximale Fehlstunden</string>
+    <string name="category_usage">%1$d von %2$d Stunden</string>
+    <string name="category_remaining">Noch %1$d Stunden</string>
+    <string name="category_limit_reached">Limit erreicht</string>
+    <string name="category_over">%1$d Stunden über dem Limit</string>
+    <string name="category_loading">Fehlstunden werden gezählt …</string>
+    <string name="category_missing_subject">Dieses Fach kommt nicht mehr im Stundenplan vor.</string>
+    <string name="category_partial">Einige Wochen konnten nicht geladen werden, die Zahl kann zu niedrig sein.</string>
+    <string name="category_manage_title">Kategorien verwalten</string>
+    <string name="category_manage_empty">Noch keine Kategorien. Lege eine an, um das Limit für ein Fach zu verfolgen.</string>
+    <string name="category_row_summary">%1$s · max. %2$d Stunden</string>
+    <string name="category_delete">Löschen</string>
+    <string name="category_delete_title">Kategorie löschen?</string>
+    <string name="category_delete_message">„%1$s“ wird entfernt. Deine Fehlstunden bleiben unverändert.</string>
 </resources>

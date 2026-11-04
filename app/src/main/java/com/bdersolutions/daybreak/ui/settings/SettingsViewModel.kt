@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
+import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
@@ -51,6 +52,7 @@ class SettingsViewModel(
     private val rawLogStore: RawLogStore,
     private val widgetUpdater: WidgetUpdater,
     private val schoolData: SchoolDataRepository,
+    private val absenceLessonHistory: AbsenceLessonHistory,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
@@ -173,9 +175,11 @@ class SettingsViewModel(
     fun logout() {
         scheduler.cancelAll()
         sessionStore.clear()
+        settingsRepository.clearAbsenceCategories()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.clear()
+                absenceLessonHistory.clear()
                 schoolData.clear()
                 rawLogStore.clear()
                 widgetUpdater.update()
@@ -196,6 +200,7 @@ class SettingsViewModel(
                 rawLogStore = container.rawLogStore,
                 widgetUpdater = container.widgetUpdater,
                 schoolData = container.schoolData,
+                absenceLessonHistory = container.absenceLessonHistory,
             ) as T
         }
     }
