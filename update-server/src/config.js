@@ -2,7 +2,11 @@
 export function loadConfig(env = process.env) {
   return {
     port: Number(env.PORT ?? 3000),
-    host: env.HOST ?? '0.0.0.0',
+    /**
+     * The address to listen on. "::" accepts IPv4 and IPv6, which matters because a health check that
+     * says "localhost" often resolves to the IPv6 address first.
+     */
+    host: env.HOST ?? '::',
     /** The GitHub repository whose releases are served, as "owner/name". */
     repo: env.GITHUB_REPO ?? 'blutuxyz/daybreak',
     /** The GitHub API address. Change it for GitHub Enterprise, or to point tests at a fake. */

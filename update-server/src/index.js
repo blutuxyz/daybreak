@@ -9,10 +9,24 @@ const apks = new ApkCache({ config });
 const { app, warm } = buildServer({ config, releases, apks, logger: true });
 
 try {
-  await app.listen({ port: config.port, host: config.host });
+  await listen(config.host);
 } catch (error) {
   app.log.error(error);
   process.exit(1);
+}
+
+/** Listens on the host. Where IPv6 is switched off, "::" is not available, so fall back to IPv4. */
+async function listen(host) {
+  try {
+    await app.listen({ port: config.port, host });
+  } catch (error) {
+    if (host === '::' && ['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(error?.code)) {
+      app.log.warn('IPv6 is not available, listening on IPv4 only');
+      await app.listen({ port: config.port, host: '0.0.0.0' });
+      return;
+    }
+    throw error;
+  }
 }
 
 // Look for a new release now and then, so the APK is already downloaded when the app asks.
