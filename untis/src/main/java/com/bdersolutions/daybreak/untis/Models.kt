@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.untis
 
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -84,7 +85,44 @@ data class UntisLesson(
 data class UntisTimetable(
     val lessons: List<UntisLesson>,
     val masterDataTimestamp: Long = 0L,
+    val directory: UntisDirectory = UntisDirectory(emptyList(), emptyList(), emptyList(), emptyMap()),
 )
+
+/** The kinds of school element whose timetable can be viewed. */
+enum class ElementType { CLASS, TEACHER, ROOM }
+
+/** A class, teacher or room that can be selected in the timetable picker. */
+data class UntisElement(
+    val id: Long,
+    val type: ElementType,
+    val name: String,
+    val longName: String = "",
+) {
+    val displayName: String
+        get() = longName.ifBlank { name }
+}
+
+/** Master data delivered with every timetable response. */
+data class UntisDirectory(
+    val classes: List<UntisElement>,
+    val teachers: List<UntisElement>,
+    val rooms: List<UntisElement>,
+    val absenceReasons: Map<Long, String>,
+)
+
+/** One absence (Fehlstunde) of the student. Times are local school time. */
+data class UntisAbsence(
+    val id: Long,
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+    val excused: Boolean,
+    val reasonId: Long?,
+    val reasonName: String,
+    val text: String,
+) {
+    val duration: Duration
+        get() = Duration.between(start, end)
+}
 
 /** Outcome of one diagnostic call. The raw response itself goes to the debug log. */
 data class ProbeResult(

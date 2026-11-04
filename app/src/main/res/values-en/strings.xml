@@ -198,4 +198,28 @@
     <string name="probe_start">Run test calls</string>
     <string name="probe_running">Running…</string>
     <string name="probe_no_session">No active sign-in. Please sign in first.</string>
+    <!-- Timetable targets and absences -->
+    <string name="nav_absences">Absences</string>
+    <string name="target_own">My timetable</string>
+    <string name="target_class">Class %1$s</string>
+    <string name="target_teacher">Teacher %1$s</string>
+    <string name="target_picker_title">Choose timetable</string>
+    <string name="target_picker_search">Search classes, teachers or rooms</string>
+    <string name="target_section_classes">Classes</string>
+    <string name="target_section_teachers">Teachers</string>
+    <string name="target_section_rooms">Rooms</string>
+    <string name="target_no_results">No matches</string>
+    <string name="absences_title">Absences</string>
+    <string name="absences_since">Since %1$s</string>
+    <string name="absences_total">Total</string>
+    <string name="absences_count">%1$d entries</string>
+    <string name="absences_excused">Excused</string>
+    <string name="absences_unexcused">Unexcused</string>
+    <string name="absences_excused_short">Excused</string>
+    <string name="absences_unexcused_short">Unexcused</string>
+    <string name="absences_filter_all">All</string>
+    <string name="absences_empty">No absences in this period</string>
+    <string name="absences_reason_unknown">No reason given</string>
+    <string name="absences_duration_hm">%1$d h %2$d min</string>
+    <string name="absences_duration_m">%1$d min</string>
 </resources>

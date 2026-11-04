@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,10 +32,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -58,6 +62,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -67,6 +73,8 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.settings.StartView
+import com.bdersolutions.daybreak.ui.absences.AbsencesScreen
+import com.bdersolutions.daybreak.ui.absences.AbsencesViewModel
 import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
@@ -235,6 +243,14 @@ private fun LoggedInContent(
                     initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
                 )
 
+                1 -> {
+                    val absencesViewModel: AbsencesViewModel = viewModel(
+                        key = "absences_${session.studentId}",
+                        factory = AbsencesViewModel.Factory(container),
+                    )
+                    AbsencesScreen(viewModel = absencesViewModel)
+                }
+
                 else -> SettingsScreen(
                     viewModel = settingsViewModel,
                     onOpenDebug = { showDebug = true },
@@ -252,23 +268,30 @@ private fun DaybreakBottomBar(
 ) {
     FlexibleBottomAppBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
     ) {
         BottomBarItem(
             selected = selectedTab == 0,
             icon = Icons.Outlined.CalendarMonth,
             selectedIcon = Icons.Filled.CalendarMonth,
-            label = androidx.compose.ui.res.stringResource(R.string.nav_timetable),
+            label = stringResource(R.string.nav_timetable),
             onClick = { onSelect(0) },
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(10.dp))
         BottomBarItem(
             selected = selectedTab == 1,
+            icon = Icons.Outlined.EventBusy,
+            selectedIcon = Icons.Filled.EventBusy,
+            label = stringResource(R.string.nav_absences),
+            onClick = { onSelect(1) },
+            modifier = Modifier.weight(1f),
+        )
+        BottomBarItem(
+            selected = selectedTab == 2,
             icon = Icons.Outlined.Settings,
             selectedIcon = Icons.Filled.Settings,
-            label = androidx.compose.ui.res.stringResource(R.string.nav_settings),
-            onClick = { onSelect(1) },
+            label = stringResource(R.string.nav_settings),
+            onClick = { onSelect(2) },
             modifier = Modifier.weight(1f),
         )
     }
@@ -287,7 +310,7 @@ private fun RowScope.BottomBarItem(
     val motion = MaterialTheme.motionScheme
     val container by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.primaryContainer
         } else {
             Color.Transparent
         },
@@ -296,38 +319,28 @@ private fun RowScope.BottomBarItem(
     )
     val content by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
+            MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
         animationSpec = motion.defaultEffectsSpec(),
         label = "bottomBarContent",
     )
-    val labelAlpha by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.72f,
-        animationSpec = motion.defaultEffectsSpec(),
-        label = "bottomBarLabelAlpha",
-    )
-    val labelShift by animateFloatAsState(
-        targetValue = if (selected) 0f else -2f,
-        animationSpec = motion.fastSpatialSpec(),
-        label = "bottomBarLabelShift",
-    )
     val iconFade = motion.fastEffectsSpec<Float>()
     val iconScale = motion.defaultSpatialSpec<Float>()
     Surface(
         onClick = onClick,
-        modifier = modifier.height(56.dp),
-        shape = CircleShape,
+        modifier = modifier.height(64.dp),
+        shape = RoundedCornerShape(32.dp),
         color = container,
         contentColor = content,
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxSize()
+                .padding(horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             AnimatedContent(
                 targetState = selected,
@@ -347,18 +360,14 @@ private fun RowScope.BottomBarItem(
                 Icon(
                     imageVector = if (isSelected) selectedIcon else icon,
                     contentDescription = null,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             }
-            Spacer(Modifier.width(9.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
-                modifier = Modifier.graphicsLayer {
-                    alpha = labelAlpha
-                    translationY = labelShift
-                },
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

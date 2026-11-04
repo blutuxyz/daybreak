@@ -105,6 +105,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.cache.TimetableCache
+import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisLesson
@@ -141,7 +142,10 @@ fun TimetableScreen(
     initialMode: Int = 0,
     modifier: Modifier = Modifier,
 ) {
-    val cache by viewModel.cache.collectAsStateWithLifecycle()
+    val cache by viewModel.displayCache.collectAsStateWithLifecycle()
+    val target by viewModel.target.collectAsStateWithLifecycle()
+    val directory by viewModel.directory.collectAsStateWithLifecycle()
+    var showTargetPicker by rememberSaveable { mutableStateOf(false) }
     val status by viewModel.status.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val currentSession = session ?: return
@@ -194,7 +198,7 @@ fun TimetableScreen(
     }
     val motion = MaterialTheme.motionScheme
 
-    LaunchedEffect(mode, dayPager.currentPage, weekPager.currentPage) {
+    LaunchedEffect(mode, dayPager.currentPage, weekPager.currentPage, target) {
         val activeDate = if (mode == 0) {
             dayOrigin.plusDays(dayPager.currentPage.toLong())
         } else {
@@ -218,8 +222,12 @@ fun TimetableScreen(
                 },
                 subtitle = {
                     Text(
-                        text = currentSession.studentName.ifBlank {
-                            currentSession.displayName
+                        text = when (val current = target) {
+                            TimetableTarget.Own -> currentSession.studentName.ifBlank {
+                                currentSession.displayName
+                            }
+
+                            is TimetableTarget.Element -> targetLabel(current)
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -273,6 +281,11 @@ fun TimetableScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            TargetChip(
+                target = target,
+                onClick = { showTargetPicker = true },
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp),
+            )
             ViewModeSwitcher(
                 mode = mode,
                 onModeChange = { mode = it },
@@ -350,6 +363,17 @@ fun TimetableScreen(
                 }
             }
         }
+    }
+    if (showTargetPicker) {
+        TargetPickerSheet(
+            directory = directory,
+            selected = target,
+            onSelect = {
+                viewModel.setTarget(it)
+                showTargetPicker = false
+            },
+            onDismiss = { showTargetPicker = false },
+        )
     }
 }
 
