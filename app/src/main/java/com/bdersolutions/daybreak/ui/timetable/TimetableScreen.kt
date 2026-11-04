@@ -47,7 +47,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
@@ -94,6 +93,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -991,10 +991,14 @@ private fun rememberLessonLook(
         else -> tone.accent
     }
     val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    // Every block carries a faint tint of its subject colour, so the card is not plain black or
+    // grey. Dark theme needs a little more tint to show up against the dark surface.
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tint = if (dark) 0.2f else 0.14f
     val fill = when {
         fullCard -> lerp(surface, stripe, 0.24f)
         exam != null -> lerp(surface, stripe, 0.25f)
-        else -> surface
+        else -> lerp(surface, stripe, tint)
     }
     return LessonLook(
         stripe = if (fullCard) null else stripe,
@@ -1929,15 +1933,23 @@ private fun LessonDetailsSheet(
         lesson.hasSubstitution -> stringResource(R.string.lesson_changed)
         else -> stringResource(R.string.lesson_regular)
     }
+    // The card is the lesson's colour, tinted strongly enough that the dark or light text on it
+    // reads clearly against the sheet. The tint is lighter in dark theme so text stays legible.
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val cardContainer = lerp(
+        MaterialTheme.colorScheme.surfaceContainerLow,
+        tone.accent,
+        if (dark) 0.2f else 0.3f,
+    )
     val statusContainer = when {
         cancelled -> MaterialTheme.colorScheme.errorContainer
         warning -> warningContainer()
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+        else -> MaterialTheme.colorScheme.surface
     }
     val statusContent = when {
         cancelled -> MaterialTheme.colorScheme.onErrorContainer
         warning -> warningAccent()
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface
     }
     val dateLabel = remember(lesson.date, locale) {
         val pattern = if (locale.language == "de") {
@@ -1960,22 +1972,10 @@ private fun LessonDetailsSheet(
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp),
         ) {
-            // Close sits on its own row above the card, so it does not crowd the status chip.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.action_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            Spacer(Modifier.height(4.dp))
             Surface(
                 shape = MaterialTheme.shapes.large,
-                color = tone.container,
+                color = cardContainer,
                 contentColor = tone.onContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -2005,7 +2005,7 @@ private fun LessonDetailsSheet(
                     Text(
                         text = "$dateLabel · ${formatTime(lesson.start)} – ${formatTime(lesson.end)}",
                         style = MaterialTheme.typography.titleSmall,
-                        color = tone.onContainer.copy(alpha = 0.82f),
+                        color = tone.onContainer,
                     )
                 }
             }

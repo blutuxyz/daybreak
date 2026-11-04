@@ -218,14 +218,6 @@ private fun LoggedInContent(
         showAbout = false
     }
 
-    if (showLessonColors) {
-        LessonColorsScreen(
-            viewModel = settingsViewModel,
-            onBack = { showLessonColors = false },
-        )
-        return
-    }
-
     val motion = MaterialTheme.motionScheme
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -287,21 +279,38 @@ private fun LoggedInContent(
             }
         }
 
+        // Settings sub-screens slide in from the right, stock style, with no scaling.
+        AnimatedVisibility(
+            visible = showLessonColors,
+            modifier = Modifier.fillMaxSize(),
+            enter = subScreenEnter,
+            exit = subScreenExit,
+        ) {
+            LessonColorsScreen(
+                viewModel = settingsViewModel,
+                onBack = { showLessonColors = false },
+            )
+        }
+
         AnimatedVisibility(
             visible = showAbout,
             modifier = Modifier.fillMaxSize(),
-            // Stock slide: the screen comes in from the right and goes back out to the right.
-            enter = slideInHorizontally(
-                animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-            ) { width -> width },
-            exit = slideOutHorizontally(
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-            ) { width -> width },
+            enter = subScreenEnter,
+            exit = subScreenExit,
         ) {
             AboutScreen(onBack = { showAbout = false })
         }
     }
 }
+
+/** Stock slide used by the settings sub-screens. Plain tweens, so there is no spring overshoot. */
+private val subScreenEnter = slideInHorizontally(
+    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+) { width -> width }
+
+private val subScreenExit = slideOutHorizontally(
+    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+) { width -> width }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
