@@ -127,9 +127,12 @@ import java.time.format.DateTimeFormatter
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenDebug: () -> Unit,
+    onOpenLessonColors: () -> Unit,
+    onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val debugUnlocked by viewModel.debugUnlocked.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -145,7 +148,6 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showIntervalDialog by remember { mutableStateOf(false) }
-    var aboutExpanded by rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -238,7 +240,11 @@ fun SettingsScreen(
                     settings = settings,
                     currentLanguage = currentLanguage,
                     onLanguage = viewModel::setLanguage,
-                    onThemeMode = viewModel::setThemeMode,
+                    onThemeMode = { mode ->
+                        // Ten taps on "System" reveal the debug log (see SettingsViewModel).
+                        if (mode == ThemeMode.SYSTEM) viewModel.onSystemThemeTapped()
+                        viewModel.setThemeMode(mode)
+                    },
                     onDynamicColor = viewModel::setDynamicColor,
                     onAccent = viewModel::setAccent,
                     onMotionStyle = viewModel::setMotionStyle,
@@ -246,6 +252,23 @@ fun SettingsScreen(
                     onSubjectColorMode = viewModel::setSubjectColorMode,
                     onTextScale = viewModel::setTextScale,
                 )
+            }
+            item {
+                SettingsGroup {
+                    SettingsRow(
+                        icon = Icons.Outlined.Palette,
+                        title = stringResource(R.string.settings_lesson_colors),
+                        subtitle = stringResource(R.string.settings_lesson_colors_desc),
+                        onClick = onOpenLessonColors,
+                        trailing = {
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                    )
+                }
             }
 
             item { SectionLabel(stringResource(R.string.settings_sync)) }
@@ -333,7 +356,8 @@ fun SettingsScreen(
                 }
             }
 
-            item {
+            // Hidden until unlocked from the theme option; see SettingsViewModel.
+            if (debugUnlocked) item {
                 SettingsGroup {
                     SettingsRow(
                         icon = Icons.Outlined.BugReport,
@@ -357,47 +381,15 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),
-                        onClick = { aboutExpanded = !aboutExpanded },
+                        onClick = onOpenAbout,
                         trailing = {
-                            val rotation by animateFloatAsState(
-                                targetValue = if (aboutExpanded) 90f else 0f,
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                label = "aboutChevron",
-                            )
                             Icon(
                                 Icons.Outlined.ChevronRight,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.graphicsLayer {
-                                    rotationZ = rotation
-                                },
                             )
                         },
                     )
-                    AnimatedVisibility(
-                        visible = aboutExpanded,
-                        enter = expandVertically(
-                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        ) + fadeIn(
-                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        ),
-                        exit = shrinkVertically(
-                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                        ) + fadeOut(
-                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        ),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_about_text),
-                            modifier = Modifier.padding(
-                                start = 66.dp,
-                                end = 16.dp,
-                                bottom = 14.dp,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
 
@@ -563,7 +555,7 @@ private fun AccountHeader(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text = text,
         modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 2.dp),
@@ -600,7 +592,7 @@ private fun SpringSwitch(
 }
 
 @Composable
-private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -614,7 +606,7 @@ private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun SettingsDivider() {
+internal fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 66.dp, end = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
@@ -622,7 +614,7 @@ private fun SettingsDivider() {
 }
 
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,

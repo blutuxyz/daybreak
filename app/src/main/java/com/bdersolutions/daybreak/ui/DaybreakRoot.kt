@@ -7,6 +7,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -80,6 +83,8 @@ import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
+import com.bdersolutions.daybreak.ui.settings.AboutScreen
+import com.bdersolutions.daybreak.ui.settings.LessonColorsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
@@ -158,6 +163,8 @@ private fun LoggedInContent(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
+    var showLessonColors by rememberSaveable { mutableStateOf(false) }
+    var showAbout by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
@@ -203,61 +210,95 @@ private fun LoggedInContent(
         factory = SettingsViewModel.Factory(container),
     )
 
+    BackHandler(enabled = showLessonColors) {
+        showLessonColors = false
+    }
+
+    BackHandler(enabled = showAbout) {
+        showAbout = false
+    }
+
+    if (showLessonColors) {
+        LessonColorsScreen(
+            viewModel = settingsViewModel,
+            onBack = { showLessonColors = false },
+        )
+        return
+    }
+
     val motion = MaterialTheme.motionScheme
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            DaybreakBottomBar(
-                selectedTab = selectedTab,
-                onSelect = { selectedTab = it },
-            )
-        },
-    ) { innerPadding ->
-        AnimatedContent(
-            targetState = selectedTab,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            transitionSpec = {
-                val direction = if (targetState > initialState) 1 else -1
-                val slide = motion.defaultSpatialSpec<IntOffset>()
-                val scale = motion.fastSpatialSpec<Float>()
-                val fade = motion.fastEffectsSpec<Float>()
-                (
-                    slideInHorizontally(slide) { width -> direction * width / 8 } +
-                        fadeIn(fade) +
-                        scaleIn(scale, initialScale = 0.98f)
-                    )
-                    .togetherWith(
-                        slideOutHorizontally(slide) { width -> -direction * width / 8 } +
-                            fadeOut(fade),
-                    )
-                    .using(SizeTransform(clip = false))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                DaybreakBottomBar(
+                    selectedTab = selectedTab,
+                    onSelect = { selectedTab = it },
+                )
             },
-            label = "tabContent",
-        ) { tab ->
-            when (tab) {
-                0 -> TimetableScreen(
-                    viewModel = timetableViewModel,
-                    initialDate = initialDate,
-                    initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
-                )
-
-                1 -> {
-                    val absencesViewModel: AbsencesViewModel = viewModel(
-                        key = "absences_${session.studentId}",
-                        factory = AbsencesViewModel.Factory(container),
+        ) { innerPadding ->
+            AnimatedContent(
+                targetState = selectedTab,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                transitionSpec = {
+                    val direction = if (targetState > initialState) 1 else -1
+                    val slide = motion.defaultSpatialSpec<IntOffset>()
+                    val scale = motion.fastSpatialSpec<Float>()
+                    val fade = motion.fastEffectsSpec<Float>()
+                    (
+                        slideInHorizontally(slide) { width -> direction * width / 8 } +
+                            fadeIn(fade) +
+                            scaleIn(scale, initialScale = 0.98f)
+                        )
+                        .togetherWith(
+                            slideOutHorizontally(slide) { width -> -direction * width / 8 } +
+                                fadeOut(fade),
+                        )
+                        .using(SizeTransform(clip = false))
+                },
+                label = "tabContent",
+            ) { tab ->
+                when (tab) {
+                    0 -> TimetableScreen(
+                        viewModel = timetableViewModel,
+                        initialDate = initialDate,
+                        initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
                     )
-                    AbsencesScreen(viewModel = absencesViewModel)
-                }
 
-                else -> SettingsScreen(
-                    viewModel = settingsViewModel,
-                    onOpenDebug = { showDebug = true },
-                )
+                    1 -> {
+                        val absencesViewModel: AbsencesViewModel = viewModel(
+                            key = "absences_${session.studentId}",
+                            factory = AbsencesViewModel.Factory(container),
+                        )
+                        AbsencesScreen(viewModel = absencesViewModel)
+                    }
+
+                    else -> SettingsScreen(
+                        viewModel = settingsViewModel,
+                        onOpenDebug = { showDebug = true },
+                        onOpenLessonColors = { showLessonColors = true },
+                    onOpenAbout = { showAbout = true },
+                    )
+                }
             }
+        }
+
+        AnimatedVisibility(
+            visible = showAbout,
+            modifier = Modifier.fillMaxSize(),
+            // Stock slide: the screen comes in from the right and goes back out to the right.
+            enter = slideInHorizontally(
+                animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+            ) { width -> width },
+            exit = slideOutHorizontally(
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            ) { width -> width },
+        ) {
+            AboutScreen(onBack = { showAbout = false })
         }
     }
 }

@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -66,7 +65,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -94,6 +93,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -117,13 +117,18 @@ import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
+import com.bdersolutions.daybreak.ui.components.LocalLessonColors
 import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
+import com.bdersolutions.daybreak.ui.components.cancelledAccent
+import com.bdersolutions.daybreak.ui.components.onColorFor
+import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
+import com.bdersolutions.daybreak.ui.components.SubjectTone
+import com.bdersolutions.daybreak.ui.components.substitutionAccent
 import com.bdersolutions.daybreak.ui.components.examAccent
 import com.bdersolutions.daybreak.ui.components.examContainer
 import com.bdersolutions.daybreak.ui.components.examContent
 import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
-import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.warningAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -713,6 +718,49 @@ private fun DayChip(
     }
 }
 
+/**
+ * The "now" line: a thin line across the timetable at the current time, with the time in a
+ * bubble at its end. It glides to its new position when the minute changes. Used by the day
+ * view and the week view.
+ */
+@Composable
+private fun NowLine(
+    range: TimelineRange,
+    now: LocalTime,
+    pxPerMinute: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val animatedMinutes by animateFloatAsState(
+        targetValue = minutesBetween(range.start, now).toFloat(),
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "nowLine",
+    )
+    Row(
+        modifier = modifier
+            .offset(y = pxPerMinute * animatedMinutes - 9.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(2.dp)
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+        ) {
+            Text(
+                text = formatTime(now),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun DayTimeline(
     blocks: List<TimelineBlock>,
@@ -756,11 +804,6 @@ private fun DayTimeline(
                 pxPerMinute = pxPerMinute,
             )
             val nowTime = now.toLocalTime()
-            val animatedNowMinutes by animateFloatAsState(
-                targetValue = minutesBetween(range.start, nowTime).toFloat(),
-                animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
-                label = "nowLine",
-            )
             val currentBlock = if (isToday) {
                 blocks.filter {
                     !nowTime.isBefore(it.start) && nowTime.isBefore(it.end)
@@ -792,11 +835,6 @@ private fun DayTimeline(
                         block = block,
                         current = current,
                         exam = examFor(block.lesson, exams),
-                        progress = if (current) {
-                            block.progressAt(nowTime)
-                        } else {
-                            0f
-                        },
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(columnWidth - 4.dp)
@@ -815,31 +853,7 @@ private fun DayTimeline(
                 }
             }
             if (isToday && nowTime >= range.start && nowTime < range.end) {
-                val y = pxPerMinute * animatedNowMinutes
-                Row(
-                    modifier = Modifier
-                        .offset(y = y - 9.dp)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(2.dp)
-                            .background(MaterialTheme.colorScheme.primary),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                    ) {
-                        Text(
-                            text = formatTime(nowTime),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                }
+                NowLine(range = range, now = nowTime, pxPerMinute = pxPerMinute)
             }
         }
     }
@@ -940,13 +954,62 @@ private fun FreeGapBands(
     }
 }
 
+/** How a lesson block is drawn once status and the user's colour choices are applied. */
+private class LessonLook(
+    /** The edge stripe, or null when the whole card is coloured instead. */
+    val stripe: Color?,
+    val fill: Color,
+    val content: Color,
+    /** Used for borders. */
+    val accent: Color,
+)
+
+@Composable
+private fun rememberLessonLook(
+    block: TimelineBlock,
+    exam: UntisExam?,
+    tone: SubjectTone,
+    subject: String,
+): LessonLook {
+    val lessonColors = LocalLessonColors.current
+    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val customSubject = lessonColors.subjectColors.containsKey(subject)
+    val fullCard = lessonColors.fillWholeCard
+    if (roles && !customSubject && !fullCard) {
+        // The role palette fills the card itself, as before.
+        return LessonLook(
+            stripe = null,
+            fill = tone.container,
+            content = tone.onContainer,
+            accent = tone.accent,
+        )
+    }
+    val stripe = when {
+        block.isCancelled -> cancelledAccent()
+        exam != null -> examAccent()
+        block.hasRoomChange || block.hasSubstitution -> substitutionAccent()
+        else -> tone.accent
+    }
+    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val fill = when {
+        fullCard -> lerp(surface, stripe, 0.24f)
+        exam != null -> lerp(surface, stripe, 0.25f)
+        else -> surface
+    }
+    return LessonLook(
+        stripe = if (fullCard) null else stripe,
+        fill = fill,
+        content = MaterialTheme.colorScheme.onSurface,
+        accent = stripe,
+    )
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DayLessonBlock(
     block: TimelineBlock,
     current: Boolean,
     exam: UntisExam?,
-    progress: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -958,19 +1021,13 @@ private fun DayLessonBlock(
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
-    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        cancelled -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-        block.hasSubstitution -> BorderStroke(1.5.dp, warningAccent())
+        cancelled -> BorderStroke(1.5.dp, cancelledAccent())
+        block.hasSubstitution -> BorderStroke(1.5.dp, substitutionAccent())
         else -> null
-    }
-    val stripe = when {
-        cancelled -> MaterialTheme.colorScheme.error
-        exam != null -> examAccent()
-        block.hasSubstitution -> warningAccent()
-        else -> tone.accent
     }
     val badge = when {
         cancelled -> stringResource(R.string.lesson_cancelled)
@@ -978,12 +1035,7 @@ private fun DayLessonBlock(
         block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
         else -> null
     }
-    // An exam is the one block that takes a full fill, so it stands out from the grid.
-    val container = when {
-        roles -> tone.container
-        exam != null -> examContainer()
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
-    }
+    val badgeAccent = if (cancelled) cancelledAccent() else substitutionAccent()
     Surface(
         onClick = onClick,
         modifier = modifier.graphicsLayer {
@@ -991,18 +1043,14 @@ private fun DayLessonBlock(
             scaleY = pressScale
         },
         shape = RoundedCornerShape(if (block.lessons.size > 1) 18.dp else 14.dp),
-        color = container,
-        contentColor = when {
-            roles -> tone.onContainer
-            exam != null -> examContent()
-            else -> MaterialTheme.colorScheme.onSurface
-        },
+        color = look.fill,
+        contentColor = look.content,
         border = border,
         tonalElevation = if (current) 3.dp else 0.dp,
         interactionSource = interactionSource,
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            if (!roles) {
+            look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -1046,24 +1094,19 @@ private fun DayLessonBlock(
                         AccentBadge(
                             text = stringResource(R.string.exam_badge),
                             containerColor = examAccent(),
-                            // Near-black text on the gold badge keeps it above 4.5:1 in both themes.
-                            contentColor = Color(0xFF1F1700),
+                            contentColor = onColorFor(examAccent()),
                         )
                     }
                     if (badge != null) {
                         Spacer(Modifier.width(4.dp))
                         AccentBadge(
                             text = badge,
-                            containerColor = if (cancelled) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                warningContainer()
-                            },
-                            contentColor = if (cancelled) {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            } else {
-                                warningAccent()
-                            },
+                            containerColor = lerp(
+                                MaterialTheme.colorScheme.surface,
+                                badgeAccent,
+                                0.22f,
+                            ),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -1086,25 +1129,6 @@ private fun DayLessonBlock(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-                if (current) {
-                    val animatedProgress = remember { Animatable(progress) }
-                    LaunchedEffect(progress) {
-                        animatedProgress.animateTo(
-                            targetValue = progress,
-                            animationSpec = tween(
-                                durationMillis = 30_000,
-                                easing = LinearEasing,
-                            ),
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    LinearWavyProgressIndicator(
-                        progress = { animatedProgress.value },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                    )
                 }
             }
         }
@@ -1139,6 +1163,11 @@ private fun WeekPage(
         }
     }
     val pxPerMinute = 1.05.dp
+    // One fade for the whole week when it is shown, instead of an animation per lesson.
+    val gridReveal = remember(weekStart) { Animatable(0f) }
+    LaunchedEffect(weekStart) {
+        gridReveal.animateTo(1f, animationSpec = tween(durationMillis = 220))
+    }
     val contentHeight = (pxPerMinute.value * range.minutes).dp
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
 
@@ -1196,7 +1225,8 @@ private fun WeekPage(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState()),
+                                    .verticalScroll(rememberScrollState())
+                                    .graphicsLayer { alpha = gridReveal.value },
                             ) {
                                 TimelineAxis(
                                     range = range,
@@ -1207,25 +1237,34 @@ private fun WeekPage(
                                         .height(contentHeight),
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Row(
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(contentHeight),
                                 ) {
-                                    days.forEach { day ->
-                                        WeekDayColumn(
-                                            date = day,
-                                            today = today,
-                                            now = now,
-                                            lessons = gridLessonsByDay[day].orEmpty(),
-                                            range = range,
-                                            periodStarts = periodStarts,
-                                            pxPerMinute = pxPerMinute,
-                                            revealKey = weekStart,
-                                            exams = cache.exams,
-                                            onLessonClick = { selectedLesson = it },
-                                            modifier = Modifier.weight(1f),
-                                        )
+                                    Row(modifier = Modifier.fillMaxSize()) {
+                                        days.forEach { day ->
+                                            WeekDayColumn(
+                                                date = day,
+                                                today = today,
+                                                now = now,
+                                                lessons = gridLessonsByDay[day].orEmpty(),
+                                                range = range,
+                                                periodStarts = periodStarts,
+                                                pxPerMinute = pxPerMinute,
+                                                revealKey = weekStart,
+                                                exams = cache.exams,
+                                                onLessonClick = { selectedLesson = it },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+                                    // The same time line as the day view, shown only in the current week.
+                                    val nowTime = now.toLocalTime()
+                                    val isCurrentWeek = weekStart ==
+                                        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                                    if (isCurrentWeek && nowTime >= range.start && nowTime < range.end) {
+                                        NowLine(range = range, now = nowTime, pxPerMinute = pxPerMinute)
                                     }
                                 }
                             }
@@ -1311,45 +1350,56 @@ private fun WeekAllDayRow(
     longEventsByDay: Map<LocalDate, List<UntisLesson>>,
     onLessonClick: (UntisLesson) -> Unit,
 ) {
-    Row(
+    val context = LocalContext.current
+    val locale = currentLocale(context)
+    val dayLabel = DateTimeFormatter.ofPattern("EEE d. MMM", locale)
+    // A day column is too narrow for a long event's name, so long events are listed
+    // full width, with the day and time next to the name.
+    val events = days.flatMap { day -> longEventsByDay[day].orEmpty() }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 14.dp, bottom = 4.dp),
+            .padding(start = 16.dp, end = 14.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Spacer(Modifier.width(52.dp))
-        Spacer(Modifier.width(8.dp))
-        Row(modifier = Modifier.weight(1f)) {
-            days.forEach { day ->
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 1.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+        events.forEach { lesson ->
+            val subject = lesson.subject.ifBlank {
+                stringResource(R.string.lesson_unknown_subject)
+            }
+            val tone = rememberSubjectTone(subject)
+            val dayText = lesson.date.format(dayLabel).replaceFirstChar { it.titlecase(locale) }
+            Surface(
+                onClick = { onLessonClick(lesson) },
+                shape = RoundedCornerShape(12.dp),
+                color = tone.container,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    longEventsByDay[day].orEmpty().take(2).forEach { lesson ->
-                        val subject = lesson.subject.ifBlank {
-                            stringResource(R.string.lesson_unknown_subject)
-                        }
-                        val tone = rememberSubjectTone(subject)
-                        Surface(
-                            onClick = { onLessonClick(lesson) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = tone.container,
-                            contentColor = tone.onContainer,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = subject,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    lineHeight = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(tone.accent, CircleShape),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = subject,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "$dayText · ${formatTime(lesson.start)} – ${formatTime(lesson.end)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -1398,24 +1448,15 @@ private fun WeekDayColumn(
             } else {
                 null
             }
-            blocks.forEachIndexed { index, block ->
+            // Block geometry is set directly. Animating every block's position and height with
+            // springs cost a lot while scrolling, so the week only fades in as a whole.
+            blocks.forEach { block ->
                 key(block.lesson.id, block.start, block.end) {
-                    val targetTop = pxPerMinute * minutesBetween(range.start, block.start)
-                    val targetHeight = max(
+                    val top = pxPerMinute * minutesBetween(range.start, block.start)
+                    val height = max(
                         24f,
                         pxPerMinute.value * minutesBetween(block.start, block.end) - 2f,
                     ).dp
-                    val animatedTop by animateDpAsState(
-                        targetValue = targetTop,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "weekLessonTop",
-                    )
-                    val animatedHeight by animateDpAsState(
-                        targetValue = targetHeight,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "weekLessonHeight",
-                    )
-                    val reveal by rememberStaggeredReveal(revealKey, index)
                     val columnWidth = maxWidth / block.columnCount
                     val current = block == currentBlock
                     WeekLessonBlock(
@@ -1425,17 +1466,11 @@ private fun WeekDayColumn(
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(maxOf(columnWidth - 2.dp, 14.dp))
-                            .height(animatedHeight)
+                            .height(height)
                             .offset(
                                 x = columnWidth * block.column + 1.dp,
-                                y = animatedTop,
-                            )
-                            .graphicsLayer {
-                                alpha = reveal
-                                val scale = 0.94f + 0.06f * reveal
-                                scaleX = scale
-                                scaleY = scale
-                            },
+                                y = top,
+                            ),
                     )
                 }
             }
@@ -1458,60 +1493,36 @@ private fun WeekLessonBlock(
     modifier: Modifier = Modifier,
 ) {
     val lesson = block.lesson
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressScale by rememberPressScale(interactionSource)
     val subject = lesson.subject.ifBlank {
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
-    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
-    val stripe = when {
-        cancelled -> MaterialTheme.colorScheme.error
-        exam != null -> examAccent()
-        block.hasRoomChange || block.hasSubstitution -> warningAccent()
-        else -> tone.accent
-    }
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        cancelled -> BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        cancelled -> BorderStroke(1.dp, cancelledAccent())
         exam != null -> BorderStroke(1.dp, examAccent())
-        block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, warningAccent())
+        block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, substitutionAccent())
         else -> null
     }
     // Week columns are narrow, so status is written out as a line of text rather than a badge.
-    val status: Pair<String, Color>? = when {
-        cancelled -> stringResource(R.string.lesson_cancelled) to MaterialTheme.colorScheme.error
-        exam != null -> stringResource(R.string.exam_badge) to examContent()
-        block.hasRoomChange || block.hasSubstitution -> {
-            stringResource(R.string.lesson_substitution_short) to warningAccent()
-        }
-
+    val status: String? = when {
+        cancelled -> stringResource(R.string.lesson_cancelled)
+        exam != null -> stringResource(R.string.exam_badge)
+        block.hasRoomChange || block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
         else -> null
-    }
-    val container = when {
-        roles -> tone.container
-        exam != null -> examContainer()
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     Surface(
         onClick = onClick,
-        modifier = modifier.graphicsLayer {
-            scaleX = pressScale
-            scaleY = pressScale
-        },
+        modifier = modifier,
         shape = RoundedCornerShape(9.dp),
-        color = container,
-        contentColor = when {
-            roles -> tone.onContainer
-            exam != null -> examContent()
-            else -> MaterialTheme.colorScheme.onSurface
-        },
+        color = look.fill,
+        contentColor = look.content,
         border = border,
-        interactionSource = interactionSource,
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            if (!roles) {
+            look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -1543,13 +1554,13 @@ private fun WeekLessonBlock(
                 if (block.durationMinutes >= 35) {
                     if (status != null) {
                         Text(
-                            text = status.first,
+                            text = status,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
                                 lineHeight = 12.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
-                            color = status.second,
+                            color = look.content,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1738,11 +1749,6 @@ private data class TimelineBlock(
     val hasSubstitution: Boolean get() = lessons.any { it.hasSubstitution }
     val durationMinutes: Int get() = minutesBetween(start, end)
 
-    fun progressAt(time: LocalTime): Float {
-        val total = Duration.between(start, end).seconds.toFloat()
-        if (total <= 0f) return 0f
-        return (Duration.between(start, time).seconds.toFloat() / total).coerceIn(0f, 1f)
-    }
 }
 
 private fun mergeLessons(lessons: List<UntisLesson>): List<TimelineBlock> {
@@ -1954,13 +1960,26 @@ private fun LessonDetailsSheet(
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp),
         ) {
+            // Close sits on its own row above the card, so it does not crowd the status chip.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.action_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Surface(
                 shape = MaterialTheme.shapes.large,
                 color = tone.container,
                 contentColor = tone.onContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 14.dp, bottom = 18.dp)) {
+                Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 18.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             text = subject,
@@ -1981,12 +2000,6 @@ private fun LessonDetailsSheet(
                             contentColor = statusContent,
                             modifier = Modifier.padding(top = 4.dp),
                         )
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.action_close),
-                            )
-                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(

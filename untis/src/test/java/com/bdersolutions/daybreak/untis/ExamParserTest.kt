@@ -68,6 +68,19 @@ class ExamParserTest {
     }
 
     @Test
+    fun resolvesTheSubjectNameFromItsId() {
+        val json = JsonParser.parseString(
+            """[{"examType":"Diktat","subjectId":8,""" +
+                """"startDateTime":"2026-11-10T11:35Z","endDateTime":"2026-11-10T13:15Z"}]""",
+        )
+
+        val exam = ExamParser.parse(json, mapOf(8L to "D")).single()
+
+        assertEquals("D", exam.subject)
+        assertEquals(LocalTime.of(13, 15), exam.end)
+    }
+
+    @Test
     fun anUnknownShapeGivesAnEmptyList() {
         assertTrue(ExamParser.parse(JsonParser.parseString("""{"something":1}""")).isEmpty())
     }

@@ -44,6 +44,18 @@ enum class TextScale(val multiplier: Float) {
     EXTRA_LARGE(1.3f),
 }
 
+/**
+ * Lesson colour choices. Colours are ARGB values; a missing entry keeps the automatic
+ * colour. [fillWholeCard] colours the whole lesson card instead of only its stripe.
+ */
+data class LessonColorSettings(
+    val subjectColors: Map<String, Long> = emptyMap(),
+    val cancelledColor: Long? = null,
+    val examColor: Long? = null,
+    val substitutionColor: Long? = null,
+    val fillWholeCard: Boolean = false,
+)
+
 data class AppSettings(
     val language: AppLanguage = AppLanguage.GERMAN,
     val syncEnabled: Boolean = true,
@@ -56,6 +68,7 @@ data class AppSettings(
     val startView: StartView = StartView.DAY,
     val subjectColorMode: SubjectColorMode = SubjectColorMode.ACCENT_HUES,
     val textScale: TextScale = TextScale.STANDARD,
+    val lessonColors: LessonColorSettings = LessonColorSettings(),
 )
 
 class SettingsRepository(context: Context) {
@@ -110,6 +123,10 @@ class SettingsRepository(context: Context) {
         update(_settings.value.copy(textScale = scale))
     }
 
+    fun updateLessonColors(transform: (LessonColorSettings) -> LessonColorSettings) {
+        update(_settings.value.copy(lessonColors = transform(_settings.value.lessonColors)))
+    }
+
     private fun update(value: AppSettings) {
         preferences.edit()
             .putString(KEY_LANGUAGE, value.language.tag)
@@ -123,6 +140,7 @@ class SettingsRepository(context: Context) {
             .putString(KEY_START_VIEW, value.startView.name)
             .putString(KEY_SUBJECT_COLOR_MODE, value.subjectColorMode.name)
             .putString(KEY_TEXT_SCALE, value.textScale.name)
+            .putString(KEY_LESSON_COLORS, gson.toJson(value.lessonColors))
             .apply()
         _settings.value = value
     }
@@ -143,7 +161,20 @@ class SettingsRepository(context: Context) {
             SubjectColorMode.ACCENT_HUES,
         ),
         textScale = enumOrDefault(preferences.getString(KEY_TEXT_SCALE, null), TextScale.STANDARD),
+        lessonColors = decodeLessonColors(preferences.getString(KEY_LESSON_COLORS, null)),
     )
+
+    private fun decodeLessonColors(json: String?): LessonColorSettings {
+        if (json.isNullOrBlank()) return LessonColorSettings()
+        return runCatching { gson.fromJson(json, LessonColorSettings::class.java) }
+            .getOrNull()
+            ?.let { decoded ->
+                // Gson can leave a missing map as null, so repair it instead of trusting it.
+                val colors: Map<String, Long>? = decoded.subjectColors
+                decoded.copy(subjectColors = colors.orEmpty())
+            }
+            ?: LessonColorSettings()
+    }
 
     private inline fun <reified E : Enum<E>> enumOrDefault(raw: String?, default: E): E =
         enumValues<E>().firstOrNull { it.name == raw } ?: default
@@ -162,5 +193,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_START_VIEW = "start_view"
         private const val KEY_SUBJECT_COLOR_MODE = "subject_color_mode"
         private const val KEY_TEXT_SCALE = "text_scale"
+        private const val KEY_LESSON_COLORS = "lesson_colors"
+        private val gson = com.google.gson.Gson()
     }
 }

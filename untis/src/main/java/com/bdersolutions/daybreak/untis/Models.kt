@@ -122,6 +122,8 @@ data class UntisDirectory(
     val teachers: List<UntisElement>,
     val rooms: List<UntisElement>,
     val absenceReasons: Map<Long, String>,
+    /** Short subject name by subject id, the names lessons carry. Exams refer to subjects by id. */
+    val subjectNamesById: Map<Long, String> = emptyMap(),
 )
 
 /** One absence (Fehlstunde) of the student. Times are local school time. */

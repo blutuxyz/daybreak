@@ -15,7 +15,11 @@ import java.time.LocalTime
  */
 internal object ExamParser {
 
-    fun parse(result: JsonElement): List<UntisExam> {
+    /**
+     * [subjectNames] maps a subject id to its short name. Exams carry only the id, and the id
+     * is what lets an exam match the right lesson.
+     */
+    fun parse(result: JsonElement, subjectNames: Map<Long, String> = emptyMap()): List<UntisExam> {
         val items: JsonArray = when {
             result.isJsonArray -> result.asJsonArray
             result.isJsonObject -> result.asJsonObject.arrayOrNull("exams", "examList", "items")
@@ -23,7 +27,9 @@ internal object ExamParser {
 
             else -> return emptyList()
         }
-        return items.mapNotNull { element -> element.asJsonObjectOrNull()?.let(::parseExam) }
+        return items.mapNotNull { element ->
+            element.asJsonObjectOrNull()?.let { parseExam(it, subjectNames) }
+        }
     }
 
     /**
@@ -32,7 +38,7 @@ internal object ExamParser {
      * space), and `subjectId` only, with no subject short name. The older `examDate` /
      * `startTime` shape is still accepted.
      */
-    private fun parseExam(obj: JsonObject): UntisExam? {
+    private fun parseExam(obj: JsonObject, subjectNames: Map<Long, String>): UntisExam? {
         val startPair = TimetableParser.parseCombinedDateTime(obj.takeFirstElement("startDateTime", "start"))
         val date: LocalDate = startPair?.first
             ?: WireDate.parseDate(obj.takeFirstElement("examDate", "date", "startDate"))
@@ -45,6 +51,7 @@ internal object ExamParser {
         val end = if (rawEnd != null && rawEnd.isAfter(start)) rawEnd else start.plusMinutes(45)
         val subject = obj.stringOrNull("subject", "subjectName", "su", "subjectShort")
             ?: obj.objectOrNull("subject")?.stringOrNull("name", "shortName", "short")
+            ?: obj.longOrNull("subjectId")?.let { subjectNames[it] }
             ?: ""
         val name = obj.stringOrNull("name", "title").orEmpty().trim()
             .ifBlank { obj.stringOrNull("examType").orEmpty().trim() }

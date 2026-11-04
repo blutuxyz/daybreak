@@ -9,6 +9,25 @@ import kotlin.math.sqrt
 /** Number of hue slots subjects are spread across in the accent-hue palette. */
 const val SUBJECT_HUE_SLOTS = 8
 
+/** Number of swatches offered when the user picks a colour. */
+const val LESSON_SWATCH_COUNT = 24
+
+/**
+ * The swatches offered in the colour picker: evenly spaced hues at one lightness and chroma,
+ * so every swatch is about equally strong. Returned as opaque ARGB values.
+ */
+fun lessonSwatchArgb(): List<Long> = List(LESSON_SWATCH_COUNT) { index ->
+    val rgb = oklchToSrgb(
+        OkLch(
+            lightness = 0.66,
+            chroma = 0.15,
+            hueDegrees = index * 360.0 / LESSON_SWATCH_COUNT,
+        ),
+    )
+    fun channel(value: Double): Long = Math.round(value * 255.0)
+    (0xFFL shl 24) or (channel(rgb[0]) shl 16) or (channel(rgb[1]) shl 8) or channel(rgb[2])
+}
+
 /** A colour in OKLCH: lightness 0..1, chroma roughly 0..0.4, hue in degrees. */
 data class OkLch(
     val lightness: Double,

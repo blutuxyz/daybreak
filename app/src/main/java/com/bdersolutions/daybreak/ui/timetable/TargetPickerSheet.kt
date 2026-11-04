@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,6 +99,8 @@ fun TargetPickerSheet(
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                // A pill, like the buttons and rows around it.
+                shape = CircleShape,
                 placeholder = { Text(stringResource(R.string.target_picker_search)) },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)

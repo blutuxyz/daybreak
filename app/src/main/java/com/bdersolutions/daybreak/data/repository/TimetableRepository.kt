@@ -167,6 +167,7 @@ class TimetableRepository(
                         endDate = weekStart.plusDays(6),
                     )
                     workingCache = workingCache.copy(
+                        subjectNames = workingCache.subjectNames + timetable.directory.subjectNamesById,
                         weeks = workingCache.weeks + (
                             weekStart to CachedWeek(
                                 weekStart = weekStart,
@@ -187,11 +188,19 @@ class TimetableRepository(
 
             // Exams are an extra. A failed exam request must not hide a good timetable, so it
             // is isolated, and the exams for this range are replaced only when it succeeds.
-            if (weeks.isNotEmpty() && nextError !is UntisAuthException) {
-                val from = weeks.min()
-                val to = weeks.max().plusDays(6)
+            // The exam window covers every cached week, not only the requested ones, so exams
+            // stored before subject names were known are refreshed with the names too.
+            val window = (workingCache.weeks.keys + weeks)
+            if (window.isNotEmpty() && nextError !is UntisAuthException) {
+                val from = window.min()
+                val to = window.max().plusDays(6)
                 runCatching {
-                    api.fetchExams(session = untisSession, startDate = from, endDate = to)
+                    api.fetchExams(
+                        session = untisSession,
+                        startDate = from,
+                        endDate = to,
+                        subjectNames = workingCache.subjectNames,
+                    )
                 }.onSuccess { exams ->
                     val kept = workingCache.exams.filterNot { it.date in from..to }
                     workingCache = workingCache.copy(exams = kept + exams)
