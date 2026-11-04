@@ -18,6 +18,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -96,6 +98,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.untis.UntisChild
+import com.bdersolutions.daybreak.ui.components.rememberPressCorner
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
@@ -338,13 +341,20 @@ fun LoginScreen(
             ) {
                 Column {
                     Spacer(Modifier.height(18.dp))
+                    val submitInteraction = remember { MutableInteractionSource() }
+                    val submitCorner by rememberPressCorner(
+                        interactionSource = submitInteraction,
+                        restingRadius = 28.dp,
+                        pressedRadius = 14.dp,
+                    )
                     Button(
                         onClick = viewModel::submit,
                         enabled = canSubmit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(submitCorner),
+                        interactionSource = submitInteraction,
                         colors = if (state.mode == LoginMode.QR) {
                             ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -559,13 +569,20 @@ private fun QrFields(
 ) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val scanInteraction = remember { MutableInteractionSource() }
+        val scanCorner by rememberPressCorner(
+            interactionSource = scanInteraction,
+            restingRadius = 30.dp,
+            pressedRadius = 14.dp,
+        )
         Button(
             onClick = { startQrScanner(context, viewModel) },
             enabled = !state.loading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp),
-            shape = CircleShape,
+            shape = RoundedCornerShape(scanCorner),
+            interactionSource = scanInteraction,
         ) {
             Icon(
                 Icons.Outlined.QrCodeScanner,

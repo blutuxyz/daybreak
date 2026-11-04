@@ -3,6 +3,7 @@ package com.bdersolutions.daybreak.ui.debug
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.BugReport
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.debug.RawLogEntry
+import com.bdersolutions.daybreak.ui.components.rememberPressCorner
 import com.bdersolutions.daybreak.untis.ProbeResult
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -325,10 +328,18 @@ private fun ProbeCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
+            val runInteraction = remember { MutableInteractionSource() }
+            val runCorner by rememberPressCorner(
+                interactionSource = runInteraction,
+                restingRadius = 24.dp,
+                pressedRadius = 10.dp,
+            )
             Button(
                 onClick = onRun,
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(runCorner),
+                interactionSource = runInteraction,
             ) {
                 if (running) {
                     CircularProgressIndicator(
