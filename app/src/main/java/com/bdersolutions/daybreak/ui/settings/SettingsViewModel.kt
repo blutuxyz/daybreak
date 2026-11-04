@@ -12,9 +12,13 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.session.SessionStore
+import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
+import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.settings.StartView
+import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +67,26 @@ class SettingsViewModel(
     fun setNotificationsEnabled(enabled: Boolean) {
         settingsRepository.setNotificationsEnabled(enabled)
         lessonNotificationManager.ensureChannel()
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        settingsRepository.setThemeMode(mode)
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        settingsRepository.setDynamicColor(enabled)
+    }
+
+    fun setAccent(accent: AccentColor) {
+        settingsRepository.setAccent(accent)
+    }
+
+    fun setMotionStyle(style: MotionStyle) {
+        settingsRepository.setMotionStyle(style)
+    }
+
+    fun setStartView(view: StartView) {
+        settingsRepository.setStartView(view)
     }
 
     fun syncNow() {

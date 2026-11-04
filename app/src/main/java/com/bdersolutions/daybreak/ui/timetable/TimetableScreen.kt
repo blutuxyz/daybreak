@@ -138,6 +138,7 @@ private const val WEEK_START_OFFSET = 52
 fun TimetableScreen(
     viewModel: TimetableViewModel,
     initialDate: LocalDate? = null,
+    initialMode: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val cache by viewModel.cache.collectAsStateWithLifecycle()
@@ -146,7 +147,7 @@ fun TimetableScreen(
     val currentSession = session ?: return
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    var mode by rememberSaveable { mutableIntStateOf(0) }
+    var mode by rememberSaveable { mutableIntStateOf(initialMode) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(viewModel) {

@@ -5,6 +5,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import java.time.format.DateTimeFormatter
 
 /**
@@ -96,6 +97,131 @@ class UntisApi(
             params = params,
         )
         return TimetableParser.parse(result)
+    }
+
+    /**
+     * Debug only. Calls the endpoints Daybreak does not use yet, once each: the
+     * student's own timetable (to find class, teacher and room ids), absences, and
+     * the class, teacher and room timetables. Each call is isolated, so one failure
+     * does not stop the rest. Raw responses are recorded by the debug log sink.
+     */
+    suspend fun runDiagnostics(
+        session: UntisSession,
+        timetableStart: LocalDate,
+        timetableEnd: LocalDate,
+        absenceStart: LocalDate,
+        absenceEnd: LocalDate,
+    ): List<ProbeResult> {
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        val type = session.studentType.ifBlank { "STUDENT" }.uppercase()
+        val results = mutableListOf<ProbeResult>()
+
+        suspend fun call(
+            label: String,
+            method: String,
+            params: JsonObject,
+            describe: (JsonElement) -> String,
+        ): JsonElement? = try {
+            val result = rpc.call(
+                server = safeServer,
+                school = session.school,
+                method = method,
+                params = JsonArray().apply { add(params) },
+            )
+            results += ProbeResult(label, method, ok = true, message = describe(result))
+            result
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            results += ProbeResult(
+                label = label,
+                method = method,
+                ok = false,
+                message = error.message ?: error::class.java.simpleName,
+            )
+            null
+        }
+
+        fun timetableParams(id: Long, objectType: String, start: LocalDate, end: LocalDate) =
+            JsonObject().apply {
+                addProperty("id", id)
+                addProperty("type", objectType)
+                addProperty("startDate", utisDate(start))
+                addProperty("endDate", utisDate(end))
+                addProperty("masterDataTimestamp", 0L)
+                addProperty("timetableTimestamp", 0L)
+                add("timetableTimestamps", JsonArray())
+                add("auth", auth(session.username, session.secret))
+            }
+
+        fun timetableSummary(element: JsonElement): String {
+            val lessons = runCatching { TimetableParser.parse(element).lessons.size }.getOrDefault(-1)
+            return "OK, $lessons lessons parsed"
+        }
+
+        fun masterArray(element: JsonElement?, vararg keys: String): JsonArray? =
+            element.asJsonObjectOrNull()?.objectOrNull("masterData")?.arrayOrNull(*keys)
+
+        fun shapeOf(element: JsonElement): String = when {
+            element.isJsonObject -> "OK, keys: " + element.asJsonObject.keySet().joinToString(", ")
+            element.isJsonArray -> "OK, list with ${element.asJsonArray.size()} entries"
+            else -> "OK, value: " + element.toString().take(80)
+        }
+
+        val studentResult = call(
+            label = "Student timetable",
+            method = "getTimetable2017",
+            params = timetableParams(session.studentId, type, timetableStart, timetableEnd),
+        ) { result ->
+            val classes = masterArray(result, "klassen", "classes")?.size() ?: 0
+            val teachers = masterArray(result, "teachers")?.size() ?: 0
+            val rooms = masterArray(result, "rooms")?.size() ?: 0
+            "${timetableSummary(result)}, masterData: $classes classes, $teachers teachers, $rooms rooms"
+        }
+
+        call(
+            label = "Absences",
+            method = "getStudentAbsences2017",
+            params = JsonObject().apply {
+                addProperty("id", session.studentId)
+                addProperty("type", type)
+                addProperty("startDate", utisDate(absenceStart))
+                addProperty("endDate", utisDate(absenceEnd))
+                add("auth", auth(session.username, session.secret))
+            },
+            describe = ::shapeOf,
+        )
+
+        val classId = masterArray(studentResult, "klassen", "classes")
+            ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
+        val teacherId = masterArray(studentResult, "teachers")
+            ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
+        val roomId = masterArray(studentResult, "rooms")
+            ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
+
+        listOf(
+            Triple("Class timetable", "CLASS", classId),
+            Triple("Teacher timetable", "TEACHER", teacherId),
+            Triple("Room timetable", "ROOM", roomId),
+        ).forEach { (label, objectType, id) ->
+            if (id == null) {
+                results += ProbeResult(
+                    label = label,
+                    method = "getTimetable2017",
+                    ok = false,
+                    message = "no $objectType id found in masterData of the student timetable",
+                )
+            } else {
+                call(
+                    label = label,
+                    method = "getTimetable2017",
+                    params = timetableParams(id, objectType, timetableStart, timetableEnd),
+                    describe = ::timetableSummary,
+                )
+            }
+        }
+
+        return results
     }
 
     private suspend fun loginResolved(

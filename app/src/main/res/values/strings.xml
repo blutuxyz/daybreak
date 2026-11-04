@@ -170,4 +170,32 @@
     <string name="widget_open_app">Zum Aktualisieren öffnen</string>
     <string name="widget_login_prompt">Bei Daybreak anmelden, um deinen Stundenplan zu sehen.</string>
     <string name="widget_room">Raum %1$s</string>
+
+    <!-- Appearance, motion and login simplification -->
+    <string name="settings_appearance">Darstellung</string>
+    <string name="settings_theme">Design</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Hell</string>
+    <string name="theme_dark">Dunkel</string>
+    <string name="settings_dynamic_color">Farben aus Hintergrundbild</string>
+    <string name="settings_dynamic_color_desc">Material You passt die Farben an dein Gerät an.</string>
+    <string name="settings_accent">Akzentfarbe</string>
+    <string name="accent_ocean">Ozean</string>
+    <string name="accent_forest">Wald</string>
+    <string name="accent_lavender">Lavendel</string>
+    <string name="accent_sunset">Abend</string>
+    <string name="accent_rose">Rose</string>
+    <string name="settings_motion">Bewegung</string>
+    <string name="motion_expressive">Lebendig</string>
+    <string name="motion_calm">Ruhig</string>
+    <string name="settings_start_view">Startansicht</string>
+    <string name="login_more_options">Andere Anmeldung</string>
+    <string name="login_fewer_options">Weniger Optionen</string>
+    <string name="login_back_to_qr">Zurück zum QR-Code</string>
+    <!-- Debug test calls -->
+    <string name="probe_title">Testaufrufe</string>
+    <string name="probe_body">Ruft einmal Fehlstunden sowie Klassen-, Lehrkräfte- und Raumpläne ab. Die Rohantworten erscheinen unten im Protokoll. Vor dem Teilen Namen entfernen.</string>
+    <string name="probe_start">Testaufrufe starten</string>
+    <string name="probe_running">Läuft…</string>
+    <string name="probe_no_session">Keine aktive Anmeldung. Bitte zuerst anmelden.</string>
 </resources>

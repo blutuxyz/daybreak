@@ -19,10 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.debug.RawLogEntry
+import com.bdersolutions.daybreak.untis.ProbeResult
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -66,6 +72,7 @@ fun DebugScreen(
     modifier: Modifier = Modifier,
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
+    val probe by viewModel.probe.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -102,20 +109,28 @@ fun DebugScreen(
             )
         },
     ) { innerPadding ->
-        if (entries.isEmpty()) {
-            EmptyDebug(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                ProbeCard(
+                    state = probe,
+                    onRun = viewModel::runProbe,
+                )
+            }
+            if (entries.isEmpty()) {
+                item {
+                    EmptyDebug(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    )
+                }
+            } else {
                 item {
                     Surface(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -285,3 +300,105 @@ private fun copyToClipboard(context: Context, entry: RawLogEntry) {
         ClipData.newPlainText("${entry.method} response", entry.body),
     )
 }
+
+@Composable
+private fun ProbeCard(
+    state: ProbeUiState,
+    onRun: () -> Unit,
+) {
+    val running = state == ProbeUiState.Running
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.probe_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = stringResource(R.string.probe_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Button(
+                onClick = onRun,
+                enabled = !running,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (running) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.size(10.dp))
+                    Text(stringResource(R.string.probe_running))
+                } else {
+                    Text(stringResource(R.string.probe_start))
+                }
+            }
+            when (state) {
+                ProbeUiState.NoSession -> Text(
+                    text = stringResource(R.string.probe_no_session),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+
+                is ProbeUiState.Failed -> Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+
+                is ProbeUiState.Done -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.results.forEach { result -> ProbeRow(result) }
+                }
+
+                ProbeUiState.Idle, ProbeUiState.Running -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProbeRow(result: ProbeResult) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            imageVector = if (result.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+            contentDescription = null,
+            tint = if (result.ok) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(18.dp),
+        )
+        Spacer(Modifier.size(8.dp))
+        Column {
+            Text(
+                text = result.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = result.method,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = result.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+    }
+}
+
