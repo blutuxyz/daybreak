@@ -1,6 +1,5 @@
 package com.bdersolutions.daybreak.ui.components
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -12,15 +11,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 /**
- * A stable tonal pair per subject. The hue is derived from the current Material
- * You primary hue plus a fixed per-subject rotation, so a subject keeps the same
- * family of colors across screens while still following the user's wallpaper.
+ * A stable tonal triad per subject, taken from the active colour scheme. Each subject
+ * maps to one of the primary, secondary or tertiary role families, so the lesson
+ * colours always follow Material You or the chosen accent and keep their contrast.
  */
 @Immutable
 data class SubjectTone(
@@ -32,27 +30,26 @@ data class SubjectTone(
 @Composable
 fun rememberSubjectTone(subject: String): SubjectTone {
     val scheme = MaterialTheme.colorScheme
-    val isDark = scheme.surface.luminance() < 0.5f
-    return remember(subject, scheme.primary, isDark) {
-        val hsv = FloatArray(3)
-        AndroidColor.colorToHSV(scheme.primary.toArgb(), hsv)
-        val seed = (stableHash(subject) % 12) * 30f
-        val hue = (hsv[0] + seed) % 360f
-        val container = if (isDark) {
-            Color.hsv(hue, 0.42f, 0.32f)
-        } else {
-            Color.hsv(hue, 0.26f, 0.96f)
+    return remember(subject, scheme) {
+        when (stableHash(subject) % 3) {
+            0 -> SubjectTone(
+                container = scheme.primaryContainer,
+                accent = scheme.primary,
+                onContainer = scheme.onPrimaryContainer,
+            )
+
+            1 -> SubjectTone(
+                container = scheme.secondaryContainer,
+                accent = scheme.secondary,
+                onContainer = scheme.onSecondaryContainer,
+            )
+
+            else -> SubjectTone(
+                container = scheme.tertiaryContainer,
+                accent = scheme.tertiary,
+                onContainer = scheme.onTertiaryContainer,
+            )
         }
-        val accent = if (isDark) {
-            Color.hsv(hue, 0.52f, 0.92f)
-        } else {
-            Color.hsv(hue, 0.7f, 0.52f)
-        }
-        SubjectTone(
-            container = container,
-            accent = accent,
-            onContainer = scheme.onSurface,
-        )
     }
 }
 

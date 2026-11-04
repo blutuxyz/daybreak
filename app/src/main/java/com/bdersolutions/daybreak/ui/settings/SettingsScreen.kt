@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -14,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,19 +30,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +60,9 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -76,6 +88,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,9 +96,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
+import com.bdersolutions.daybreak.data.settings.AppSettings
+import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.settings.StartView
+import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
+import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
+import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -188,6 +208,18 @@ fun SettingsScreen(
                     schoolName = session?.schoolName.orEmpty(),
                     school = session?.school.orEmpty(),
                     username = session?.username.orEmpty(),
+                )
+            }
+
+            item { SectionLabel(stringResource(R.string.settings_appearance)) }
+            item {
+                AppearanceGroup(
+                    settings = settings,
+                    onThemeMode = viewModel::setThemeMode,
+                    onDynamicColor = viewModel::setDynamicColor,
+                    onAccent = viewModel::setAccent,
+                    onMotionStyle = viewModel::setMotionStyle,
+                    onStartView = viewModel::setStartView,
                 )
             }
 
@@ -705,3 +737,263 @@ private fun SettingsRow(
         }
     }
 }
+
+private val ThemeOptions = listOf(
+    ThemeMode.SYSTEM,
+    ThemeMode.LIGHT,
+    ThemeMode.DARK,
+)
+
+@Composable
+private fun AppearanceGroup(
+    settings: AppSettings,
+    onThemeMode: (ThemeMode) -> Unit,
+    onDynamicColor: (Boolean) -> Unit,
+    onAccent: (AccentColor) -> Unit,
+    onMotionStyle: (MotionStyle) -> Unit,
+    onStartView: (StartView) -> Unit,
+) {
+    val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val showAccentPicker = !dynamicAvailable || !settings.dynamicColor
+    val dark = resolveDarkTheme(settings.themeMode)
+
+    SettingsGroup {
+        AppearanceOption(
+            icon = Icons.Outlined.DarkMode,
+            title = stringResource(R.string.settings_theme),
+        ) {
+            SegmentChoice(
+                options = ThemeOptions.map { mode ->
+                    mode to when (mode) {
+                        ThemeMode.SYSTEM -> stringResource(R.string.theme_system)
+                        ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+                        ThemeMode.DARK -> stringResource(R.string.theme_dark)
+                    }
+                },
+                selected = settings.themeMode,
+                onSelect = onThemeMode,
+            )
+        }
+
+        if (dynamicAvailable) {
+            AppearanceDivider()
+            SettingsRow(
+                icon = Icons.Outlined.Palette,
+                title = stringResource(R.string.settings_dynamic_color),
+                subtitle = stringResource(R.string.settings_dynamic_color_desc),
+                trailing = {
+                    SpringSwitch(
+                        checked = settings.dynamicColor,
+                        onCheckedChange = onDynamicColor,
+                    )
+                },
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showAccentPicker,
+            enter = expandVertically(
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            ) + fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+            exit = shrinkVertically(
+                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            ) + fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+        ) {
+            Column {
+                AppearanceDivider()
+                AppearanceOption(
+                    icon = Icons.Outlined.Palette,
+                    title = stringResource(R.string.settings_accent),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        AccentColor.entries.forEach { accent ->
+                            val (seed, onSeed) = accentSwatchColors(accent, dark)
+                            AccentSwatch(
+                                color = seed,
+                                onColor = onSeed,
+                                label = accentLabel(accent),
+                                selected = settings.accent == accent,
+                                onClick = { onAccent(accent) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        AppearanceDivider()
+        AppearanceOption(
+            icon = Icons.Outlined.Speed,
+            title = stringResource(R.string.settings_motion),
+        ) {
+            SegmentChoice(
+                options = listOf(
+                    MotionStyle.EXPRESSIVE to stringResource(R.string.motion_expressive),
+                    MotionStyle.CALM to stringResource(R.string.motion_calm),
+                ),
+                selected = settings.motionStyle,
+                onSelect = onMotionStyle,
+            )
+        }
+
+        AppearanceDivider()
+        AppearanceOption(
+            icon = Icons.Outlined.Today,
+            title = stringResource(R.string.settings_start_view),
+        ) {
+            SegmentChoice(
+                options = listOf(
+                    StartView.DAY to stringResource(R.string.timetable_day),
+                    StartView.WEEK to stringResource(R.string.timetable_week),
+                ),
+                selected = settings.startView,
+                onSelect = onStartView,
+            )
+        }
+    }
+}
+
+@Composable
+private fun accentLabel(accent: AccentColor): String = when (accent) {
+    AccentColor.OCEAN -> stringResource(R.string.accent_ocean)
+    AccentColor.FOREST -> stringResource(R.string.accent_forest)
+    AccentColor.LAVENDER -> stringResource(R.string.accent_lavender)
+    AccentColor.SUNSET -> stringResource(R.string.accent_sunset)
+    AccentColor.ROSE -> stringResource(R.string.accent_rose)
+}
+
+@Composable
+private fun AppearanceOption(
+    icon: ImageVector,
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.size(10.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        content()
+    }
+}
+
+@Composable
+private fun AppearanceDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> SegmentChoice(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (value, label) ->
+            SegmentedButton(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                label = {
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccentSwatch(
+    color: Color,
+    onColor: Color,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.84f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "accentSwatchScale",
+    )
+    val ring by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            Color.Transparent
+        },
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "accentSwatchRing",
+    )
+    Column(
+        modifier = Modifier
+            .width(64.dp)
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton,
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .border(width = 2.dp, color = ring, shape = CircleShape)
+                .padding(5.dp)
+                .clip(CircleShape)
+                .background(color),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = onColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+

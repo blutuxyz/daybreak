@@ -66,6 +66,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
@@ -73,8 +74,24 @@ import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
+import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import java.time.LocalDate
+
+/**
+ * Entry point of the Compose tree. Settings are observed here so that theme, accent,
+ * dark mode and motion update live when the user changes them.
+ */
+@Composable
+fun DaybreakApp(
+    container: AppContainer,
+    initialDate: LocalDate? = null,
+) {
+    val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
+    DaybreakTheme(settings = settings) {
+        DaybreakRoot(container = container, initialDate = initialDate)
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -132,6 +149,7 @@ private fun LoggedInContent(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -214,6 +232,7 @@ private fun LoggedInContent(
                 0 -> TimetableScreen(
                     viewModel = timetableViewModel,
                     initialDate = initialDate,
+                    initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
                 )
 
                 else -> SettingsScreen(

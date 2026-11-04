@@ -3,10 +3,12 @@ package com.bdersolutions.daybreak.ui.login
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -32,6 +34,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
@@ -62,7 +66,10 @@ import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -151,6 +158,10 @@ fun LoginScreen(
     )
     val errorShake = remember { Animatable(0f) }
     val animationsEnabled = motionAnimationsEnabled()
+    // QR-code sign-in is the primary path. The other two methods are tucked away
+    // until the user asks for them (or the screen was opened in one of them).
+    var showAlternatives by rememberSaveable { mutableStateOf(false) }
+    val alternativesVisible = showAlternatives || state.mode != LoginMode.QR
     LaunchedEffect(state.error) {
         if (state.error == null || !animationsEnabled) {
             errorShake.snapTo(0f)
@@ -253,12 +264,28 @@ fun LoginScreen(
                 )
                 Spacer(Modifier.height(14.dp))
 
-                LoginModeSwitcher(
-                    mode = state.mode,
-                    onModeChange = viewModel::onModeChange,
-                )
+                AnimatedVisibility(
+                    visible = alternativesVisible,
+                    enter = expandVertically(
+                        animationSpec = motion.defaultSpatialSpec(),
+                    ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
+                    exit = shrinkVertically(
+                        animationSpec = motion.fastSpatialSpec(),
+                    ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
+                    label = "loginAlternatives",
+                ) {
+                    Column {
+                        LoginModeSwitcher(
+                            mode = state.mode,
+                            onModeChange = viewModel::onModeChange,
+                        )
+                        Spacer(Modifier.height(18.dp))
+                    }
+                }
 
-                Spacer(Modifier.height(18.dp))
+                if (!alternativesVisible) {
+                    Spacer(Modifier.height(18.dp))
+                }
                 AnimatedContent(
                     targetState = state.mode,
                     modifier = Modifier.fillMaxWidth(),
@@ -364,6 +391,45 @@ fun LoginScreen(
                             }
                         }
                     }
+                }
+            }
+
+        Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(
+                    onClick = {
+                        when {
+                            state.mode != LoginMode.QR -> {
+                                viewModel.onModeChange(LoginMode.QR)
+                                showAlternatives = false
+                            }
+
+                            alternativesVisible -> showAlternatives = false
+                            else -> showAlternatives = true
+                        }
+                    },
+                    enabled = !state.loading,
+                ) {
+                    Icon(
+                        imageVector = when {
+                            state.mode != LoginMode.QR -> Icons.Outlined.QrCodeScanner
+                            alternativesVisible -> Icons.Outlined.ExpandLess
+                            else -> Icons.Outlined.ExpandMore
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = when {
+                            state.mode != LoginMode.QR -> stringResource(R.string.login_back_to_qr)
+                            alternativesVisible -> stringResource(R.string.login_fewer_options)
+                            else -> stringResource(R.string.login_more_options)
+                        },
+                    )
                 }
             }
 

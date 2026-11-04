@@ -6,8 +6,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
-import com.bdersolutions.daybreak.ui.DaybreakRoot
-import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
+import com.bdersolutions.daybreak.ui.DaybreakApp
 import java.time.LocalDate
 
 class MainActivity : AppCompatActivity() {
@@ -20,9 +19,7 @@ class MainActivity : AppCompatActivity() {
             runCatching { LocalDate.parse(raw) }.getOrNull()
         }
         setContent {
-            DaybreakTheme {
-                DaybreakRoot(container = container, initialDate = widgetDate)
-            }
+            DaybreakApp(container = container, initialDate = widgetDate)
         }
     }
 

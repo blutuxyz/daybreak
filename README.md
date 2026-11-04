@@ -6,6 +6,9 @@ API) and does **not** require any API key or developer account.
 
 - German is the default UI language; English can be selected in Settings or on the
   login screen.
+- Appearance settings: system, light or dark theme; Material You colours or one of
+  five accent palettes; lively or calm motion; and whether the app opens on the day or
+  the week view.
 - Day and week views with horizontal swipe navigation, a live “now” highlight and
   clear cancellation, room-change and substitution badges.
 - Offline-first cache, periodic WorkManager sync, change notifications and a
@@ -37,6 +40,9 @@ Run the unit tests with:
 
 ## Logging in with the Untis Mobile QR data
 
+QR sign-in is the default. Tap **Andere Anmeldung** to show the manual and password
+methods.
+
 1. Open WebUntis in a browser and sign in.
 2. Go to **Profil → Freigaben → Zugriff über Untis Mobile** (Profile → Shares →
    Access via Untis Mobile).
@@ -53,7 +59,7 @@ Daybreak generates a fresh six-digit code for every request, just like the mobil
 
 ### Manual entry
 
-Use the **Manuell** tab if you already know:
+Use **Andere Anmeldung → Manuell** if you already know:
 
 - Server, e.g. `school.webuntis.com`
 - School short name
@@ -62,7 +68,7 @@ Use the **Manuell** tab if you already know:
 
 ### Password fallback
 
-The **Passwort** tab asks WebUntis once for the mobile access key using your
+**Andere Anmeldung → Passwort** asks WebUntis once for the mobile access key using your
 username and password (plus a verification code if the school requires two-factor
 authentication). Daybreak stores only the derived key, never your password.
 

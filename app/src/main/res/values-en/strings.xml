@@ -170,4 +170,26 @@
     <string name="widget_open_app">Open to refresh</string>
     <string name="widget_login_prompt">Sign in to Daybreak to see your timetable.</string>
     <string name="widget_room">Room %1$s</string>
+
+    <!-- Appearance, motion and login simplification -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Colours from wallpaper</string>
+    <string name="settings_dynamic_color_desc">Material You adapts the colours to your device.</string>
+    <string name="settings_accent">Accent colour</string>
+    <string name="accent_ocean">Ocean</string>
+    <string name="accent_forest">Forest</string>
+    <string name="accent_lavender">Lavender</string>
+    <string name="accent_sunset">Sunset</string>
+    <string name="accent_rose">Rose</string>
+    <string name="settings_motion">Motion</string>
+    <string name="motion_expressive">Lively</string>
+    <string name="motion_calm">Calm</string>
+    <string name="settings_start_view">Start view</string>
+    <string name="login_more_options">Other sign-in options</string>
+    <string name="login_fewer_options">Fewer options</string>
+    <string name="login_back_to_qr">Back to QR code</string>
 </resources>
