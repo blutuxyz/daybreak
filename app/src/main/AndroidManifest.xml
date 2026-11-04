@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets the user allow Daybreak to install its own updates. See data/update/ApkInstaller. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".DaybreakApplication"
@@ -47,6 +49,10 @@
 
         <receiver
             android:name=".widget.WidgetRefreshReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".data.update.InstallResultReceiver"
             android:exported="false" />
 
         <meta-data

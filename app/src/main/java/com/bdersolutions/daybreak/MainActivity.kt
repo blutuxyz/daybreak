@@ -18,8 +18,9 @@ class MainActivity : AppCompatActivity() {
         val widgetDate = intent.getStringExtra(EXTRA_WIDGET_DATE)?.let { raw ->
             runCatching { LocalDate.parse(raw) }.getOrNull()
         }
+        val openUpdates = intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false)
         setContent {
-            DaybreakApp(container = container, initialDate = widgetDate)
+            DaybreakApp(container = container, initialDate = widgetDate, openUpdates = openUpdates)
         }
     }
 
@@ -34,5 +35,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_WIDGET_DATE = "com.bdersolutions.daybreak.widget.DATE"
+        const val EXTRA_OPEN_UPDATES = "com.bdersolutions.daybreak.OPEN_UPDATES"
     }
 }

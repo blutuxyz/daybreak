@@ -83,8 +83,10 @@ import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
-import com.bdersolutions.daybreak.ui.settings.AboutScreen
-import com.bdersolutions.daybreak.ui.settings.LessonColorsScreen
+import com.bdersolutions.daybreak.data.update.ReleaseInfo
+import com.bdersolutions.daybreak.ui.settings.SettingsPage
+import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
+import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
@@ -101,10 +103,11 @@ import java.time.LocalDate
 fun DaybreakApp(
     container: AppContainer,
     initialDate: LocalDate? = null,
+    openUpdates: Boolean = false,
 ) {
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
     DaybreakTheme(settings = settings) {
-        DaybreakRoot(container = container, initialDate = initialDate)
+        DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
     }
 }
 
@@ -113,6 +116,7 @@ fun DaybreakApp(
 fun DaybreakRoot(
     container: AppContainer,
     initialDate: LocalDate? = null,
+    openUpdates: Boolean = false,
 ) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
@@ -149,6 +153,7 @@ fun DaybreakRoot(
                 container = container,
                 session = currentSession,
                 initialDate = initialDate,
+                openUpdates = openUpdates,
             )
         }
     }
@@ -160,11 +165,18 @@ private fun LoggedInContent(
     container: AppContainer,
     session: DaybreakSession,
     initialDate: LocalDate?,
+    openUpdates: Boolean,
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // Tapping the "update available" notification lands on the Updates screen.
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (openUpdates) 2 else 0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
-    var showLessonColors by rememberSaveable { mutableStateOf(false) }
-    var showAbout by rememberSaveable { mutableStateOf(false) }
+    // The settings screen that is open over the list, if any. Debug has its own flag above.
+    var settingsPage by rememberSaveable {
+        mutableStateOf<SettingsPage?>(if (openUpdates) SettingsPage.UPDATES else null)
+    }
+    // Kept after closing, so the screen can still be drawn while it slides out.
+    var shownPage by remember { mutableStateOf(settingsPage) }
+    if (settingsPage != null) shownPage = settingsPage
     val context = LocalContext.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
@@ -174,6 +186,15 @@ private fun LoggedInContent(
         if (!granted) {
             container.settingsRepository.setNotificationsEnabled(false)
         }
+    }
+
+    // After an update, show what changed; and look for a new version when it is time to.
+    var whatsNew by remember { mutableStateOf<ReleaseInfo?>(null) }
+    LaunchedEffect(Unit) {
+        val updates = container.updateManager
+        if (!updates.isConfigured) return@LaunchedEffect
+        whatsNew = updates.whatsNew()
+        if (settings.autoCheckUpdates && updates.isCheckDue()) updates.check()
     }
 
     LaunchedEffect(session.studentId) {
@@ -210,12 +231,8 @@ private fun LoggedInContent(
         factory = SettingsViewModel.Factory(container),
     )
 
-    BackHandler(enabled = showLessonColors) {
-        showLessonColors = false
-    }
-
-    BackHandler(enabled = showAbout) {
-        showAbout = false
+    BackHandler(enabled = settingsPage != null) {
+        settingsPage = null
     }
 
     val motion = MaterialTheme.motionScheme
@@ -272,8 +289,7 @@ private fun LoggedInContent(
                     else -> SettingsScreen(
                         viewModel = settingsViewModel,
                         onOpenDebug = { showDebug = true },
-                        onOpenLessonColors = { showLessonColors = true },
-                    onOpenAbout = { showAbout = true },
+                        onOpenPage = { settingsPage = it },
                     )
                 }
             }
@@ -281,24 +297,28 @@ private fun LoggedInContent(
 
         // Settings sub-screens slide in from the right, stock style, with no scaling.
         AnimatedVisibility(
-            visible = showLessonColors,
+            visible = settingsPage != null,
             modifier = Modifier.fillMaxSize(),
             enter = subScreenEnter,
             exit = subScreenExit,
         ) {
-            LessonColorsScreen(
-                viewModel = settingsViewModel,
-                onBack = { showLessonColors = false },
-            )
+            shownPage?.let { page ->
+                SettingsPageHost(
+                    page = page,
+                    viewModel = settingsViewModel,
+                    onBack = { settingsPage = null },
+                )
+            }
         }
 
-        AnimatedVisibility(
-            visible = showAbout,
-            modifier = Modifier.fillMaxSize(),
-            enter = subScreenEnter,
-            exit = subScreenExit,
-        ) {
-            AboutScreen(onBack = { showAbout = false })
+        whatsNew?.let { release ->
+            WhatsNewSheet(
+                release = release,
+                onDismiss = {
+                    container.updateManager.markWhatsNewSeen()
+                    whatsNew = null
+                },
+            )
         }
     }
 }

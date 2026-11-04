@@ -161,6 +161,7 @@ fun TimetableScreen(
     val cache by viewModel.displayCache.collectAsStateWithLifecycle()
     val target by viewModel.target.collectAsStateWithLifecycle()
     val directory by viewModel.directory.collectAsStateWithLifecycle()
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     var showTargetPicker by rememberSaveable { mutableStateOf(false) }
     val status by viewModel.status.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
@@ -404,10 +405,11 @@ fun TimetableScreen(
         TargetPickerSheet(
             directory = directory,
             selected = target,
-            onSelect = {
-                viewModel.setTarget(it)
-                showTargetPicker = false
-            },
+            favorites = favorites,
+            onSelect = viewModel::setTarget,
+            onToggleFavorite = viewModel::toggleFavorite,
+            onRemoveFavorite = viewModel::removeFavorite,
+            onReorderFavorites = viewModel::reorderFavorites,
             onDismiss = { showTargetPicker = false },
         )
     }

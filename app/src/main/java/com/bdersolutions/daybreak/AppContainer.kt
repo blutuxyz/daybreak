@@ -12,6 +12,11 @@ import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
+import com.bdersolutions.daybreak.data.update.UpdateApi
+import com.bdersolutions.daybreak.data.update.UpdateManager
+import com.bdersolutions.daybreak.data.update.UpdateNotificationManager
+import com.bdersolutions.daybreak.data.update.UpdateScheduler
+import com.bdersolutions.daybreak.data.update.UpdateStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 
@@ -40,10 +45,24 @@ class AppContainer(context: Context) {
     val syncScheduler = SyncScheduler(appContext)
     val widgetUpdater = WidgetUpdater(appContext)
 
+    // Updates come from the update server (update-server/). Without a configured address the
+    // feature is off and the Updates screen is hidden.
+    val updateManager = UpdateManager(
+        context = appContext,
+        api = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { UpdateApi(it) },
+        store = UpdateStore(appContext),
+    )
+    val updateNotificationManager = UpdateNotificationManager(appContext, settingsRepository)
+    val updateScheduler = UpdateScheduler(appContext)
+
     fun start() {
         lessonNotificationManager.ensureChannel()
         if (sessionStore.isLoggedIn()) {
             syncScheduler.schedule(settingsRepository.current())
+        }
+        if (updateManager.isConfigured) {
+            updateNotificationManager.ensureChannel()
+            updateScheduler.schedule(settingsRepository.current().autoCheckUpdates)
         }
     }
 }

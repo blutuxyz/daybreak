@@ -13,9 +13,13 @@ import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.session.SessionStore
+import com.bdersolutions.daybreak.data.settings.FavoriteTarget
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.settings.reorderedByKeys
+import com.bdersolutions.daybreak.data.settings.withToggled
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.untis.UntisDirectory
+import com.bdersolutions.daybreak.untis.UntisElement
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +28,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -89,6 +95,24 @@ class TimetableViewModel(
 
     fun setTarget(target: TimetableTarget) {
         _target.value = target
+    }
+
+    /** The classes, teachers and rooms the user pinned, in their own order. */
+    val favorites: StateFlow<List<FavoriteTarget>> = settingsRepository.settings
+        .map { it.favoriteTargets }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settingsRepository.current().favoriteTargets)
+
+    fun toggleFavorite(element: UntisElement) {
+        settingsRepository.updateFavoriteTargets { it.withToggled(element) }
+    }
+
+    fun removeFavorite(key: String) {
+        settingsRepository.updateFavoriteTargets { list -> list.filterNot { it.key == key } }
+    }
+
+    fun reorderFavorites(keys: List<String>) {
+        settingsRepository.updateFavoriteTargets { it.reorderedByKeys(keys) }
     }
 
     fun ensureWeek(date: LocalDate, force: Boolean = false) {

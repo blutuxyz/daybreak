@@ -1,0 +1,8 @@
+node_modules
+data
+.tmpdata
+test
+.env
+.env.*
+npm-debug.log
+README.md

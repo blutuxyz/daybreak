@@ -1,6 +1,16 @@
 package com.bdersolutions.daybreak.ui.absences
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +28,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -84,6 +98,10 @@ fun AbsencesScreen(
     val sinceText = remember(viewModel.schoolYearStart) {
         viewModel.schoolYearStart.format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
     }
+    var sheet by remember { mutableStateOf<CategorySheetRequest?>(null) }
+    // Owned here: the list shows the selected card's absences, and deleting the visible category
+    // first moves the pager off its card.
+    val pagerState = rememberPagerState(pageCount = { 1 + categories.categories.size })
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -93,6 +111,29 @@ fun AbsencesScreen(
             MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.absences_title)) },
                 subtitle = { Text(stringResource(R.string.absences_since, sinceText)) },
+                actions = {
+                    if (state is AbsencesUiState.Loaded) {
+                        if (categories.categories.isNotEmpty()) {
+                            IconButton(onClick = { sheet = CategorySheetRequest.Manage }) {
+                                Icon(
+                                    Icons.Outlined.Tune,
+                                    contentDescription = stringResource(R.string.absences_manage),
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                viewModel.loadSubjects()
+                                sheet = CategorySheetRequest.New
+                            },
+                        ) {
+                            Icon(
+                                Icons.Outlined.Add,
+                                contentDescription = stringResource(R.string.absences_add_category),
+                            )
+                        }
+                    }
+                },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -141,12 +182,24 @@ fun AbsencesScreen(
                 absences = current.absences,
                 reasons = current.reasons,
                 categories = categories,
-                onSaveCategory = viewModel::saveCategory,
-                onDeleteCategory = viewModel::deleteCategory,
+                pagerState = pagerState,
                 contentPadding = innerPadding,
             )
         }
     }
+
+    AbsenceCategorySheets(
+        request = sheet,
+        onRequest = { sheet = it },
+        categories = categories,
+        onSave = viewModel::saveCategory,
+        onPrepareDelete = { id ->
+            val page = categories.categories.indexOfFirst { it.id == id } + 1
+            if (page > 0 && pagerState.currentPage == page) pagerState.animateScrollToPage(page - 1)
+        },
+        onDelete = viewModel::deleteCategory,
+        onReorder = viewModel::reorderCategories,
+    )
 }
 
 @Composable
@@ -154,12 +207,25 @@ private fun AbsenceList(
     absences: List<UntisAbsence>,
     reasons: Map<Long, String>,
     categories: CategoriesUiState,
-    onSaveCategory: (id: String?, name: String, subject: String, maxLessons: Int) -> Unit,
-    onDeleteCategory: (id: String) -> Unit,
+    pagerState: PagerState,
     contentPadding: PaddingValues,
 ) {
     var filter by rememberSaveable { mutableStateOf(AbsenceFilter.ALL) }
-    val shown = remember(absences, filter) { absences.filter { filter.matches(it) } }
+    val motion = MaterialTheme.motionScheme
+
+    // The card the pager is heading for decides what the list shows: every absence on "Total", and
+    // only the absences that missed a lesson of the subject on a category card. The list items
+    // animate, so the change flows instead of cutting.
+    val selected = categories.categories.getOrNull(pagerState.targetPage - 1)
+    val lessonsByAbsence: Map<Long, Int>? = selected?.let { categories.lessonsByAbsence[it.id] }
+    val base = remember(absences, selected, lessonsByAbsence) {
+        when {
+            selected == null -> absences
+            lessonsByAbsence == null -> emptyList()
+            else -> absences.filter { (lessonsByAbsence[it.id] ?: 0) > 0 }
+        }
+    }
+    val shown = remember(base, filter) { base.filter { filter.matches(it) } }
     val groups = remember(shown) { shown.groupBy { it.start.toLocalDate() } }
 
     LazyColumn(
@@ -173,12 +239,11 @@ private fun AbsenceList(
             AbsenceSummaryPager(
                 absences = absences,
                 categories = categories,
-                onSave = onSaveCategory,
-                onDelete = onDeleteCategory,
+                pagerState = pagerState,
             )
         }
         item(key = "filters") {
-            val totals = remember(absences) { absenceTotals(absences) }
+            val totals = remember(base) { absenceTotals(base) }
             val totalTime = totals.total
             val excusedTime = totals.excused
             val unexcusedTime = totals.unexcused
@@ -196,6 +261,15 @@ private fun AbsenceList(
                         AbsenceFilter.UNEXCUSED -> stringResource(R.string.absences_unexcused) to unexcusedTime
                         AbsenceFilter.EXCUSED -> stringResource(R.string.absences_excused) to excusedTime
                     }
+                    // On a category card the chips count lessons of the subject, not clock time.
+                    val chipValue = if (lessonsByAbsence != null) {
+                        stringResource(
+                            R.string.absences_lessons_count,
+                            base.filter { option.matches(it) }.sumOf { lessonsByAbsence[it.id] ?: 0 },
+                        )
+                    } else {
+                        formatDuration(time)
+                    }
                     FilterChip(
                         selected = filter == option,
                         onClick = { filter = option },
@@ -203,18 +277,33 @@ private fun AbsenceList(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(text = name, maxLines = 1)
                                 Spacer(Modifier.width(6.dp))
-                                // Only the unexcused time carries the accent colour.
-                                Text(
-                                    text = formatDuration(time),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (option == AbsenceFilter.UNEXCUSED) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                // The value rolls to its new number instead of swapping.
+                                AnimatedContent(
+                                    targetState = chipValue,
+                                    transitionSpec = {
+                                        (
+                                            fadeIn(motion.defaultEffectsSpec<Float>()) +
+                                                slideInVertically(motion.defaultSpatialSpec<IntOffset>()) { it / 2 }
+                                            ).togetherWith(
+                                                fadeOut(motion.fastEffectsSpec<Float>()) +
+                                                    slideOutVertically(motion.fastSpatialSpec<IntOffset>()) { -it / 2 },
+                                            ).using(SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec<IntSize>() })
                                     },
-                                    maxLines = 1,
-                                )
+                                    label = "chipValue",
+                                ) { value ->
+                                    // Only the unexcused value carries the accent colour.
+                                    Text(
+                                        text = value,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (option == AbsenceFilter.UNEXCUSED) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         },
                     )
@@ -225,10 +314,17 @@ private fun AbsenceList(
         if (shown.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = stringResource(R.string.absences_empty),
+                    text = stringResource(
+                        if (selected != null && lessonsByAbsence == null) {
+                            R.string.category_loading
+                        } else {
+                            R.string.absences_empty
+                        },
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
+                        .animateItem()
                         .fillMaxWidth()
                         .padding(top = 32.dp),
                     textAlign = TextAlign.Center,
@@ -238,10 +334,15 @@ private fun AbsenceList(
 
         groups.forEach { (date, dayAbsences) ->
             item(key = "date-$date") {
-                DateHeader(date)
+                DateHeader(date, modifier = Modifier.animateItem())
             }
             items(dayAbsences, key = { it.id }) { absence ->
-                AbsenceCard(absence = absence, reasons = reasons)
+                AbsenceCard(
+                    absence = absence,
+                    reasons = reasons,
+                    lessons = lessonsByAbsence?.get(absence.id),
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
     }
@@ -364,7 +465,7 @@ internal fun AbsenceSummary(
 }
 
 @Composable
-private fun DateHeader(date: LocalDate) {
+private fun DateHeader(date: LocalDate, modifier: Modifier = Modifier) {
     val text = remember(date) {
         date.format(DateTimeFormatter.ofPattern("EEEE, dd.MM.", Locale.getDefault()))
     }
@@ -372,7 +473,7 @@ private fun DateHeader(date: LocalDate) {
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+        modifier = modifier.padding(start = 4.dp, top = 8.dp),
     )
 }
 
@@ -394,6 +495,9 @@ private fun absenceRange(absence: UntisAbsence): String {
 private fun AbsenceCard(
     absence: UntisAbsence,
     reasons: Map<Long, String>,
+    /** Lessons of the selected category's subject this absence covers; null on the Total card. */
+    lessons: Int? = null,
+    modifier: Modifier = Modifier,
 ) {
     val range = remember(absence) { absenceRange(absence) }
     val reason = absence.reasonName
@@ -401,7 +505,7 @@ private fun AbsenceCard(
         .ifBlank { stringResource(R.string.absences_reason_unknown) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
@@ -428,11 +532,22 @@ private fun AbsenceCard(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = formatDuration(absence.duration),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = formatDuration(absence.duration),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (lessons != null) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(R.string.absences_lessons_missed, lessons),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
     }
 }

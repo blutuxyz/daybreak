@@ -47,6 +47,11 @@ data class CategoriesUiState(
     val subjects: List<String> = emptyList(),
     /** Missed lessons by category id. */
     val usage: Map<String, CategoryUsage> = emptyMap(),
+    /**
+     * Per category id: the lessons each absence covers, by absence id. Only absences that cover at
+     * least one lesson of the subject appear, so this also says which absences to list.
+     */
+    val lessonsByAbsence: Map<String, Map<Long, Int>> = emptyMap(),
     /** Ids of categories whose subject is not in the student's lessons any more. */
     val missingSubject: Set<String> = emptySet(),
     val loading: Boolean = false,
@@ -87,6 +92,11 @@ class AbsencesViewModel(
             subjects = subjects,
             usage = if (ready) {
                 categories.associate { it.id to countMissedLessons(absenceList!!, lessonSet!!.lessons, it.subject) }
+            } else {
+                emptyMap()
+            },
+            lessonsByAbsence = if (ready) {
+                categories.associate { it.id to missedLessonsByAbsence(absenceList!!, lessonSet!!.lessons, it.subject) }
             } else {
                 emptyMap()
             },
@@ -142,11 +152,24 @@ class AbsencesViewModel(
     }
 
     /**
+     * The subject picker lists the subjects of the whole school year, which needs the same lessons
+     * as the counting. Without a category yet they are not loaded, so opening the picker does it.
+     */
+    fun loadSubjects() {
+        loadHistory(force = false, evenWithoutCategories = true)
+    }
+
+    /** Saves the order the user dragged the categories into. */
+    fun reorderCategories(ids: List<String>) {
+        settingsRepository.updateAbsenceCategories { list -> list.reorderedBy(ids) }
+    }
+
+    /**
      * Loads the lessons of the school year, but only when a category needs them: without
      * categories the screen makes no extra requests.
      */
-    private fun loadHistory(force: Boolean) {
-        if (settingsRepository.current().absenceCategories.isEmpty()) return
+    private fun loadHistory(force: Boolean, evenWithoutCategories: Boolean = false) {
+        if (!evenWithoutCategories && settingsRepository.current().absenceCategories.isEmpty()) return
         if (!force && history.value != null) return
         if (historyJob?.isActive == true) {
             if (!force) return

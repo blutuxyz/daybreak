@@ -23,6 +23,17 @@ data class CategoryUsage(
     val total: Int get() = excused + unexcused
 }
 
+/**
+ * The categories in the order of [ids]. Ids that no category has are ignored, and categories that
+ * [ids] leaves out keep their relative order at the end, so a stale order never loses a category.
+ */
+fun List<AbsenceCategory>.reorderedBy(ids: List<String>): List<AbsenceCategory> {
+    val byId = associateBy { it.id }
+    val wanted = ids.distinct().mapNotNull(byId::get)
+    val taken = wanted.map { it.id }.toSet()
+    return wanted + filter { it.id !in taken }
+}
+
 /** A lesson subject can hold several comma-joined subjects ("Mat, Eng"). */
 fun lessonSubjects(subject: String): List<String> =
     subject.split(',').map { it.trim() }.filter { it.isNotEmpty() }
@@ -64,6 +75,33 @@ fun countMissedLessons(
         if (overlapping.any { it.excused }) excused++ else unexcused++
     }
     return CategoryUsage(excused = excused, unexcused = unexcused)
+}
+
+/**
+ * How many held lessons of [subject] each absence covers, by absence id. Absences that cover none
+ * are left out, so the keys are exactly the absences that belong to the subject. This feeds the
+ * list under a category card.
+ */
+fun missedLessonsByAbsence(
+    absences: List<UntisAbsence>,
+    lessons: Collection<UntisLesson>,
+    subject: String,
+): Map<Long, Int> {
+    if (absences.isEmpty() || subject.isBlank()) return emptyMap()
+    val counts = HashMap<Long, Int>()
+    val seen = HashSet<Triple<Long, java.time.LocalDate, java.time.LocalTime>>()
+    for (lesson in lessons) {
+        if (lesson.isCancelled || !lesson.hasSubject(subject)) continue
+        if (!seen.add(Triple(lesson.id, lesson.date, lesson.start))) continue
+        val begin = lesson.startsAt
+        val finish = lesson.endsAt
+        for (absence in absences) {
+            if (absence.start < finish && absence.end > begin) {
+                counts[absence.id] = (counts[absence.id] ?: 0) + 1
+            }
+        }
+    }
+    return counts
 }
 
 /** Sums of an absence list, shared by the Total card and the filter chips. */

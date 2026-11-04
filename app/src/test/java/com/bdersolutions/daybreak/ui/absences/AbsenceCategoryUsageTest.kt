@@ -127,6 +127,53 @@ class AbsenceCategoryUsageTest {
     }
 
     @Test
+    fun lessonsByAbsenceListsOnlyAbsencesThatMissedTheSubject() {
+        val tuesday = monday.plusDays(1)
+        val lessons = listOf(
+            lesson(id = 1, date = monday),
+            lesson(id = 2, date = monday, start = LocalTime.of(8, 50)),
+            lesson(id = 3, date = tuesday, subject = "MA"),
+            lesson(id = 4, date = tuesday.plusDays(1), start = LocalTime.of(8, 0)),
+        )
+        val absences = listOf(
+            absence(at(monday, 7, 0), at(monday, 12, 0), id = 10),
+            absence(at(tuesday, 7, 0), at(tuesday, 12, 0), id = 11), // only MA that day
+            absence(at(tuesday.plusDays(1), 13, 0), at(tuesday.plusDays(1), 15, 0), id = 12), // after the lesson
+        )
+
+        val byAbsence = missedLessonsByAbsence(absences, lessons, "WEPT")
+
+        assertEquals(mapOf(10L to 2), byAbsence)
+    }
+
+    @Test
+    fun lessonsByAbsenceSkipsCancelledLessons() {
+        val lessons = listOf(lesson(id = 1, status = LessonStatus.CANCELLED))
+        val absence = absence(at(monday, 7, 0), at(monday, 12, 0), id = 10)
+
+        assertEquals(emptyMap<Long, Int>(), missedLessonsByAbsence(listOf(absence), lessons, "WEPT"))
+    }
+
+    @Test
+    fun reorderedByFollowsTheGivenIds() {
+        val a = AbsenceCategory("a", "A", "MA", 10)
+        val b = AbsenceCategory("b", "B", "D", 10)
+        val c = AbsenceCategory("c", "C", "E1", 10)
+
+        assertEquals(listOf(c, a, b), listOf(a, b, c).reorderedBy(listOf("c", "a", "b")))
+    }
+
+    @Test
+    fun reorderedByIgnoresUnknownIdsAndKeepsLeftOutCategories() {
+        val a = AbsenceCategory("a", "A", "MA", 10)
+        val b = AbsenceCategory("b", "B", "D", 10)
+        val c = AbsenceCategory("c", "C", "E1", 10)
+
+        assertEquals(listOf(b, a, c), listOf(a, b, c).reorderedBy(listOf("b", "gone", "a", "b")))
+        assertEquals(listOf(a, b, c), listOf(a, b, c).reorderedBy(emptyList()))
+    }
+
+    @Test
     fun studentSubjectsAreDistinctAndSorted() {
         val lessons = listOf(
             lesson(id = 1, subject = "WEPT"),

@@ -3,9 +3,12 @@ package com.bdersolutions.daybreak.ui.settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -13,11 +16,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,12 +40,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.SystemUpdate
+import com.bdersolutions.daybreak.data.update.UpdateState
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ColorLens
@@ -52,10 +63,11 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Today
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
@@ -66,10 +78,10 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -91,11 +103,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -117,84 +130,68 @@ import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenDebug: () -> Unit,
-    onOpenLessonColors: () -> Unit,
-    onOpenAbout: () -> Unit,
+    onOpenPage: (SettingsPage) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val debugUnlocked by viewModel.debugUnlocked.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
-    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val currentLanguage = if (
-        context.resources.configuration.locales[0].language.equals("de", ignoreCase = true)
-    ) {
-        AppLanguage.GERMAN
-    } else {
-        AppLanguage.ENGLISH
+    val currentLanguage = currentAppLanguage()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val updatesSummary = when (val update = updateState) {
+        is UpdateState.Available -> stringResource(R.string.settings_updates_available, update.release.versionName)
+        is UpdateState.Ready -> stringResource(R.string.settings_updates_available, update.release.versionName)
+        else -> stringResource(R.string.settings_updates_current, viewModel.currentVersionName)
     }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showIntervalDialog by remember { mutableStateOf(false) }
+    var confirmingLogout by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) {
-            viewModel.setNotificationsEnabled(true)
-        } else {
-            scope.launch {
-                snackbarHostState.showSnackbar(
-                    context.getString(R.string.settings_notification_permission_denied),
-                )
+    // Back closes the confirmation first, and the card is scrolled into view when it opens.
+    BackHandler(enabled = confirmingLogout) { confirmingLogout = false }
+    LaunchedEffect(confirmingLogout) {
+        if (confirmingLogout) {
+            // The card grows over a few frames, so follow it to the end of the list while it does.
+            repeat(5) {
+                delay(100)
+                listState.animateScrollBy(4000f)
             }
         }
     }
 
-    val retryLabel = stringResource(R.string.action_retry)
-    LaunchedEffect(viewModel) {
-        viewModel.events.collect { error ->
-            val result = snackbarHostState.showSnackbar(
-                message = error.toUserMessage(context),
-                actionLabel = retryLabel,
-                withDismissAction = true,
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.syncNow()
-        }
-    }
-    LaunchedEffect(viewModel) {
-        viewModel.syncSucceeded.collect {
-            snackbarHostState.showSnackbar(context.getString(R.string.timetable_refreshed))
-        }
-    }
-
-    val lastSyncText = remember(syncStatus.lastSyncAt) {
-        if (syncStatus.lastSyncAt > 0L) {
-            Instant.ofEpochMilli(syncStatus.lastSyncAt)
-                .atZone(ZoneId.systemDefault())
-                .format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
+    val on = stringResource(R.string.settings_value_on)
+    val off = stringResource(R.string.settings_value_off)
+    val appearanceSummary = listOf(
+        themeLabel(settings.themeMode),
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && settings.dynamicColor) {
+            stringResource(R.string.settings_dynamic_color)
         } else {
-            null
-        }
+            accentLabel(settings.accent)
+        },
+    ).joinToString(" · ")
+    val timetableSummary = stringResource(R.string.settings_start_view) + ": " +
+        startViewLabel(settings.startView)
+    val syncSummary = if (settings.syncEnabled) {
+        stringResource(R.string.settings_sync_every, settings.syncIntervalMinutes)
+    } else {
+        off
     }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
@@ -218,6 +215,7 @@ fun SettingsScreen(
         },
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -234,234 +232,248 @@ fun SettingsScreen(
                 )
             }
 
-            item { SectionLabel(stringResource(R.string.settings_appearance)) }
-            item {
-                AppearanceGroup(
-                    settings = settings,
-                    currentLanguage = currentLanguage,
-                    onLanguage = viewModel::setLanguage,
-                    onThemeMode = { mode ->
-                        // Ten taps on "System" reveal the debug log (see SettingsViewModel).
-                        if (mode == ThemeMode.SYSTEM) viewModel.onSystemThemeTapped()
-                        viewModel.setThemeMode(mode)
-                    },
-                    onDynamicColor = viewModel::setDynamicColor,
-                    onAccent = viewModel::setAccent,
-                    onMotionStyle = viewModel::setMotionStyle,
-                    onStartView = viewModel::setStartView,
-                    onSubjectColorMode = viewModel::setSubjectColorMode,
-                    onTextScale = viewModel::setTextScale,
-                )
-            }
+            // Every setting lives on its own screen; this list only leads there.
             item {
                 SettingsGroup {
-                    SettingsRow(
+                    NavigationRow(
                         icon = Icons.Outlined.Palette,
+                        title = stringResource(R.string.settings_appearance),
+                        subtitle = appearanceSummary,
+                        onClick = { onOpenPage(SettingsPage.APPEARANCE) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.CalendarMonth,
+                        title = stringResource(R.string.settings_timetable),
+                        subtitle = timetableSummary,
+                        onClick = { onOpenPage(SettingsPage.TIMETABLE) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.Brush,
                         title = stringResource(R.string.settings_lesson_colors),
                         subtitle = stringResource(R.string.settings_lesson_colors_desc),
-                        onClick = onOpenLessonColors,
-                        trailing = {
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
+                        onClick = { onOpenPage(SettingsPage.LESSON_COLORS) },
                     )
-                }
-            }
-
-            item { SectionLabel(stringResource(R.string.settings_sync)) }
-            item {
-                SettingsGroup {
-                    SettingsRow(
-                        icon = Icons.Outlined.CloudSync,
-                        title = stringResource(R.string.settings_sync_enabled),
-                        subtitle = stringResource(R.string.settings_sync_enabled_desc),
-                        trailing = {
-                            SpringSwitch(
-                                checked = settings.syncEnabled,
-                                onCheckedChange = viewModel::setSyncEnabled,
-                            )
-                        },
-                    )
-                    if (settings.syncEnabled) {
-                        SettingsDivider()
-                        SettingsRow(
-                            icon = Icons.Outlined.Schedule,
-                            title = stringResource(R.string.settings_sync_interval),
-                            subtitle = stringResource(
-                                R.string.sync_interval_minutes,
-                                settings.syncIntervalMinutes,
-                            ),
-                            onClick = { showIntervalDialog = true },
-                            trailing = {
-                                Icon(
-                                    Icons.Outlined.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                        )
-                    }
                     SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Outlined.Sync,
-                        title = stringResource(R.string.settings_manual_sync),
-                        subtitle = lastSyncText?.let {
-                            stringResource(R.string.settings_last_sync) + " · " + it
-                        } ?: stringResource(R.string.settings_last_sync_never),
-                        onClick = viewModel::syncNow,
-                        trailing = {
-                            if (syncStatus.isLoading) {
-                                LoadingIndicator(modifier = Modifier.size(22.dp))
-                            } else {
-                                Icon(
-                                    Icons.Outlined.Sync,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        },
+                    NavigationRow(
+                        icon = Icons.Outlined.Language,
+                        title = stringResource(R.string.settings_language),
+                        subtitle = languageLabel(currentLanguage),
+                        onClick = { onOpenPage(SettingsPage.LANGUAGE) },
                     )
                 }
             }
 
             item {
                 SettingsGroup {
-                    SettingsRow(
+                    NavigationRow(
+                        icon = Icons.Outlined.CloudSync,
+                        title = stringResource(R.string.settings_sync),
+                        subtitle = syncSummary,
+                        onClick = { onOpenPage(SettingsPage.SYNC) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
                         icon = Icons.Outlined.Notifications,
-                        title = stringResource(R.string.settings_notifications_enabled),
-                        subtitle = stringResource(R.string.settings_notifications_desc),
-                        trailing = {
-                            SpringSwitch(
-                                checked = settings.notificationsEnabled,
-                                onCheckedChange = { enabled ->
-                                    if (enabled && Build.VERSION.SDK_INT >= 33 &&
-                                        ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.POST_NOTIFICATIONS,
-                                        ) != PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        notificationPermissionLauncher.launch(
-                                            Manifest.permission.POST_NOTIFICATIONS,
-                                        )
-                                    } else {
-                                        viewModel.setNotificationsEnabled(enabled)
-                                    }
-                                },
-                            )
-                        },
+                        title = stringResource(R.string.settings_notifications),
+                        subtitle = if (settings.notificationsEnabled) on else off,
+                        onClick = { onOpenPage(SettingsPage.NOTIFICATIONS) },
                     )
                 }
             }
 
-            // Hidden until unlocked from the theme option; see SettingsViewModel.
-            if (debugUnlocked) item {
-                SettingsGroup {
-                    SettingsRow(
-                        icon = Icons.Outlined.BugReport,
-                        title = stringResource(R.string.settings_debug_title),
-                        subtitle = stringResource(R.string.settings_debug_desc),
-                        onClick = onOpenDebug,
-                        trailing = {
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
-                    )
-                }
-            }
-
-            item { SectionLabel(stringResource(R.string.settings_about)) }
             item {
                 SettingsGroup {
-                    SettingsRow(
+                    // Hidden until unlocked from the theme option; see SettingsViewModel.
+                    if (debugUnlocked) {
+                        NavigationRow(
+                            icon = Icons.Outlined.BugReport,
+                            title = stringResource(R.string.settings_debug_title),
+                            subtitle = stringResource(R.string.settings_debug_desc),
+                            onClick = onOpenDebug,
+                        )
+                        SettingsDivider()
+                    }
+                    if (viewModel.updatesConfigured) {
+                        NavigationRow(
+                            icon = Icons.Outlined.SystemUpdate,
+                            title = stringResource(R.string.settings_updates),
+                            subtitle = updatesSummary,
+                            onClick = { onOpenPage(SettingsPage.UPDATES) },
+                        )
+                        SettingsDivider()
+                    }
+                    NavigationRow(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),
-                        onClick = onOpenAbout,
-                        trailing = {
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
+                        onClick = { onOpenPage(SettingsPage.ABOUT) },
                     )
                 }
             }
 
             item {
-                SettingsGroup {
-                    SettingsRow(
-                        icon = Icons.AutoMirrored.Outlined.Logout,
-                        title = stringResource(R.string.settings_logout),
-                        destructive = true,
-                        onClick = { showLogoutDialog = true },
-                    )
-                }
+                LogoutCard(
+                    confirming = confirmingLogout,
+                    onAsk = { confirmingLogout = true },
+                    onCancel = { confirmingLogout = false },
+                    onConfirm = {
+                        confirmingLogout = false
+                        viewModel.logout()
+                    },
+                )
             }
         }
     }
 
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
-            title = { Text(stringResource(R.string.settings_logout_title)) },
-            text = { Text(stringResource(R.string.settings_logout_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutDialog = false
-                        viewModel.logout()
-                    },
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_logout_confirm),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        )
-    }
+}
 
-    if (showIntervalDialog) {
-        // Choosing an interval applies it straight away, so there is no save step.
-        val intervals = SettingsRepository.SYNC_INTERVALS
-        AlertDialog(
-            onDismissRequest = { showIntervalDialog = false },
-            title = { Text(stringResource(R.string.settings_interval_dialog_title)) },
-            text = {
-                // A list rather than segments: "120 minutes" does not fit four segments in a dialog.
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    intervals.forEach { interval ->
-                        SelectionRow(
-                            label = stringResource(R.string.sync_interval_minutes, interval),
-                            supporting = null,
-                            selected = settings.syncIntervalMinutes == interval,
-                            onClick = {
-                                viewModel.setSyncInterval(interval)
-                                showIntervalDialog = false
-                            },
-                        )
-                    }
-                }
+/**
+ * The logout row. Tapping it turns the card itself into the confirmation: it flows into a muted
+ * red, says what is removed, and offers two equal buttons. No dialog opens over the list.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun LogoutCard(
+    confirming: Boolean,
+    onAsk: () -> Unit,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    val container by animateColorAsState(
+        targetValue = if (confirming) {
+            lerp(scheme.surfaceContainerHigh, scheme.errorContainer, 0.55f)
+        } else {
+            scheme.surfaceContainerLow
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "logoutContainer",
+    )
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = container,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        AnimatedContent(
+            targetState = confirming,
+            transitionSpec = {
+                (
+                    fadeIn(motion.defaultEffectsSpec()) +
+                        scaleIn(motion.defaultSpatialSpec(), initialScale = 0.94f)
+                    )
+                    .togetherWith(fadeOut(motion.fastEffectsSpec()))
+                    .using(SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() })
             },
-            confirmButton = {
-                TextButton(onClick = { showIntervalDialog = false }) {
-                    Text(stringResource(R.string.action_close))
-                }
-            },
-        )
+            label = "logoutContent",
+        ) { isConfirming ->
+            if (isConfirming) {
+                LogoutConfirmation(onCancel = onCancel, onConfirm = onConfirm)
+            } else {
+                SettingsRow(
+                    icon = Icons.AutoMirrored.Outlined.Logout,
+                    title = stringResource(R.string.settings_logout),
+                    destructive = true,
+                    onClick = onAsk,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun LogoutConfirmation(
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(scheme.error.copy(alpha = 0.18f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.Logout,
+                    contentDescription = null,
+                    tint = scheme.error,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_logout_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onErrorContainer,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.settings_logout_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onErrorContainer.copy(alpha = 0.8f),
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = scheme.onErrorContainer),
+            ) {
+                Text(stringResource(R.string.action_cancel))
+            }
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.error,
+                    contentColor = scheme.onError,
+                ),
+            ) {
+                Text(stringResource(R.string.settings_logout_confirm))
+            }
+        }
+    }
+}
+
+/** A row of the settings list that opens a screen: icon, title, the current value, and a chevron. */
+@Composable
+internal fun NavigationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+) {
+    SettingsRow(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        subtitleMaxLines = 1,
+        onClick = onClick,
+        trailing = {
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
 }
 
 @Composable
@@ -566,7 +578,7 @@ internal fun SectionLabel(text: String) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun SpringSwitch(
+internal fun SpringSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -703,178 +715,14 @@ internal fun SettingsRow(
     )
 }
 
-private val ThemeOptions = listOf(
+internal val ThemeOptions = listOf(
     ThemeMode.SYSTEM,
     ThemeMode.LIGHT,
     ThemeMode.DARK,
 )
 
 @Composable
-private fun AppearanceGroup(
-    settings: AppSettings,
-    currentLanguage: AppLanguage,
-    onLanguage: (AppLanguage) -> Unit,
-    onThemeMode: (ThemeMode) -> Unit,
-    onDynamicColor: (Boolean) -> Unit,
-    onAccent: (AccentColor) -> Unit,
-    onMotionStyle: (MotionStyle) -> Unit,
-    onStartView: (StartView) -> Unit,
-    onSubjectColorMode: (SubjectColorMode) -> Unit,
-    onTextScale: (TextScale) -> Unit,
-) {
-    val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val showAccentPicker = !dynamicAvailable || !settings.dynamicColor
-    val dark = resolveDarkTheme(settings.themeMode)
-
-    SettingsGroup {
-        AppearanceOption(
-            icon = Icons.Outlined.DarkMode,
-            title = stringResource(R.string.settings_theme),
-        ) {
-            SegmentChoice(
-                options = ThemeOptions.map { mode ->
-                    mode to when (mode) {
-                        ThemeMode.SYSTEM -> stringResource(R.string.theme_system)
-                        ThemeMode.LIGHT -> stringResource(R.string.theme_light)
-                        ThemeMode.DARK -> stringResource(R.string.theme_dark)
-                    }
-                },
-                selected = settings.themeMode,
-                onSelect = onThemeMode,
-            )
-        }
-
-        if (dynamicAvailable) {
-            AppearanceDivider()
-            SettingsRow(
-                icon = Icons.Outlined.Palette,
-                title = stringResource(R.string.settings_dynamic_color),
-                subtitle = stringResource(R.string.settings_dynamic_color_desc),
-                trailing = {
-                    SpringSwitch(
-                        checked = settings.dynamicColor,
-                        onCheckedChange = onDynamicColor,
-                    )
-                },
-            )
-        }
-
-        AnimatedVisibility(
-            visible = showAccentPicker,
-            enter = expandVertically(
-                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-            ) + fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-            exit = shrinkVertically(
-                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-            ) + fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-        ) {
-            Column {
-                AppearanceDivider()
-                AppearanceOption(
-                    icon = Icons.Outlined.Palette,
-                    title = stringResource(R.string.settings_accent),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        AccentColor.entries.forEach { accent ->
-                            val (seed, onSeed) = accentSwatchColors(accent, dark)
-                            AccentSwatch(
-                                color = seed,
-                                onColor = onSeed,
-                                label = accentLabel(accent),
-                                selected = settings.accent == accent,
-                                onClick = { onAccent(accent) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        AppearanceDivider()
-        AppearanceOption(
-            icon = Icons.Outlined.Speed,
-            title = stringResource(R.string.settings_motion),
-        ) {
-            SegmentChoice(
-                options = listOf(
-                    MotionStyle.EXPRESSIVE to stringResource(R.string.motion_expressive),
-                    MotionStyle.CALM to stringResource(R.string.motion_calm),
-                ),
-                selected = settings.motionStyle,
-                onSelect = onMotionStyle,
-            )
-        }
-
-        AppearanceDivider()
-        AppearanceOption(
-            icon = Icons.Outlined.Today,
-            title = stringResource(R.string.settings_start_view),
-        ) {
-            SegmentChoice(
-                options = listOf(
-                    StartView.DAY to stringResource(R.string.timetable_day),
-                    StartView.WEEK to stringResource(R.string.timetable_week),
-                ),
-                selected = settings.startView,
-                onSelect = onStartView,
-            )
-        }
-
-        AppearanceDivider()
-        AppearanceOption(
-            icon = Icons.Outlined.ColorLens,
-            title = stringResource(R.string.settings_subject_colors),
-        ) {
-            SegmentChoice(
-                options = listOf(
-                    SubjectColorMode.ACCENT_HUES to stringResource(R.string.subject_colors_accent),
-                    SubjectColorMode.ROLES to stringResource(R.string.subject_colors_roles),
-                ),
-                selected = settings.subjectColorMode,
-                onSelect = onSubjectColorMode,
-            )
-        }
-
-        AppearanceDivider()
-        AppearanceOption(
-            icon = Icons.Outlined.TextFields,
-            title = stringResource(R.string.settings_text_size),
-        ) {
-            SegmentChoice(
-                options = TextScale.entries.map { scale ->
-                    scale to when (scale) {
-                        TextScale.STANDARD -> stringResource(R.string.text_scale_standard)
-                        TextScale.LARGE -> stringResource(R.string.text_scale_large)
-                        TextScale.EXTRA_LARGE -> stringResource(R.string.text_scale_extra_large)
-                    }
-                },
-                selected = settings.textScale,
-                onSelect = onTextScale,
-            )
-        }
-
-        AppearanceDivider()
-        AppearanceOption(
-            icon = Icons.Outlined.Language,
-            title = stringResource(R.string.settings_language),
-        ) {
-            SegmentChoice(
-                options = listOf(
-                    AppLanguage.GERMAN to stringResource(R.string.language_german),
-                    AppLanguage.ENGLISH to stringResource(R.string.language_english),
-                ),
-                selected = currentLanguage,
-                onSelect = onLanguage,
-            )
-        }
-    }
-}
-
-@Composable
-private fun accentLabel(accent: AccentColor): String = when (accent) {
+internal fun accentLabel(accent: AccentColor): String = when (accent) {
     AccentColor.OCEAN -> stringResource(R.string.accent_ocean)
     AccentColor.FOREST -> stringResource(R.string.accent_forest)
     AccentColor.LAVENDER -> stringResource(R.string.accent_lavender)
@@ -883,7 +731,7 @@ private fun accentLabel(accent: AccentColor): String = when (accent) {
 }
 
 @Composable
-private fun AppearanceOption(
+internal fun AppearanceOption(
     icon: ImageVector,
     title: String,
     content: @Composable ColumnScope.() -> Unit,
@@ -913,7 +761,7 @@ private fun AppearanceOption(
 }
 
 @Composable
-private fun AppearanceDivider() {
+internal fun AppearanceDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
@@ -922,7 +770,7 @@ private fun AppearanceDivider() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> SegmentChoice(
+internal fun <T> SegmentChoice(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
@@ -946,7 +794,7 @@ private fun <T> SegmentChoice(
 }
 
 @Composable
-private fun AccentSwatch(
+internal fun AccentSwatch(
     color: Color,
     onColor: Color,
     label: String,
