@@ -4,9 +4,11 @@ export function loadConfig(env = process.env) {
     port: Number(env.PORT ?? 3000),
     /**
      * The address to listen on. "::" accepts IPv4 and IPv6, which matters because a health check that
-     * says "localhost" often resolves to the IPv6 address first.
+     * says "localhost" often resolves to the IPv6 address first. The variable is not called HOST
+     * because hosting platforms such as Coolify set HOST themselves, to something that is not meant
+     * for this.
      */
-    host: env.HOST ?? '::',
+    host: env.LISTEN_HOST ?? '::',
     /** The GitHub repository whose releases are served, as "owner/name". */
     repo: env.GITHUB_REPO ?? 'blutuxyz/daybreak',
     /** The GitHub API address. Change it for GitHub Enterprise, or to point tests at a fake. */
