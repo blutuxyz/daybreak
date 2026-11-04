@@ -123,12 +123,18 @@
     <string name="settings_debug_title">Debug-Protokoll</string>
     <string name="settings_debug_desc">Letzte Rohantworten der WebUntis-API ansehen.</string>
     <string name="settings_about">Über Daybreak</string>
+    <string name="about_version">Version</string>
+    <string name="about_version_line">Version %1$s</string>
+    <string name="about_build">Build</string>
+    <string name="about_package">Paket</string>
+    <string name="about_build_type_debug">Debug</string>
+    <string name="about_build_type_release">Release</string>
     <string name="settings_about_text">Daybreak ist ein inoffizieller, schlanker Stundenplan-Client für WebUntis. Die Zugangsdaten bleiben auf deinem Gerät. Kein API-Schlüssel erforderlich.</string>
     <string name="settings_logout">Abmelden</string>
     <string name="settings_logout_title">Wirklich abmelden?</string>
     <string name="settings_logout_message">Zugangsschlüssel, Cache und Debug-Protokoll werden von diesem Gerät entfernt.</string>
     <string name="settings_logout_confirm">Abmelden</string>
-    <string name="settings_interval_dialog_title">Synchronisierungsintervall</string>
+    <string name="settings_interval_dialog_title">Sync-Intervall</string>
     <string name="settings_notification_permission_denied">Ohne Benachrichtigungsberechtigung können keine Änderungen gemeldet werden.</string>
     <string name="sync_interval_minutes">%1$d Minuten</string>
 
@@ -233,6 +239,8 @@
     <string name="absences_since">Seit %1$s</string>
     <string name="absences_total">Gesamt</string>
     <string name="absences_count">%1$d Einträge</string>
+    <string name="absences_latest">Zuletzt: %1$s</string>
+    <string name="absences_excused_share">%1$d%% entschuldigt</string>
     <string name="absences_excused">Entschuldigt</string>
     <string name="absences_unexcused">Unentschuldigt</string>
     <string name="absences_excused_short">Entsch.</string>

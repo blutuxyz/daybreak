@@ -128,6 +128,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenDebug: () -> Unit,
     onOpenLessonColors: () -> Unit,
+    onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -147,7 +148,6 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showIntervalDialog by remember { mutableStateOf(false) }
-    var aboutExpanded by rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -381,47 +381,15 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),
-                        onClick = { aboutExpanded = !aboutExpanded },
+                        onClick = onOpenAbout,
                         trailing = {
-                            val rotation by animateFloatAsState(
-                                targetValue = if (aboutExpanded) 90f else 0f,
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                label = "aboutChevron",
-                            )
                             Icon(
                                 Icons.Outlined.ChevronRight,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.graphicsLayer {
-                                    rotationZ = rotation
-                                },
                             )
                         },
                     )
-                    AnimatedVisibility(
-                        visible = aboutExpanded,
-                        enter = expandVertically(
-                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        ) + fadeIn(
-                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        ),
-                        exit = shrinkVertically(
-                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                        ) + fadeOut(
-                            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                        ),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_about_text),
-                            modifier = Modifier.padding(
-                                start = 66.dp,
-                                end = 16.dp,
-                                bottom = 14.dp,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
 

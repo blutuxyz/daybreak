@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -719,6 +718,49 @@ private fun DayChip(
     }
 }
 
+/**
+ * The "now" line: a thin line across the timetable at the current time, with the time in a
+ * bubble at its end. It glides to its new position when the minute changes. Used by the day
+ * view and the week view.
+ */
+@Composable
+private fun NowLine(
+    range: TimelineRange,
+    now: LocalTime,
+    pxPerMinute: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val animatedMinutes by animateFloatAsState(
+        targetValue = minutesBetween(range.start, now).toFloat(),
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "nowLine",
+    )
+    Row(
+        modifier = modifier
+            .offset(y = pxPerMinute * animatedMinutes - 9.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(2.dp)
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+        ) {
+            Text(
+                text = formatTime(now),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun DayTimeline(
     blocks: List<TimelineBlock>,
@@ -762,11 +804,6 @@ private fun DayTimeline(
                 pxPerMinute = pxPerMinute,
             )
             val nowTime = now.toLocalTime()
-            val animatedNowMinutes by animateFloatAsState(
-                targetValue = minutesBetween(range.start, nowTime).toFloat(),
-                animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
-                label = "nowLine",
-            )
             val currentBlock = if (isToday) {
                 blocks.filter {
                     !nowTime.isBefore(it.start) && nowTime.isBefore(it.end)
@@ -798,11 +835,6 @@ private fun DayTimeline(
                         block = block,
                         current = current,
                         exam = examFor(block.lesson, exams),
-                        progress = if (current) {
-                            block.progressAt(nowTime)
-                        } else {
-                            0f
-                        },
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(columnWidth - 4.dp)
@@ -821,31 +853,7 @@ private fun DayTimeline(
                 }
             }
             if (isToday && nowTime >= range.start && nowTime < range.end) {
-                val y = pxPerMinute * animatedNowMinutes
-                Row(
-                    modifier = Modifier
-                        .offset(y = y - 9.dp)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(2.dp)
-                            .background(MaterialTheme.colorScheme.primary),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                    ) {
-                        Text(
-                            text = formatTime(nowTime),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                }
+                NowLine(range = range, now = nowTime, pxPerMinute = pxPerMinute)
             }
         }
     }
@@ -952,7 +960,7 @@ private class LessonLook(
     val stripe: Color?,
     val fill: Color,
     val content: Color,
-    /** Used for the progress bar and borders. */
+    /** Used for borders. */
     val accent: Color,
 )
 
@@ -1002,7 +1010,6 @@ private fun DayLessonBlock(
     block: TimelineBlock,
     current: Boolean,
     exam: UntisExam?,
-    progress: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1123,32 +1130,6 @@ private fun DayLessonBlock(
                         )
                     }
                 }
-                if (current) {
-                    val animatedProgress = remember { Animatable(progress) }
-                    LaunchedEffect(progress) {
-                        animatedProgress.animateTo(
-                            targetValue = progress,
-                            animationSpec = tween(
-                                durationMillis = 30_000,
-                                easing = LinearEasing,
-                            ),
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    // A thin, straight bar: how far through the lesson it is.
-                    LinearProgressIndicator(
-                        progress = { animatedProgress.value },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp),
-                        color = if (look.stripe == null) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            look.accent
-                        },
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    )
-                }
             }
         }
     }
@@ -1182,6 +1163,11 @@ private fun WeekPage(
         }
     }
     val pxPerMinute = 1.05.dp
+    // One fade for the whole week when it is shown, instead of an animation per lesson.
+    val gridReveal = remember(weekStart) { Animatable(0f) }
+    LaunchedEffect(weekStart) {
+        gridReveal.animateTo(1f, animationSpec = tween(durationMillis = 220))
+    }
     val contentHeight = (pxPerMinute.value * range.minutes).dp
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
 
@@ -1239,7 +1225,8 @@ private fun WeekPage(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState()),
+                                    .verticalScroll(rememberScrollState())
+                                    .graphicsLayer { alpha = gridReveal.value },
                             ) {
                                 TimelineAxis(
                                     range = range,
@@ -1250,25 +1237,34 @@ private fun WeekPage(
                                         .height(contentHeight),
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Row(
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(contentHeight),
                                 ) {
-                                    days.forEach { day ->
-                                        WeekDayColumn(
-                                            date = day,
-                                            today = today,
-                                            now = now,
-                                            lessons = gridLessonsByDay[day].orEmpty(),
-                                            range = range,
-                                            periodStarts = periodStarts,
-                                            pxPerMinute = pxPerMinute,
-                                            revealKey = weekStart,
-                                            exams = cache.exams,
-                                            onLessonClick = { selectedLesson = it },
-                                            modifier = Modifier.weight(1f),
-                                        )
+                                    Row(modifier = Modifier.fillMaxSize()) {
+                                        days.forEach { day ->
+                                            WeekDayColumn(
+                                                date = day,
+                                                today = today,
+                                                now = now,
+                                                lessons = gridLessonsByDay[day].orEmpty(),
+                                                range = range,
+                                                periodStarts = periodStarts,
+                                                pxPerMinute = pxPerMinute,
+                                                revealKey = weekStart,
+                                                exams = cache.exams,
+                                                onLessonClick = { selectedLesson = it },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+                                    // The same time line as the day view, shown only in the current week.
+                                    val nowTime = now.toLocalTime()
+                                    val isCurrentWeek = weekStart ==
+                                        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                                    if (isCurrentWeek && nowTime >= range.start && nowTime < range.end) {
+                                        NowLine(range = range, now = nowTime, pxPerMinute = pxPerMinute)
                                     }
                                 }
                             }
@@ -1452,24 +1448,15 @@ private fun WeekDayColumn(
             } else {
                 null
             }
-            blocks.forEachIndexed { index, block ->
+            // Block geometry is set directly. Animating every block's position and height with
+            // springs cost a lot while scrolling, so the week only fades in as a whole.
+            blocks.forEach { block ->
                 key(block.lesson.id, block.start, block.end) {
-                    val targetTop = pxPerMinute * minutesBetween(range.start, block.start)
-                    val targetHeight = max(
+                    val top = pxPerMinute * minutesBetween(range.start, block.start)
+                    val height = max(
                         24f,
                         pxPerMinute.value * minutesBetween(block.start, block.end) - 2f,
                     ).dp
-                    val animatedTop by animateDpAsState(
-                        targetValue = targetTop,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "weekLessonTop",
-                    )
-                    val animatedHeight by animateDpAsState(
-                        targetValue = targetHeight,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "weekLessonHeight",
-                    )
-                    val reveal by rememberStaggeredReveal(revealKey, index)
                     val columnWidth = maxWidth / block.columnCount
                     val current = block == currentBlock
                     WeekLessonBlock(
@@ -1479,17 +1466,11 @@ private fun WeekDayColumn(
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(maxOf(columnWidth - 2.dp, 14.dp))
-                            .height(animatedHeight)
+                            .height(height)
                             .offset(
                                 x = columnWidth * block.column + 1.dp,
-                                y = animatedTop,
-                            )
-                            .graphicsLayer {
-                                alpha = reveal
-                                val scale = 0.94f + 0.06f * reveal
-                                scaleX = scale
-                                scaleY = scale
-                            },
+                                y = top,
+                            ),
                     )
                 }
             }
@@ -1512,8 +1493,6 @@ private fun WeekLessonBlock(
     modifier: Modifier = Modifier,
 ) {
     val lesson = block.lesson
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressScale by rememberPressScale(interactionSource)
     val subject = lesson.subject.ifBlank {
         stringResource(R.string.lesson_unknown_subject)
     }
@@ -1536,15 +1515,11 @@ private fun WeekLessonBlock(
     }
     Surface(
         onClick = onClick,
-        modifier = modifier.graphicsLayer {
-            scaleX = pressScale
-            scaleY = pressScale
-        },
+        modifier = modifier,
         shape = RoundedCornerShape(9.dp),
         color = look.fill,
         contentColor = look.content,
         border = border,
-        interactionSource = interactionSource,
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             look.stripe?.let { stripe ->
@@ -1774,11 +1749,6 @@ private data class TimelineBlock(
     val hasSubstitution: Boolean get() = lessons.any { it.hasSubstitution }
     val durationMinutes: Int get() = minutesBetween(start, end)
 
-    fun progressAt(time: LocalTime): Float {
-        val total = Duration.between(start, end).seconds.toFloat()
-        if (total <= 0f) return 0f
-        return (Duration.between(start, time).seconds.toFloat() / total).coerceIn(0f, 1f)
-    }
 }
 
 private fun mergeLessons(lessons: List<UntisLesson>): List<TimelineBlock> {

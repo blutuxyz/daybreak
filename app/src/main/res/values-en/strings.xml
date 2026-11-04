@@ -123,6 +123,12 @@
     <string name="settings_debug_title">Debug log</string>
     <string name="settings_debug_desc">Inspect the latest raw WebUntis API responses.</string>
     <string name="settings_about">About Daybreak</string>
+    <string name="about_version">Version</string>
+    <string name="about_version_line">Version %1$s</string>
+    <string name="about_build">Build</string>
+    <string name="about_package">Package</string>
+    <string name="about_build_type_debug">Debug</string>
+    <string name="about_build_type_release">Release</string>
     <string name="settings_about_text">Daybreak is an unofficial, focused timetable client for WebUntis. Your credentials stay on this device. No API key is required.</string>
     <string name="settings_logout">Sign out</string>
     <string name="settings_logout_title">Sign out?</string>
@@ -233,6 +239,8 @@
     <string name="absences_since">Since %1$s</string>
     <string name="absences_total">Total</string>
     <string name="absences_count">%1$d entries</string>
+    <string name="absences_latest">Latest: %1$s</string>
+    <string name="absences_excused_share">%1$d%% excused</string>
     <string name="absences_excused">Excused</string>
     <string name="absences_unexcused">Unexcused</string>
     <string name="absences_excused_short">Excused</string>

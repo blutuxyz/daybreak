@@ -27,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
@@ -56,6 +57,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private enum class AbsenceFilter {
     ALL,
@@ -238,36 +240,115 @@ private fun AbsenceList(
     }
 }
 
-/** A compact total. The excused and unexcused split lives in the filter chips. */
+/**
+ * The overview card: the total absence time, how much of it is excused, the two durations,
+ * and the most recent absence.
+ */
 @Composable
 private fun AbsenceSummary(absences: List<UntisAbsence>) {
     val total = absences.fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
+    val excusedTime = absences.filter { it.excused }
+        .fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
+    val unexcusedTime = total.minus(excusedTime)
+    val excusedShare = if (total.isZero) {
+        0f
+    } else {
+        excusedTime.toMinutes().toFloat() / total.toMinutes().toFloat()
+    }
+    val latest = absences.maxByOrNull { it.start }
+    val locale = Locale.getDefault()
+    val latestText = remember(latest, locale) {
+        latest?.start?.format(DateTimeFormatter.ofPattern("EEE dd.MM. HH:mm", locale))
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.absences_total),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatDuration(total),
+                        style = MaterialTheme.typography.displaySmallEmphasized,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.absences_count, absences.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { excusedShare },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+                color = MaterialTheme.colorScheme.secondary,
+                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+            )
+            Spacer(Modifier.height(6.dp))
             Text(
-                text = stringResource(R.string.absences_total),
-                style = MaterialTheme.typography.labelLarge,
+                text = stringResource(
+                    R.string.absences_excused_share,
+                    (excusedShare * 100).roundToInt(),
+                ),
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = formatDuration(total),
-                style = MaterialTheme.typography.titleLargeEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = stringResource(R.string.absences_count, absences.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+            Spacer(Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.absences_excused),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatDuration(excusedTime),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.absences_unexcused),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatDuration(unexcusedTime),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        // The unexcused time carries the accent, as in the filter chips.
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            if (latestText != null) {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.absences_latest, latestText),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
