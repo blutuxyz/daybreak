@@ -27,6 +27,10 @@ sealed interface ProbeUiState {
     data class Failed(val message: String) : ProbeUiState
 }
 
+/** 1 August of the school year that contains [today] (German school years start in summer). */
+private fun schoolYearStart(today: LocalDate): LocalDate =
+    if (today.monthValue >= 8) LocalDate.of(today.year, 8, 1) else LocalDate.of(today.year - 1, 8, 1)
+
 class DebugViewModel(
     private val rawLogStore: RawLogStore,
     private val untisApi: UntisApi,
@@ -61,7 +65,7 @@ class DebugViewModel(
                         session = session,
                         timetableStart = weekStart,
                         timetableEnd = weekStart.plusDays(6),
-                        absenceStart = today.minusDays(60),
+                        absenceStart = schoolYearStart(today),
                         absenceEnd = today,
                     )
                 }

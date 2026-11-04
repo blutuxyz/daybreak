@@ -196,13 +196,10 @@ class UntisApi(
             ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
         val teacherId = masterArray(studentResult, "teachers")
             ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
-        val roomId = masterArray(studentResult, "rooms")
-            ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
 
         listOf(
             Triple("Class timetable", "CLASS", classId),
             Triple("Teacher timetable", "TEACHER", teacherId),
-            Triple("Room timetable", "ROOM", roomId),
         ).forEach { (label, objectType, id) ->
             if (id == null) {
                 results += ProbeResult(
@@ -219,6 +216,30 @@ class UntisApi(
                     describe = ::timetableSummary,
                 )
             }
+        }
+
+        // A room can be empty in a given week, so try a few rooms until one has lessons.
+        val roomIds = masterArray(studentResult, "rooms")
+            ?.mapNotNull { it.asJsonObjectOrNull()?.longOrNull("id") }
+            .orEmpty()
+        if (roomIds.isEmpty()) {
+            results += ProbeResult(
+                label = "Room timetable",
+                method = "getTimetable2017",
+                ok = false,
+                message = "no ROOM id found in masterData of the student timetable",
+            )
+        }
+        val maxRoomProbes = 5
+        for ((index, roomId) in roomIds.take(maxRoomProbes).withIndex()) {
+            val result = call(
+                label = "Room timetable #${index + 1}",
+                method = "getTimetable2017",
+                params = timetableParams(roomId, "ROOM", timetableStart, timetableEnd),
+                describe = ::timetableSummary,
+            ) ?: continue
+            val lessons = runCatching { TimetableParser.parse(result).lessons.size }.getOrDefault(0)
+            if (lessons > 0) break
         }
 
         return results
