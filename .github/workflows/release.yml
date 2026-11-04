@@ -3,9 +3,19 @@ name: Release APK
 # Runs when you publish a release on GitHub. The release's tag (v1.2.3) becomes the app version, the
 # release notes become the changelog, and the signed APK is attached to the release. The update
 # server (update-server/) then serves both to the app. Setup is described in update-server/README.md.
+#
+# It can also be started by hand (Actions > Release APK > Run workflow) for a release that already
+# exists. It then builds the branch you pick and attaches the APK to that release, which saves
+# recreating the release while the pipeline is being fixed.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag of an existing release, for example v1.0.0
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,7 +24,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.event.release.tag_name }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
