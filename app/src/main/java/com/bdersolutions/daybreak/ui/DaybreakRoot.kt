@@ -17,6 +17,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -82,6 +83,7 @@ import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
+import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import java.time.LocalDate
@@ -328,12 +330,21 @@ private fun RowScope.BottomBarItem(
     )
     val iconFade = motion.fastEffectsSpec<Float>()
     val iconScale = motion.defaultSpatialSpec<Float>()
+    val interactionSource = remember { MutableInteractionSource() }
+    val corner by rememberMorphCorner(
+        interactionSource = interactionSource,
+        selected = selected,
+        selectedRadius = 32.dp,
+        unselectedRadius = 22.dp,
+        pressedRadius = 14.dp,
+    )
     Surface(
         onClick = onClick,
         modifier = modifier.height(64.dp),
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedCornerShape(corner),
         color = container,
         contentColor = content,
+        interactionSource = interactionSource,
     ) {
         Column(
             modifier = Modifier

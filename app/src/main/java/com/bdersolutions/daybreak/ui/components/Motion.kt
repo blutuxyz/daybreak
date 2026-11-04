@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -13,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 
 /**
@@ -72,3 +74,45 @@ fun rememberPressScale(
         label = "pressScale",
     )
 }
+
+/**
+ * Corner radius that morphs with state, like Material 3 Expressive shapes: it moves to
+ * [pressedRadius] while the element is pressed and to [selectedRadius] or
+ * [unselectedRadius] otherwise. Use it as `RoundedCornerShape(radius)`.
+ */
+@Composable
+fun rememberMorphCorner(
+    interactionSource: InteractionSource,
+    selected: Boolean,
+    selectedRadius: Dp,
+    unselectedRadius: Dp,
+    pressedRadius: Dp,
+): State<Dp> {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val animationsEnabled = motionAnimationsEnabled()
+    val target = when {
+        animationsEnabled && pressed -> pressedRadius
+        selected -> selectedRadius
+        else -> unselectedRadius
+    }
+    return animateDpAsState(
+        targetValue = target,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "morphCorner",
+    )
+}
+
+/** Corner that goes from [restingRadius] to [pressedRadius] while pressed. */
+@Composable
+fun rememberPressCorner(
+    interactionSource: InteractionSource,
+    restingRadius: Dp,
+    pressedRadius: Dp,
+): State<Dp> = rememberMorphCorner(
+    interactionSource = interactionSource,
+    selected = true,
+    selectedRadius = restingRadius,
+    unselectedRadius = restingRadius,
+    pressedRadius = pressedRadius,
+)
+
