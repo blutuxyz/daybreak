@@ -3,6 +3,7 @@ package com.bdersolutions.daybreak.data.cache
 import android.content.Context
 import android.util.AtomicFile
 import com.bdersolutions.daybreak.untis.LessonStatus
+import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -23,6 +24,8 @@ data class TimetableCache(
     val studentId: Long = 0L,
     val weeks: Map<LocalDate, CachedWeek> = emptyMap(),
     val lastSyncAt: Long = 0L,
+    /** The student's exams for the cached weeks. Empty for class, teacher and room views. */
+    val exams: List<UntisExam> = emptyList(),
 )
 
 /**
@@ -63,7 +66,7 @@ class TimetableCacheStore(context: Context) {
 
     private fun encode(cache: TimetableCache): String {
         val root = JsonObject().apply {
-            addProperty("version", 1)
+            addProperty("version", VERSION)
             addProperty("studentId", cache.studentId)
             addProperty("lastSyncAt", cache.lastSyncAt)
             add("weeks", JsonArray().apply {
@@ -72,9 +75,34 @@ class TimetableCacheStore(context: Context) {
                     .take(MAX_WEEKS)
                     .forEach { week -> add(encodeWeek(week)) }
             })
+            add("exams", JsonArray().apply {
+                cache.exams.forEach { exam -> add(encodeExam(exam)) }
+            })
         }
         return root.toString()
     }
+
+    private fun encodeExam(exam: UntisExam): JsonObject = JsonObject().apply {
+        addProperty("id", exam.id)
+        addProperty("date", exam.date.toString())
+        addProperty("start", exam.start.toString())
+        addProperty("end", exam.end.toString())
+        addProperty("subject", exam.subject)
+        addProperty("name", exam.name)
+        addProperty("text", exam.text)
+    }
+
+    private fun decodeExam(obj: JsonObject): UntisExam? = runCatching {
+        UntisExam(
+            id = obj.get("id")?.asLong ?: 0L,
+            date = LocalDate.parse(obj.get("date").asString),
+            start = LocalTime.parse(obj.get("start").asString),
+            end = LocalTime.parse(obj.get("end").asString),
+            subject = obj.get("subject")?.asString.orEmpty(),
+            name = obj.get("name")?.asString.orEmpty(),
+            text = obj.get("text")?.asString.orEmpty(),
+        )
+    }.getOrNull()
 
     private fun encodeWeek(week: CachedWeek): JsonObject = JsonObject().apply {
         addProperty("weekStart", week.weekStart.toString())
@@ -119,7 +147,10 @@ class TimetableCacheStore(context: Context) {
             }
             weeks[weekStart] = CachedWeek(weekStart, lessons, updatedAt)
         }
-        return TimetableCache(studentId, weeks, lastSyncAt)
+        val exams = root.getAsJsonArray("exams")?.mapNotNull { element ->
+            runCatching { decodeExam(element.asJsonObject) }.getOrNull()
+        }.orEmpty()
+        return TimetableCache(studentId, weeks, lastSyncAt, exams)
     }
 
     private fun decodeLesson(obj: JsonObject): UntisLesson? = runCatching {
@@ -152,5 +183,8 @@ class TimetableCacheStore(context: Context) {
     private companion object {
         const val FILE_NAME = "timetable_cache.json"
         const val MAX_WEEKS = 8
+
+        /** 2 added the exams list. Version 1 caches load fine and fill in exams on the next sync. */
+        const val VERSION = 2
     }
 }

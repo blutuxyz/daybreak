@@ -46,10 +46,10 @@ import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +58,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -93,11 +94,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.untis.UntisChild
+import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.ui.components.rememberPressCorner
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
@@ -468,7 +469,7 @@ fun LoginScreen(
     }
 
     state.pendingStudents?.let { students ->
-        StudentPickerDialog(
+        StudentPickerSheet(
             students = students,
             onSelected = viewModel::selectStudent,
             onCancelled = viewModel::cancelStudentSelection,
@@ -911,46 +912,56 @@ private fun LoginErrorCard(failure: LoginFailure, detail: String?) {
     }
 }
 
+/**
+ * Asks which student to sign in as. Each student is a row that picks them straight away,
+ * so there is no confirm button. Outside tap, swipe and back all cancel.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StudentPickerDialog(
+private fun StudentPickerSheet(
     students: List<UntisChild>,
     onSelected: (UntisChild) -> Unit,
     onCancelled: () -> Unit,
 ) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onCancelled,
-        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false),
-        icon = { Icon(Icons.Outlined.Person, contentDescription = null) },
-        title = { Text(stringResource(R.string.login_choose_student_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.login_choose_student_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.login_choose_student_title),
+                style = MaterialTheme.typography.headlineSmallEmphasized,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.login_choose_student_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 students.forEach { student ->
-                    TextButton(
+                    SelectionRow(
+                        label = student.displayName,
+                        supporting = null,
+                        selected = false,
                         onClick = { onSelected(student) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = student.displayName,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Start,
-                        )
-                    }
+                    )
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onCancelled) {
+            Spacer(Modifier.height(10.dp))
+            TextButton(
+                onClick = onCancelled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(stringResource(R.string.action_cancel))
             }
-        },
-    )
+        }
+    }
 }
 
 private fun startQrScanner(context: android.content.Context, viewModel: LoginViewModel) {

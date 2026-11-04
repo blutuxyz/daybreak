@@ -14,9 +14,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -49,6 +52,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
@@ -56,6 +60,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
@@ -66,6 +72,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -74,7 +81,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -102,8 +108,12 @@ import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.settings.StartView
+import com.bdersolutions.daybreak.data.settings.SubjectColorMode
+import com.bdersolutions.daybreak.data.settings.TextScale
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
+import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -151,9 +161,20 @@ fun SettingsScreen(
         }
     }
 
+    val retryLabel = stringResource(R.string.action_retry)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { error ->
-            snackbarHostState.showSnackbar(error.toUserMessage(context))
+            val result = snackbarHostState.showSnackbar(
+                message = error.toUserMessage(context),
+                actionLabel = retryLabel,
+                withDismissAction = true,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.syncNow()
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.syncSucceeded.collect {
+            snackbarHostState.showSnackbar(context.getString(R.string.timetable_refreshed))
         }
     }
 
@@ -215,39 +236,16 @@ fun SettingsScreen(
             item {
                 AppearanceGroup(
                     settings = settings,
+                    currentLanguage = currentLanguage,
+                    onLanguage = viewModel::setLanguage,
                     onThemeMode = viewModel::setThemeMode,
                     onDynamicColor = viewModel::setDynamicColor,
                     onAccent = viewModel::setAccent,
                     onMotionStyle = viewModel::setMotionStyle,
                     onStartView = viewModel::setStartView,
+                    onSubjectColorMode = viewModel::setSubjectColorMode,
+                    onTextScale = viewModel::setTextScale,
                 )
-            }
-
-            item { SectionLabel(stringResource(R.string.settings_language)) }
-            item {
-                SettingsGroup {
-                    SettingsRow(
-                        icon = Icons.Outlined.Language,
-                        title = stringResource(R.string.language_german),
-                        onClick = { viewModel.setLanguage(AppLanguage.GERMAN) },
-                        trailing = {
-                            SpringRadioButton(
-                                selected = currentLanguage == AppLanguage.GERMAN,
-                            )
-                        },
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Outlined.Language,
-                        title = stringResource(R.string.language_english),
-                        onClick = { viewModel.setLanguage(AppLanguage.ENGLISH) },
-                        trailing = {
-                            SpringRadioButton(
-                                selected = currentLanguage == AppLanguage.ENGLISH,
-                            )
-                        },
-                    )
-                }
             }
 
             item { SectionLabel(stringResource(R.string.settings_sync)) }
@@ -306,7 +304,6 @@ fun SettingsScreen(
                 }
             }
 
-            item { SectionLabel(stringResource(R.string.settings_notifications)) }
             item {
                 SettingsGroup {
                     SettingsRow(
@@ -336,7 +333,6 @@ fun SettingsScreen(
                 }
             }
 
-            item { SectionLabel(stringResource(R.string.settings_debug)) }
             item {
                 SettingsGroup {
                     SettingsRow(
@@ -446,44 +442,30 @@ fun SettingsScreen(
     }
 
     if (showIntervalDialog) {
-        var selected by remember { mutableIntStateOf(settings.syncIntervalMinutes) }
+        // Choosing an interval applies it straight away, so there is no save step.
+        val intervals = SettingsRepository.SYNC_INTERVALS
         AlertDialog(
             onDismissRequest = { showIntervalDialog = false },
             title = { Text(stringResource(R.string.settings_interval_dialog_title)) },
             text = {
-                Column {
-                    SettingsRepository.SYNC_INTERVALS.forEach { interval ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selected = interval }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SpringRadioButton(
-                                selected = selected == interval,
-                            )
-                            Text(
-                                text = stringResource(R.string.sync_interval_minutes, interval),
-                                modifier = Modifier.padding(start = 6.dp),
-                            )
-                        }
+                // A list rather than segments: "120 minutes" does not fit four segments in a dialog.
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    intervals.forEach { interval ->
+                        SelectionRow(
+                            label = stringResource(R.string.sync_interval_minutes, interval),
+                            supporting = null,
+                            selected = settings.syncIntervalMinutes == interval,
+                            onClick = {
+                                viewModel.setSyncInterval(interval)
+                                showIntervalDialog = false
+                            },
+                        )
                     }
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.setSyncInterval(selected)
-                        showIntervalDialog = false
-                    },
-                ) {
-                    Text(stringResource(R.string.action_save))
-                }
-            },
-            dismissButton = {
                 TextButton(onClick = { showIntervalDialog = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                    Text(stringResource(R.string.action_close))
                 }
             },
         )
@@ -617,24 +599,6 @@ private fun SpringSwitch(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun SpringRadioButton(selected: Boolean) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.08f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "radioScale",
-    )
-    RadioButton(
-        selected = selected,
-        onClick = null,
-        modifier = Modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        },
-    )
-}
-
 @Composable
 private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -683,36 +647,21 @@ private fun SettingsRow(
     } else {
         MaterialTheme.colorScheme.onSecondaryContainer
     }
-    val baseModifier = Modifier
-        .fillMaxWidth()
-        .then(
-            if (onClick != null) {
-                Modifier.clickable(onClick = onClick)
-            } else {
-                Modifier
-            },
+    // Built on ListItem so spacing, touch targets and TalkBack behave like other list
+    // items. The row gives the same spring press feedback as the timetable blocks.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressScale by rememberPressScale(interactionSource)
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick,
         )
-        .padding(horizontal = 16.dp, vertical = 13.dp)
-    Row(
-        modifier = baseModifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = iconContainer,
-            contentColor = iconColor,
-            modifier = Modifier.size(38.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        Spacer(Modifier.size(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+    } else {
+        Modifier
+    }
+    ListItem(
+        headlineContent = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -721,7 +670,15 @@ private fun SettingsRow(
                 maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle != null) {
+        },
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .then(clickModifier),
+        supportingContent = if (subtitle != null) {
+            {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -730,12 +687,28 @@ private fun SettingsRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-        if (trailing != null) {
-            Spacer(Modifier.size(8.dp))
-            trailing()
-        }
-    }
+        } else {
+            null
+        },
+        leadingContent = {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = iconContainer,
+                contentColor = iconColor,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        },
+        trailingContent = trailing,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 private val ThemeOptions = listOf(
@@ -747,11 +720,15 @@ private val ThemeOptions = listOf(
 @Composable
 private fun AppearanceGroup(
     settings: AppSettings,
+    currentLanguage: AppLanguage,
+    onLanguage: (AppLanguage) -> Unit,
     onThemeMode: (ThemeMode) -> Unit,
     onDynamicColor: (Boolean) -> Unit,
     onAccent: (AccentColor) -> Unit,
     onMotionStyle: (MotionStyle) -> Unit,
     onStartView: (StartView) -> Unit,
+    onSubjectColorMode: (SubjectColorMode) -> Unit,
+    onTextScale: (TextScale) -> Unit,
 ) {
     val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showAccentPicker = !dynamicAvailable || !settings.dynamicColor
@@ -851,6 +828,54 @@ private fun AppearanceGroup(
                 ),
                 selected = settings.startView,
                 onSelect = onStartView,
+            )
+        }
+
+        AppearanceDivider()
+        AppearanceOption(
+            icon = Icons.Outlined.ColorLens,
+            title = stringResource(R.string.settings_subject_colors),
+        ) {
+            SegmentChoice(
+                options = listOf(
+                    SubjectColorMode.ACCENT_HUES to stringResource(R.string.subject_colors_accent),
+                    SubjectColorMode.ROLES to stringResource(R.string.subject_colors_roles),
+                ),
+                selected = settings.subjectColorMode,
+                onSelect = onSubjectColorMode,
+            )
+        }
+
+        AppearanceDivider()
+        AppearanceOption(
+            icon = Icons.Outlined.TextFields,
+            title = stringResource(R.string.settings_text_size),
+        ) {
+            SegmentChoice(
+                options = TextScale.entries.map { scale ->
+                    scale to when (scale) {
+                        TextScale.STANDARD -> stringResource(R.string.text_scale_standard)
+                        TextScale.LARGE -> stringResource(R.string.text_scale_large)
+                        TextScale.EXTRA_LARGE -> stringResource(R.string.text_scale_extra_large)
+                    }
+                },
+                selected = settings.textScale,
+                onSelect = onTextScale,
+            )
+        }
+
+        AppearanceDivider()
+        AppearanceOption(
+            icon = Icons.Outlined.Language,
+            title = stringResource(R.string.settings_language),
+        ) {
+            SegmentChoice(
+                options = listOf(
+                    AppLanguage.GERMAN to stringResource(R.string.language_german),
+                    AppLanguage.ENGLISH to stringResource(R.string.language_english),
+                ),
+                selected = currentLanguage,
+                onSelect = onLanguage,
             )
         }
     }

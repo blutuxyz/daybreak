@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.absences
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,13 +27,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -162,23 +164,49 @@ private fun AbsenceList(
             AbsenceSummary(absences = absences)
         }
         item(key = "filters") {
+            val totalTime = remember(absences) {
+                absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
+            }
+            val excusedTime = remember(absences) {
+                absences.filter { it.excused }.fold(Duration.ZERO) { sum, absence ->
+                    sum + absence.duration
+                }
+            }
+            val unexcusedTime = totalTime - excusedTime
+            // The chips carry their counts, so they can be wider than a phone. They scroll rather
+            // than squeezing the labels.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 AbsenceFilter.entries.forEach { option ->
+                    val (name, time) = when (option) {
+                        AbsenceFilter.ALL -> stringResource(R.string.absences_filter_all) to totalTime
+                        AbsenceFilter.UNEXCUSED -> stringResource(R.string.absences_unexcused) to unexcusedTime
+                        AbsenceFilter.EXCUSED -> stringResource(R.string.absences_excused) to excusedTime
+                    }
                     FilterChip(
                         selected = filter == option,
                         onClick = { filter = option },
                         label = {
-                            Text(
-                                text = when (option) {
-                                    AbsenceFilter.ALL -> stringResource(R.string.absences_filter_all)
-                                    AbsenceFilter.UNEXCUSED -> stringResource(R.string.absences_unexcused)
-                                    AbsenceFilter.EXCUSED -> stringResource(R.string.absences_excused)
-                                },
-                                maxLines = 1,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = name, maxLines = 1)
+                                Spacer(Modifier.width(6.dp))
+                                // Only the unexcused time carries the accent colour.
+                                Text(
+                                    text = formatDuration(time),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (option == AbsenceFilter.UNEXCUSED) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    maxLines = 1,
+                                )
+                            }
                         },
                     )
                 }
@@ -210,71 +238,36 @@ private fun AbsenceList(
     }
 }
 
+/** A compact total. The excused and unexcused split lives in the filter chips. */
 @Composable
 private fun AbsenceSummary(absences: List<UntisAbsence>) {
     val total = absences.fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
-    val excused = absences.filter { it.excused }
-    val excusedTime = excused.fold(Duration.ZERO) { sum, absence -> sum.plus(absence.duration) }
-    val unexcusedTime = total.minus(excusedTime)
-    val excusedShare = if (total.isZero) 0f else excusedTime.toMinutes().toFloat() / total.toMinutes().toFloat()
-
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = stringResource(R.string.absences_total),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.weight(1f))
             Text(
                 text = formatDuration(total),
-                style = MaterialTheme.typography.displaySmallEmphasized,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.titleLargeEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
             )
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = stringResource(R.string.absences_count, absences.size),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(14.dp))
-            LinearProgressIndicator(
-                progress = { excusedShare },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f),
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.absences_excused),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = formatDuration(excusedTime),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.absences_unexcused),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = formatDuration(unexcusedTime),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
         }
     }
 }
@@ -287,7 +280,7 @@ private fun DateHeader(date: LocalDate) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 4.dp, top = 8.dp),
     )
 }

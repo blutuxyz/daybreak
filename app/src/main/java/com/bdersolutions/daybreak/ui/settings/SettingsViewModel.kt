@@ -18,6 +18,8 @@ import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.settings.SubjectColorMode
+import com.bdersolutions.daybreak.data.settings.TextScale
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
@@ -47,6 +49,10 @@ class SettingsViewModel(
 
     private val _events = MutableSharedFlow<Throwable>(extraBufferCapacity = 4)
     val events: SharedFlow<Throwable> = _events
+
+    /** Emits when a manual sync finished without errors. */
+    private val _syncSucceeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val syncSucceeded: SharedFlow<Unit> = _syncSucceeded
 
     fun setLanguage(language: AppLanguage) {
         settingsRepository.setLanguage(language)
@@ -91,6 +97,14 @@ class SettingsViewModel(
         settingsRepository.setStartView(view)
     }
 
+    fun setSubjectColorMode(mode: SubjectColorMode) {
+        settingsRepository.setSubjectColorMode(mode)
+    }
+
+    fun setTextScale(scale: TextScale) {
+        settingsRepository.setTextScale(scale)
+    }
+
     fun syncNow() {
         viewModelScope.launch {
             val today = LocalDate.now()
@@ -104,7 +118,12 @@ class SettingsViewModel(
             if (result.successCount > 0) {
                 widgetUpdater.update()
             }
-            result.error?.let { _events.tryEmit(it) }
+            val error = result.error
+            if (error == null) {
+                _syncSucceeded.tryEmit(Unit)
+            } else {
+                _events.tryEmit(error)
+            }
         }
     }
 

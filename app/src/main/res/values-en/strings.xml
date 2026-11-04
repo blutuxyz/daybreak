@@ -9,6 +9,8 @@
     <string name="action_refresh">Refresh</string>
     <string name="action_retry">Try again</string>
     <string name="action_close">Close</string>
+    <string name="action_show_more">Show more</string>
+    <string name="action_show_less">Show less</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
     <string name="action_back">Back</string>
@@ -79,6 +81,7 @@
     <string name="timetable_empty_week_title">Nothing scheduled this week</string>
     <string name="timetable_empty_body">Enjoy your time — or check back later.</string>
     <string name="timetable_load_error">Could not load the timetable</string>
+    <string name="timetable_refreshed">Updated</string>
     <string name="timetable_offline">Offline · %1$s</string>
     <string name="timetable_swipe_hint">Swipe horizontally to change the day.</string>
     <string name="now">Now</string>
@@ -189,7 +192,14 @@
     <string name="motion_expressive">Lively</string>
     <string name="motion_calm">Calm</string>
     <string name="settings_start_view">Start view</string>
-    <string name="login_more_options">Other sign-in options</string>
+    <string name="exam_badge">Exam</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="text_scale_standard">Normal</string>
+    <string name="text_scale_large">Large</string>
+    <string name="text_scale_extra_large">Extra large</string>
+    <string name="settings_subject_colors">Subject colours</string>
+    <string name="subject_colors_accent">Accent</string>
+    <string name="subject_colors_roles">Roles</string>    <string name="login_more_options">Other sign-in options</string>
     <string name="login_fewer_options">Fewer options</string>
     <string name="login_back_to_qr">Back to QR code</string>
     <!-- Debug test calls -->

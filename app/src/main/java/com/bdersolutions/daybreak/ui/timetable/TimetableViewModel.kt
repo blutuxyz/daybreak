@@ -71,6 +71,10 @@ class TimetableViewModel(
     private val _events = MutableSharedFlow<Throwable>(extraBufferCapacity = 4)
     val events: SharedFlow<Throwable> = _events
 
+    /** Emits once a manual refresh has loaded every week it asked for. */
+    private val _refreshSucceeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val refreshSucceeded: SharedFlow<Unit> = _refreshSucceeded
+
     private val requestsInFlight = mutableSetOf<LocalDate>()
 
     init {
@@ -97,10 +101,7 @@ class TimetableViewModel(
     fun refresh(date: LocalDate) {
         when (val current = _target.value) {
             TimetableTarget.Own -> refreshOwn(date)
-            is TimetableTarget.Element -> {
-                ensureElementWeek(current, date, force = true)
-                ensureElementWeek(current, date.plusWeeks(1), force = true)
-            }
+            is TimetableTarget.Element -> refreshElement(current, date)
         }
     }
 
@@ -132,14 +133,31 @@ class TimetableViewModel(
         if (!force && (key in elementWeeks.value || key in elementRequests)) return
         elementRequests += key
         viewModelScope.launch {
-            try {
-                val lessons = schoolData.elementWeek(target.element, week)
-                elementWeeks.update { it + (key to CachedWeek(week, lessons, System.currentTimeMillis())) }
-            } catch (error: Throwable) {
-                _events.tryEmit(error)
-            } finally {
-                elementRequests -= key
-            }
+            loadElementWeek(target, date)
+        }
+    }
+
+    private fun refreshElement(target: TimetableTarget.Element, date: LocalDate) {
+        viewModelScope.launch {
+            val loaded = listOf(date, date.plusWeeks(1)).map { loadElementWeek(target, it) }
+            if (loaded.all { it }) _refreshSucceeded.tryEmit(Unit)
+        }
+    }
+
+    /** Loads one week of an element timetable. Returns false when it failed. */
+    private suspend fun loadElementWeek(target: TimetableTarget.Element, date: LocalDate): Boolean {
+        val week = repository.weekStartFor(date)
+        val key = target.cacheKey(week)
+        elementRequests += key
+        return try {
+            val lessons = schoolData.elementWeek(target.element, week)
+            elementWeeks.update { it + (key to CachedWeek(week, lessons, System.currentTimeMillis())) }
+            true
+        } catch (error: Throwable) {
+            _events.tryEmit(error)
+            false
+        } finally {
+            elementRequests -= key
         }
     }
 
@@ -160,6 +178,9 @@ class TimetableViewModel(
                 widgetUpdater.update()
             }
             result?.error?.let { _events.tryEmit(it) }
+            if (result != null && result.error == null) {
+                _refreshSucceeded.tryEmit(Unit)
+            }
         }
     }
 

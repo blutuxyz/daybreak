@@ -17,14 +17,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
 
 private val DarkColorScheme = darkColorScheme(
     primary = DaybreakPrimaryDark,
@@ -254,14 +258,27 @@ fun DaybreakTheme(
         }
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        motionScheme = when (settings.motionStyle) {
-            MotionStyle.EXPRESSIVE -> MotionScheme.expressive()
-            MotionStyle.CALM -> MotionScheme.standard()
-        },
-        shapes = DaybreakShapes,
-        typography = Typography,
-        content = content,
+    // The in-app text size multiplies the system font scale, so people who already
+    // enlarged text on the phone are not shrunk back down.
+    val baseDensity = LocalDensity.current
+    val scaledDensity = Density(
+        density = baseDensity.density,
+        fontScale = baseDensity.fontScale * settings.textScale.multiplier,
     )
+
+    CompositionLocalProvider(
+        LocalDensity provides scaledDensity,
+        LocalSubjectColorMode provides settings.subjectColorMode,
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            motionScheme = when (settings.motionStyle) {
+                MotionStyle.EXPRESSIVE -> MotionScheme.expressive()
+                MotionStyle.CALM -> MotionScheme.standard()
+            },
+            shapes = DaybreakShapes,
+            typography = Typography,
+            content = content,
+        )
+    }
 }

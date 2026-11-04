@@ -1,6 +1,5 @@
 package com.bdersolutions.daybreak.ui.timetable
 
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,12 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -29,7 +24,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -46,7 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
-import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
+import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.untis.ElementType
 import com.bdersolutions.daybreak.untis.UntisDirectory
 import com.bdersolutions.daybreak.untis.UntisElement
@@ -60,33 +54,6 @@ fun targetLabel(target: TimetableTarget): String = when (target) {
         ElementType.TEACHER -> stringResource(R.string.target_teacher, target.element.displayName)
         ElementType.ROOM -> stringResource(R.string.room_value, target.element.displayName)
     }
-}
-
-/** Chip above the timetable that shows whose timetable is displayed and opens the picker. */
-@Composable
-fun TargetChip(
-    target: TimetableTarget,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AssistChip(
-        onClick = onClick,
-        label = {
-            Text(
-                text = targetLabel(target),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Outlined.SwapHoriz,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        modifier = modifier,
-    )
 }
 
 /**
@@ -159,7 +126,7 @@ fun TargetPickerSheet(
             }
 
             if (search.isBlank()) {
-                TargetRow(
+                SelectionRow(
                     label = ownLabel,
                     supporting = null,
                     selected = selected == TimetableTarget.Own,
@@ -197,7 +164,7 @@ fun TargetPickerSheet(
                 ) {
                     items(shown, key = { "${it.type.name}-${it.id}" }) { element ->
                         val target = TimetableTarget.Element(element)
-                        TargetRow(
+                        SelectionRow(
                             label = element.displayName,
                             supporting = if (search.isBlank()) null else categoryName(element, categoryTitles),
                             selected = selected == target,
@@ -221,66 +188,3 @@ private fun UntisElement.matches(search: String): Boolean =
         displayName.contains(search, ignoreCase = true) ||
         name.contains(search, ignoreCase = true)
 
-/** A selectable row whose corners morph from rounded to square while pressed. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun TargetRow(
-    label: String,
-    supporting: String?,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val corner by rememberMorphCorner(
-        interactionSource = interactionSource,
-        selected = selected,
-        selectedRadius = 24.dp,
-        unselectedRadius = 16.dp,
-        pressedRadius = 6.dp,
-    )
-    val content = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(corner),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = content,
-        interactionSource = interactionSource,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (supporting != null) {
-                    Text(
-                        text = supporting,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = content.copy(alpha = 0.75f),
-                        maxLines = 1,
-                    )
-                }
-            }
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = content,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
-}

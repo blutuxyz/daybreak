@@ -185,6 +185,19 @@ class TimetableRepository(
                 }
             }
 
+            // Exams are an extra. A failed exam request must not hide a good timetable, so it
+            // is isolated, and the exams for this range are replaced only when it succeeds.
+            if (weeks.isNotEmpty() && nextError !is UntisAuthException) {
+                val from = weeks.min()
+                val to = weeks.max().plusDays(6)
+                runCatching {
+                    api.fetchExams(session = untisSession, startDate = from, endDate = to)
+                }.onSuccess { exams ->
+                    val kept = workingCache.exams.filterNot { it.date in from..to }
+                    workingCache = workingCache.copy(exams = kept + exams)
+                }
+            }
+
             val now = System.currentTimeMillis()
             val updatedCache = if (successes > 0) {
                 workingCache.copy(lastSyncAt = now)

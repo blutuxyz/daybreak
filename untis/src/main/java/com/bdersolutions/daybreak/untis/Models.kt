@@ -81,6 +81,20 @@ data class UntisLesson(
     val endsAt: LocalDateTime get() = LocalDateTime.of(date, end)
 }
 
+/**
+ * A scheduled test or exam (Prüfung) for the student. [subject] is the short subject
+ * name used to match it to a lesson; [name] and [text] are whatever the school wrote.
+ */
+data class UntisExam(
+    val id: Long,
+    val date: LocalDate,
+    val start: LocalTime,
+    val end: LocalTime,
+    val subject: String,
+    val name: String = "",
+    val text: String = "",
+)
+
 /** One fetched range of lessons together with parser metadata. */
 data class UntisTimetable(
     val lessons: List<UntisLesson>,

@@ -2,6 +2,7 @@ package com.bdersolutions.daybreak.ui.timetable
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -17,6 +18,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,9 +26,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,13 +48,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Room
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.ButtonGroup
@@ -58,23 +62,23 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,6 +100,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -107,16 +112,21 @@ import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.cache.TimetableCache
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
+import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.untis.LessonStatus
+import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
+import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
+import com.bdersolutions.daybreak.ui.components.examAccent
+import com.bdersolutions.daybreak.ui.components.examContainer
+import com.bdersolutions.daybreak.ui.components.examContent
 import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
 import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.warningAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
 import com.bdersolutions.daybreak.ui.toUserMessage
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Duration
@@ -126,6 +136,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
+import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlin.math.max
 
@@ -154,11 +165,6 @@ fun TimetableScreen(
     var mode by rememberSaveable { mutableIntStateOf(initialMode) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    LaunchedEffect(viewModel) {
-        viewModel.events.collect { error ->
-            snackbarHostState.showSnackbar(error.toUserMessage(context))
-        }
-    }
 
     val today = remember { LocalDate.now() }
     val initialDayPage = remember(initialDate, today) {
@@ -197,6 +203,33 @@ fun TimetableScreen(
         selectedDate == todayWeekStart
     }
     val motion = MaterialTheme.motionScheme
+    val locale = currentLocale(context)
+    val weekNumber = remember(selectedDate, locale) {
+        selectedDate.get(WeekFields.of(locale).weekOfWeekBasedYear())
+    }
+    val weekLabel = stringResource(R.string.timetable_calendar_week, weekNumber)
+    val targetName = when (val current = target) {
+        TimetableTarget.Own -> currentSession.studentName.ifBlank { currentSession.displayName }
+        is TimetableTarget.Element -> targetLabel(current)
+    }
+    val retryLabel = stringResource(R.string.action_retry)
+    // Read the date at the time of the tap, not the date from when this effect started.
+    val latestDate by rememberUpdatedState(selectedDate)
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { error ->
+            val result = snackbarHostState.showSnackbar(
+                message = error.toUserMessage(context),
+                actionLabel = retryLabel,
+                withDismissAction = true,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.refresh(latestDate)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.refreshSucceeded.collect {
+            snackbarHostState.showSnackbar(context.getString(R.string.timetable_refreshed))
+        }
+    }
 
     LaunchedEffect(mode, dayPager.currentPage, weekPager.currentPage, target) {
         val activeDate = if (mode == 0) {
@@ -222,22 +255,18 @@ fun TimetableScreen(
                 },
                 subtitle = {
                     Text(
-                        text = when (val current = target) {
-                            TimetableTarget.Own -> currentSession.studentName.ifBlank {
-                                currentSession.displayName
-                            }
-
-                            is TimetableTarget.Element -> targetLabel(current)
-                        },
+                        text = "$weekLabel · $targetName",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
                 actions = {
-                    RefreshAction(
-                        loading = status.isLoading,
-                        onClick = { viewModel.refresh(selectedDate) },
-                    )
+                    IconButton(onClick = { showTargetPicker = true }) {
+                        Icon(
+                            Icons.Outlined.SwapHoriz,
+                            contentDescription = stringResource(R.string.target_picker_title),
+                        )
+                    }
                 },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -259,6 +288,8 @@ fun TimetableScreen(
                 ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
                 label = "todayFab",
             ) {
+                val todayInteraction = remember { MutableInteractionSource() }
+                val todayScale by rememberPressScale(todayInteraction)
                 ExtendedFloatingActionButton(
                     onClick = {
                         scope.launch {
@@ -267,6 +298,11 @@ fun TimetableScreen(
                                 animationSpec = motion.defaultSpatialSpec(),
                             )
                         }
+                    },
+                    interactionSource = todayInteraction,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = todayScale
+                        scaleY = todayScale
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -281,15 +317,10 @@ fun TimetableScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            TargetChip(
-                target = target,
-                onClick = { showTargetPicker = true },
-                modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp),
-            )
             ViewModeSwitcher(
                 mode = mode,
                 onModeChange = { mode = it },
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
             AnimatedContent(
                 targetState = mode,
@@ -426,76 +457,6 @@ private fun ViewModeSwitcher(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun RefreshAction(
-    loading: Boolean,
-    onClick: () -> Unit,
-) {
-    var wasLoading by remember { mutableStateOf(loading) }
-    var success by remember { mutableStateOf(false) }
-    LaunchedEffect(loading) {
-        if (loading) {
-            success = false
-        } else if (wasLoading) {
-            success = true
-            delay(900)
-            success = false
-        }
-        wasLoading = loading
-    }
-    val visual = when {
-        loading -> RefreshVisual.Loading
-        success -> RefreshVisual.Success
-        else -> RefreshVisual.Idle
-    }
-    val fade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-    val scale = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
-    IconButton(
-        onClick = onClick,
-        enabled = !loading,
-        modifier = Modifier.size(48.dp),
-    ) {
-        AnimatedContent(
-            targetState = visual,
-            transitionSpec = {
-                (
-                    fadeIn(fade) +
-                        scaleIn(scale, initialScale = 0.55f)
-                    )
-                    .togetherWith(
-                        fadeOut(fade) +
-                            scaleOut(scale, targetScale = 0.55f),
-                    )
-                    .using(SizeTransform(clip = false))
-            },
-            label = "refreshVisual",
-        ) { state ->
-            Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                when (state) {
-                    RefreshVisual.Loading -> LoadingIndicator(modifier = Modifier.size(24.dp))
-                    RefreshVisual.Success -> Icon(
-                        Icons.Outlined.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-
-                    RefreshVisual.Idle -> Icon(
-                        Icons.Outlined.Refresh,
-                        contentDescription = stringResource(R.string.action_refresh),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private enum class RefreshVisual {
-    Idle,
-    Loading,
-    Success,
-}
-
 @Composable
 private fun DayPage(
     date: LocalDate,
@@ -514,12 +475,14 @@ private fun DayPage(
     }
     val isToday = date == today
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
+    val examDates = remember(cache.exams) { cache.exams.map { it.date }.toSet() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             week == null && status.isLoading -> LoadingPane()
             week == null && status.lastError != null -> ErrorPane(
                 message = status.lastError!!.toUserMessage(context),
+                isRefreshing = status.isLoading,
                 onRetry = onRetry,
             )
             else -> {
@@ -529,15 +492,11 @@ private fun DayPage(
                     periodStartsFor(week?.lessons.orEmpty())
                 }
                 Column(modifier = Modifier.fillMaxSize()) {
-                    DayHeaderLine(
-                        date = date,
-                        isToday = isToday,
-                        lessonCount = lessons.size,
-                    )
                     DayStrip(
                         date = date,
                         today = today,
                         onSelectDate = onSelectDate,
+                        examDates = examDates,
                     )
                     if (status.lastError != null) {
                         OfflineBanner(
@@ -546,40 +505,44 @@ private fun DayPage(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    if (lessons.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        ) {
-                            EmptyMessage(
-                                title = stringResource(
-                                    if (isToday) {
-                                        R.string.timetable_empty_today_title
-                                    } else {
-                                        R.string.timetable_empty_title
-                                    },
-                                ),
-                                body = stringResource(R.string.timetable_empty_body),
-                            )
-                        }
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(bottom = 112.dp),
-                        ) {
-                            DayTimeline(
-                                blocks = blocks,
-                                range = range,
-                                periodStarts = periodStarts,
-                                isToday = isToday,
-                                now = now,
-                                revealKey = weekStart,
-                                onLessonClick = { selectedLesson = it },
-                            )
+                    PullToRefreshBox(
+                        isRefreshing = status.isLoading,
+                        onRefresh = onRetry,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    ) {
+                        if (lessons.isEmpty()) {
+                            ScrollableCentered {
+                                EmptyMessage(
+                                    title = stringResource(
+                                        if (isToday) {
+                                            R.string.timetable_empty_today_title
+                                        } else {
+                                            R.string.timetable_empty_title
+                                        },
+                                    ),
+                                    body = stringResource(R.string.timetable_empty_body),
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(bottom = 112.dp),
+                            ) {
+                                DayTimeline(
+                                    blocks = blocks,
+                                    range = range,
+                                    periodStarts = periodStarts,
+                                    isToday = isToday,
+                                    now = now,
+                                    revealKey = weekStart,
+                                    exams = cache.exams,
+                                    onLessonClick = { selectedLesson = it },
+                                )
+                            }
                         }
                     }
                 }
@@ -589,74 +552,9 @@ private fun DayPage(
             // The detail sheet itself is implemented in LessonDetailsSheet.
             LessonDetailsSheet(
                 lesson = lesson,
+                exam = examFor(lesson, cache.exams),
                 onDismiss = { selectedLesson = null },
             )
-        }
-    }
-}
-
-@Composable
-private fun DayHeaderLine(
-    date: LocalDate,
-    isToday: Boolean,
-    lessonCount: Int,
-) {
-    val locale = currentLocale(LocalContext.current)
-    val label = remember(date, locale) {
-        date.format(DateTimeFormatter.ofPattern("EEE, d MMM", locale))
-            .replaceFirstChar { it.titlecase(locale) }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "·",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = androidx.compose.ui.res.pluralStringResource(
-                R.plurals.timetable_lesson_count,
-                lessonCount,
-                lessonCount,
-            ),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        AnimatedVisibility(
-            visible = isToday,
-            enter = scaleIn(
-                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                initialScale = 0.7f,
-            ) + fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-            exit = scaleOut(
-                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                targetScale = 0.7f,
-            ) + fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-            label = "todayChip",
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(8.dp))
-                AccentBadge(
-                    text = stringResource(R.string.today),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
         }
     }
 }
@@ -666,6 +564,7 @@ private fun DayStrip(
     date: LocalDate,
     today: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
+    examDates: Set<LocalDate> = emptySet(),
 ) {
     val locale = currentLocale(LocalContext.current)
     val weekStart = remember(date) {
@@ -699,6 +598,7 @@ private fun DayStrip(
                         date = day,
                         selected = day == date,
                         isToday = day == today,
+                        hasExam = day in examDates,
                         locale = locale,
                         onClick = { onSelectDate(day) },
                         modifier = Modifier.weight(1f),
@@ -722,6 +622,7 @@ private fun DayChip(
     date: LocalDate,
     selected: Boolean,
     isToday: Boolean,
+    hasExam: Boolean,
     locale: Locale,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -748,21 +649,42 @@ private fun DayChip(
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "dayChipScale",
     )
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressScale by rememberPressScale(interactionSource)
     Column(
         modifier = modifier
             .height(50.dp)
-            .clickable(onClick = onClick),
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = date.format(DateTimeFormatter.ofPattern("EEE", locale))
-                .replaceFirstChar { it.titlecase(locale) }
-                .take(3),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            maxLines = 1,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = date.format(DateTimeFormatter.ofPattern("EEE", locale))
+                    .replaceFirstChar { it.titlecase(locale) }
+                    .take(3),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) scheme.primary else scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            if (hasExam) {
+                // A small yellow dot marks a day with an exam. The text stays the signal for screen readers.
+                Spacer(Modifier.width(3.dp))
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .background(examAccent(), CircleShape),
+                )
+            }
+        }
         Spacer(Modifier.height(2.dp))
         Surface(
             shape = CircleShape,
@@ -799,6 +721,7 @@ private fun DayTimeline(
     isToday: Boolean,
     now: LocalDateTime,
     revealKey: Any?,
+    exams: List<UntisExam>,
     onLessonClick: (UntisLesson) -> Unit,
 ) {
     val pxPerMinute = 1.5.dp
@@ -868,6 +791,7 @@ private fun DayTimeline(
                     DayLessonBlock(
                         block = block,
                         current = current,
+                        exam = examFor(block.lesson, exams),
                         progress = if (current) {
                             block.progressAt(nowTime)
                         } else {
@@ -1021,6 +945,7 @@ private fun FreeGapBands(
 private fun DayLessonBlock(
     block: TimelineBlock,
     current: Boolean,
+    exam: UntisExam?,
     progress: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1033,6 +958,7 @@ private fun DayLessonBlock(
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
+    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
     val cancelled = block.isCancelled
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
@@ -1040,11 +966,23 @@ private fun DayLessonBlock(
         block.hasSubstitution -> BorderStroke(1.5.dp, warningAccent())
         else -> null
     }
+    val stripe = when {
+        cancelled -> MaterialTheme.colorScheme.error
+        exam != null -> examAccent()
+        block.hasSubstitution -> warningAccent()
+        else -> tone.accent
+    }
     val badge = when {
         cancelled -> stringResource(R.string.lesson_cancelled)
         block.hasRoomChange -> stringResource(R.string.lesson_room_short)
         block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
         else -> null
+    }
+    // An exam is the one block that takes a full fill, so it stands out from the grid.
+    val container = when {
+        roles -> tone.container
+        exam != null -> examContainer()
+        else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     Surface(
         onClick = onClick,
@@ -1053,85 +991,121 @@ private fun DayLessonBlock(
             scaleY = pressScale
         },
         shape = RoundedCornerShape(if (block.lessons.size > 1) 18.dp else 14.dp),
-        color = tone.container,
-        contentColor = tone.onContainer,
+        color = container,
+        contentColor = when {
+            roles -> tone.onContainer
+            exam != null -> examContent()
+            else -> MaterialTheme.colorScheme.onSurface
+        },
         border = border,
         tonalElevation = if (current) 3.dp else 0.dp,
         interactionSource = interactionSource,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 9.dp, vertical = 7.dp),
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = subject,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    textDecoration = if (cancelled) {
-                        TextDecoration.LineThrough
-                    } else {
-                        TextDecoration.None
-                    },
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (!roles) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .background(stripe),
                 )
-                if (badge != null) {
-                    Spacer(Modifier.width(4.dp))
-                    AccentBadge(
-                        text = badge,
-                        containerColor = if (cancelled) {
-                            MaterialTheme.colorScheme.errorContainer
-                        } else {
-                            warningContainer()
-                        },
-                        contentColor = if (cancelled) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            warningAccent()
-                        },
-                    )
-                }
             }
-            if (block.durationMinutes >= 35) {
-                val details = buildList {
-                    if (lesson.room.isNotBlank()) {
-                        add(context.getString(R.string.room_value, lesson.room))
-                    }
-                    if (block.durationMinutes >= 75 && lesson.teacher.isNotBlank()) {
-                        add(lesson.teacher)
-                    }
-                }.joinToString(" · ")
-                if (details.isNotBlank()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
                     Text(
-                        text = details,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tone.onContainer.copy(alpha = 0.75f),
-                        maxLines = 1,
+                        text = subject,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (cancelled) {
+                            TextDecoration.LineThrough
+                        } else {
+                            TextDecoration.None
+                        },
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (lesson.info.isNotBlank()) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .size(16.dp),
+                        )
+                    }
+                    if (exam != null) {
+                        Spacer(Modifier.width(4.dp))
+                        AccentBadge(
+                            text = stringResource(R.string.exam_badge),
+                            containerColor = examAccent(),
+                            // Near-black text on the gold badge keeps it above 4.5:1 in both themes.
+                            contentColor = Color(0xFF1F1700),
+                        )
+                    }
+                    if (badge != null) {
+                        Spacer(Modifier.width(4.dp))
+                        AccentBadge(
+                            text = badge,
+                            containerColor = if (cancelled) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                warningContainer()
+                            },
+                            contentColor = if (cancelled) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                warningAccent()
+                            },
+                        )
+                    }
                 }
-            }
-            if (current) {
-                val animatedProgress = remember { Animatable(progress) }
-                LaunchedEffect(progress) {
-                    animatedProgress.animateTo(
-                        targetValue = progress,
-                        animationSpec = tween(
-                            durationMillis = 30_000,
-                            easing = LinearEasing,
-                        ),
+                if (block.durationMinutes >= 35) {
+                    // Room and teacher share one line so the block reads at a glance.
+                    val details = buildList {
+                        if (lesson.room.isNotBlank()) {
+                            add(context.getString(R.string.room_value, lesson.room))
+                        }
+                        if (lesson.teacher.isNotBlank()) {
+                            add(lesson.teacher)
+                        }
+                    }.joinToString(" · ")
+                    if (details.isNotBlank()) {
+                        Text(
+                            text = details,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (current) {
+                    val animatedProgress = remember { Animatable(progress) }
+                    LaunchedEffect(progress) {
+                        animatedProgress.animateTo(
+                            targetValue = progress,
+                            animationSpec = tween(
+                                durationMillis = 30_000,
+                                easing = LinearEasing,
+                            ),
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    LinearWavyProgressIndicator(
+                        progress = { animatedProgress.value },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                LinearWavyProgressIndicator(
-                    progress = { animatedProgress.value },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                )
             }
         }
     }
@@ -1173,14 +1147,11 @@ private fun WeekPage(
             week == null && status.isLoading -> LoadingPane()
             week == null && status.lastError != null -> ErrorPane(
                 message = status.lastError!!.toUserMessage(context),
+                isRefreshing = status.isLoading,
                 onRetry = onRetry,
             )
             else -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    WeekHeaderLine(
-                        weekStart = weekStart,
-                        lessonCount = allLessons.size,
-                    )
                     if (status.lastError != null) {
                         OfflineBanner(
                             status = status,
@@ -1189,15 +1160,19 @@ private fun WeekPage(
                         Spacer(Modifier.height(8.dp))
                     }
                     if (allLessons.isEmpty()) {
-                        Box(
+                        PullToRefreshBox(
+                            isRefreshing = status.isLoading,
+                            onRefresh = onRetry,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
                         ) {
-                            EmptyMessage(
-                                title = stringResource(R.string.timetable_empty_week_title),
-                                body = stringResource(R.string.timetable_empty_body),
-                            )
+                            ScrollableCentered {
+                                EmptyMessage(
+                                    title = stringResource(R.string.timetable_empty_week_title),
+                                    body = stringResource(R.string.timetable_empty_body),
+                                )
+                            }
                         }
                     } else {
                         WeekDayHeaderRow(
@@ -1211,7 +1186,9 @@ private fun WeekPage(
                                 onLessonClick = { selectedLesson = it },
                             )
                         }
-                        Box(
+                        PullToRefreshBox(
+                            isRefreshing = status.isLoading,
+                            onRefresh = onRetry,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -1245,6 +1222,7 @@ private fun WeekPage(
                                             periodStarts = periodStarts,
                                             pxPerMinute = pxPerMinute,
                                             revealKey = weekStart,
+                                            exams = cache.exams,
                                             onLessonClick = { selectedLesson = it },
                                             modifier = Modifier.weight(1f),
                                         )
@@ -1259,51 +1237,10 @@ private fun WeekPage(
         selectedLesson?.let { lesson ->
             LessonDetailsSheet(
                 lesson = lesson,
+                exam = examFor(lesson, cache.exams),
                 onDismiss = { selectedLesson = null },
             )
         }
-    }
-}
-
-@Composable
-private fun WeekHeaderLine(
-    weekStart: LocalDate,
-    lessonCount: Int,
-) {
-    val locale = currentLocale(LocalContext.current)
-    val weekNumber = remember(weekStart, locale) {
-        weekStart.get(java.time.temporal.WeekFields.of(locale).weekOfWeekBasedYear())
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.timetable_calendar_week, weekNumber),
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            modifier = Modifier.weight(1f, fill = false),
-            maxLines = 1,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "·",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = androidx.compose.ui.res.pluralStringResource(
-                R.plurals.timetable_lesson_count,
-                lessonCount,
-                lessonCount,
-            ),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
     }
 }
 
@@ -1430,6 +1367,7 @@ private fun WeekDayColumn(
     periodStarts: List<LocalTime>,
     pxPerMinute: Dp,
     revealKey: Any?,
+    exams: List<UntisExam>,
     onLessonClick: (UntisLesson) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1483,6 +1421,7 @@ private fun WeekDayColumn(
                     WeekLessonBlock(
                         block = block,
                         current = current,
+                        exam = examFor(block.lesson, exams),
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(maxOf(columnWidth - 2.dp, 14.dp))
@@ -1514,6 +1453,7 @@ private fun WeekDayColumn(
 private fun WeekLessonBlock(
     block: TimelineBlock,
     current: Boolean,
+    exam: UntisExam?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1524,17 +1464,35 @@ private fun WeekLessonBlock(
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
+    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
     val cancelled = block.isCancelled
-    val accent = when {
+    val stripe = when {
         cancelled -> MaterialTheme.colorScheme.error
+        exam != null -> examAccent()
         block.hasRoomChange || block.hasSubstitution -> warningAccent()
-        else -> null
+        else -> tone.accent
     }
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         cancelled -> BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        exam != null -> BorderStroke(1.dp, examAccent())
         block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, warningAccent())
         else -> null
+    }
+    // Week columns are narrow, so status is written out as a line of text rather than a badge.
+    val status: Pair<String, Color>? = when {
+        cancelled -> stringResource(R.string.lesson_cancelled) to MaterialTheme.colorScheme.error
+        exam != null -> stringResource(R.string.exam_badge) to examContent()
+        block.hasRoomChange || block.hasSubstitution -> {
+            stringResource(R.string.lesson_substitution_short) to warningAccent()
+        }
+
+        else -> null
+    }
+    val container = when {
+        roles -> tone.container
+        exam != null -> examContainer()
+        else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     Surface(
         onClick = onClick,
@@ -1543,23 +1501,36 @@ private fun WeekLessonBlock(
             scaleY = pressScale
         },
         shape = RoundedCornerShape(9.dp),
-        color = tone.container,
-        contentColor = tone.onContainer,
+        color = container,
+        contentColor = when {
+            roles -> tone.onContainer
+            exam != null -> examContent()
+            else -> MaterialTheme.colorScheme.onSurface
+        },
         border = border,
         interactionSource = interactionSource,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 3.dp),
-        ) {
-            Column {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (!roles) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(3.dp)
+                        .background(stripe),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 5.dp, vertical = 4.dp),
+            ) {
                 Text(
                     text = subject,
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = FontWeight.Bold,
                     ),
                     textDecoration = if (cancelled) {
                         TextDecoration.LineThrough
@@ -1570,28 +1541,36 @@ private fun WeekLessonBlock(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (block.durationMinutes >= 35) {
+                    if (status != null) {
+                        Text(
+                            text = status.first,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = status.second,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // A status line and a room line only fit in a longer block, or with larger
+                    // text they clip. Status wins when the block is short.
                     val detail = lesson.room.ifBlank { lesson.teacher }
-                    if (detail.isNotBlank()) {
+                    val roomFits = status == null || block.durationMinutes >= 60
+                    if (detail.isNotBlank() && roomFits) {
                         Text(
                             text = detail,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                lineHeight = 10.sp,
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
                             ),
-                            color = tone.onContainer.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
-            }
-            if (accent != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(5.dp)
-                        .background(accent, CircleShape),
-                )
             }
         }
     }
@@ -1628,40 +1607,34 @@ private fun OfflineBanner(status: TimetableSyncStatus, modifier: Modifier = Modi
 
 @Composable
 private fun EmptyMessage(title: String, body: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.size(58.dp),
     ) {
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(58.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Outlined.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(28.dp),
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
+    Spacer(Modifier.height(12.dp))
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = body,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1672,36 +1645,59 @@ private fun LoadingPane() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ErrorPane(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun ErrorPane(message: String, isRefreshing: Boolean, onRetry: () -> Unit) {
+    // Pull-to-refresh also works from the error state, so a retry does not need the button.
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRetry,
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Icon(
-            Icons.Outlined.ErrorOutline,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(40.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.timetable_load_error),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(14.dp))
-        androidx.compose.material3.Button(onClick = onRetry) {
-            Text(stringResource(R.string.action_retry))
+        ScrollableCentered {
+            Icon(
+                Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.timetable_load_error),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(14.dp))
+            androidx.compose.material3.Button(onClick = onRetry) {
+                Text(stringResource(R.string.action_retry))
+            }
         }
+    }
+}
+
+/**
+ * Content that is centred when it is short but still scrolls when it is taller than the
+ * space. Scrolling is what lets a pull-to-refresh start on an empty day.
+ */
+@Composable
+private fun ScrollableCentered(content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = maxHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            content = content,
+        )
     }
 }
 
@@ -1886,6 +1882,21 @@ private fun minutesBetween(start: LocalTime, end: LocalTime): Int =
 private fun UntisLesson.isLongEvent(): Boolean =
     Duration.between(start, end).toMinutes() >= 180
 
+/**
+ * The exam that belongs to a lesson. The server sends exams with a subject id, not a
+ * subject name, so the match is on the same day and an overlapping time. When an exam
+ * does carry a subject name, that must match too.
+ */
+private fun examFor(lesson: UntisLesson, exams: List<UntisExam>): UntisExam? {
+    if (exams.isEmpty()) return null
+    return exams.firstOrNull { exam ->
+        exam.date == lesson.date &&
+            exam.start < lesson.end &&
+            exam.end > lesson.start &&
+            (exam.subject.isBlank() || exam.subject.equals(lesson.subject, ignoreCase = true))
+    }
+}
+
 private fun formatTime(time: LocalTime): String =
     time.format(DateTimeFormatter.ofPattern("HH:mm"))
 
@@ -1896,6 +1907,7 @@ private fun currentLocale(context: android.content.Context): Locale =
 @Composable
 private fun LessonDetailsSheet(
     lesson: UntisLesson,
+    exam: UntisExam?,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1930,32 +1942,15 @@ private fun LessonDetailsSheet(
         lesson.date.format(DateTimeFormatter.ofPattern(pattern, locale))
             .replaceFirstChar { it.titlecase(locale) }
     }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    val currentOnDismiss by rememberUpdatedState(onDismiss)
-    var closing by remember { mutableStateOf(false) }
-    val closeSheet: () -> Unit = remember(scope, sheetState) {
-        {
-            if (!closing) {
-                closing = true
-                scope.launch {
-                    sheetState.hide()
-                }.invokeOnCompletion {
-                    if (!sheetState.isVisible) currentOnDismiss()
-                }
-            }
-        }
-    }
-
+    // The sheet handles its own dismissal (scrim, swipe, back). The content does not scroll
+    // itself, so it cannot fight the sheet's drag gesture.
     ModalBottomSheet(
-        onDismissRequest = closeSheet,
-        sheetState = sheetState,
+        onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp),
         ) {
@@ -1965,7 +1960,7 @@ private fun LessonDetailsSheet(
                 contentColor = tone.onContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 14.dp, bottom = 18.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             text = subject,
@@ -1975,14 +1970,23 @@ private fun LessonDetailsSheet(
                             } else {
                                 TextDecoration.None
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 4.dp),
                         )
                         Spacer(Modifier.width(8.dp))
                         AccentBadge(
                             text = statusText,
                             containerColor = statusContainer,
                             contentColor = statusContent,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.action_close),
+                            )
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -1991,6 +1995,11 @@ private fun LessonDetailsSheet(
                         color = tone.onContainer.copy(alpha = 0.82f),
                     )
                 }
+            }
+
+            if (exam != null) {
+                Spacer(Modifier.height(14.dp))
+                ExamCard(exam = exam)
             }
 
             if (lesson.hasRoomChange) {
@@ -2071,26 +2080,101 @@ private fun LessonDetailsSheet(
                 )
             }
             if (lesson.info.isNotBlank()) {
-                DetailRow(
-                    icon = Icons.Outlined.Info,
-                    label = stringResource(R.string.label_info),
-                    value = lesson.info,
-                )
-            }
-
-            Spacer(Modifier.height(18.dp))
-            FilledTonalButton(
-                onClick = closeSheet,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = CircleShape,
-            ) {
-                Text(stringResource(R.string.action_close))
+                Spacer(Modifier.height(14.dp))
+                InfoNotice(text = lesson.info)
             }
         }
     }
 }
+
+/** An exam (Prüfung) with its time and whatever the school wrote about it. */
+@Composable
+private fun ExamCard(exam: UntisExam) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = examContainer(),
+        contentColor = examContent(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.exam_badge),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${formatTime(exam.start)} – ${formatTime(exam.end)}",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            if (exam.name.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(text = exam.name, style = MaterialTheme.typography.bodyLarge)
+            }
+            // The server often repeats the name as the text, so only show a different text.
+            if (exam.text.isNotBlank() && exam.text != exam.name) {
+                Spacer(Modifier.height(4.dp))
+                Text(text = exam.text, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+/**
+ * The lesson's free-text information, shown as a notice rather than a plain detail row.
+ * Long text is clamped and can be expanded.
+ */
+@Composable
+private fun InfoNotice(text: String) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val clamp = text.length > INFO_CLAMP_LENGTH
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.label_info),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = if (expanded || !clamp) Int.MAX_VALUE else INFO_CLAMP_LINES,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (clamp) {
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(
+                        stringResource(
+                            if (expanded) R.string.action_show_less else R.string.action_show_more,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val INFO_CLAMP_LENGTH = 180
+private const val INFO_CLAMP_LINES = 4
 
 @Composable
 private fun DetailRow(

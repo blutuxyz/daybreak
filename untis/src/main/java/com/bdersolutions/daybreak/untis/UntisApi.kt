@@ -135,6 +135,38 @@ class UntisApi(
         return SchoolDataParser.absences(result)
     }
 
+    /**
+     * The student's exams (Prüfungen) in a date range. Unverified against every server:
+     * the raw response is written to the debug log, so the shape can be checked there.
+     */
+    suspend fun fetchExams(
+        session: UntisSession,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<UntisExam> {
+        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val type = session.studentType.ifBlank { "STUDENT" }.uppercase()
+
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("id", session.studentId)
+                addProperty("type", type)
+                addProperty("startDate", utisDate(startDate))
+                addProperty("endDate", utisDate(endDate))
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = rpc.call(
+            server = safeServer,
+            school = session.school,
+            method = "getExams2017",
+            params = params,
+        )
+        return ExamParser.parse(result)
+    }
+
     private suspend fun requestTimetable(
         session: UntisSession,
         id: Long,

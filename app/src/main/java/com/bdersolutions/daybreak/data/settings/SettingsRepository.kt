@@ -31,6 +31,19 @@ enum class MotionStyle { EXPRESSIVE, CALM }
 /** Which timetable view opens first when the app starts. */
 enum class StartView { DAY, WEEK }
 
+/**
+ * How lesson stripes pick their colour. [ACCENT_HUES] spreads subjects around the
+ * accent hue; [ROLES] uses the primary, secondary and tertiary role families.
+ */
+enum class SubjectColorMode { ACCENT_HUES, ROLES }
+
+/** App-wide text size, applied on top of the system font scale. */
+enum class TextScale(val multiplier: Float) {
+    STANDARD(1.0f),
+    LARGE(1.15f),
+    EXTRA_LARGE(1.3f),
+}
+
 data class AppSettings(
     val language: AppLanguage = AppLanguage.GERMAN,
     val syncEnabled: Boolean = true,
@@ -41,6 +54,8 @@ data class AppSettings(
     val accent: AccentColor = AccentColor.OCEAN,
     val motionStyle: MotionStyle = MotionStyle.EXPRESSIVE,
     val startView: StartView = StartView.DAY,
+    val subjectColorMode: SubjectColorMode = SubjectColorMode.ACCENT_HUES,
+    val textScale: TextScale = TextScale.STANDARD,
 )
 
 class SettingsRepository(context: Context) {
@@ -87,6 +102,14 @@ class SettingsRepository(context: Context) {
         update(_settings.value.copy(startView = view))
     }
 
+    fun setSubjectColorMode(mode: SubjectColorMode) {
+        update(_settings.value.copy(subjectColorMode = mode))
+    }
+
+    fun setTextScale(scale: TextScale) {
+        update(_settings.value.copy(textScale = scale))
+    }
+
     private fun update(value: AppSettings) {
         preferences.edit()
             .putString(KEY_LANGUAGE, value.language.tag)
@@ -98,6 +121,8 @@ class SettingsRepository(context: Context) {
             .putString(KEY_ACCENT, value.accent.name)
             .putString(KEY_MOTION_STYLE, value.motionStyle.name)
             .putString(KEY_START_VIEW, value.startView.name)
+            .putString(KEY_SUBJECT_COLOR_MODE, value.subjectColorMode.name)
+            .putString(KEY_TEXT_SCALE, value.textScale.name)
             .apply()
         _settings.value = value
     }
@@ -113,6 +138,11 @@ class SettingsRepository(context: Context) {
         accent = enumOrDefault(preferences.getString(KEY_ACCENT, null), AccentColor.OCEAN),
         motionStyle = enumOrDefault(preferences.getString(KEY_MOTION_STYLE, null), MotionStyle.EXPRESSIVE),
         startView = enumOrDefault(preferences.getString(KEY_START_VIEW, null), StartView.DAY),
+        subjectColorMode = enumOrDefault(
+            preferences.getString(KEY_SUBJECT_COLOR_MODE, null),
+            SubjectColorMode.ACCENT_HUES,
+        ),
+        textScale = enumOrDefault(preferences.getString(KEY_TEXT_SCALE, null), TextScale.STANDARD),
     )
 
     private inline fun <reified E : Enum<E>> enumOrDefault(raw: String?, default: E): E =
@@ -130,5 +160,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ACCENT = "accent"
         private const val KEY_MOTION_STYLE = "motion_style"
         private const val KEY_START_VIEW = "start_view"
+        private const val KEY_SUBJECT_COLOR_MODE = "subject_color_mode"
+        private const val KEY_TEXT_SCALE = "text_scale"
     }
 }
