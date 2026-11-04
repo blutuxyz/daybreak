@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
+import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
@@ -24,6 +25,10 @@ import com.bdersolutions.daybreak.data.settings.TextScale
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
+import com.bdersolutions.daybreak.data.update.ReleaseInfo
+import com.bdersolutions.daybreak.data.update.UpdateManager
+import com.bdersolutions.daybreak.data.update.UpdateScheduler
+import com.bdersolutions.daybreak.data.update.UpdateState
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +56,9 @@ class SettingsViewModel(
     private val rawLogStore: RawLogStore,
     private val widgetUpdater: WidgetUpdater,
     private val schoolData: SchoolDataRepository,
+    private val absenceLessonHistory: AbsenceLessonHistory,
+    private val updateManager: UpdateManager,
+    private val updateScheduler: UpdateScheduler,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
@@ -76,6 +84,36 @@ class SettingsViewModel(
             .distinct()
             .sorted()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // ---- Updates ----
+
+    /** False when the app was built without an update server address; the screen is hidden then. */
+    val updatesConfigured: Boolean get() = updateManager.isConfigured
+    val updateState: StateFlow<UpdateState> = updateManager.state
+    val updateReleases: StateFlow<List<ReleaseInfo>> = updateManager.releases
+    val currentVersionName: String get() = updateManager.currentVersionName
+    val currentVersionCode: Long get() = updateManager.currentVersionCode
+    val lastUpdateCheckAt: Long get() = updateManager.lastCheckAt
+
+    fun canInstallUpdates(): Boolean = updateManager.installer.canInstall()
+    fun installPermissionIntent() = updateManager.installer.permissionSettingsIntent()
+
+    fun checkForUpdates() {
+        viewModelScope.launch { updateManager.check() }
+    }
+
+    fun refreshUpdateReleases() {
+        viewModelScope.launch { updateManager.refreshReleases() }
+    }
+
+    fun downloadUpdate() = updateManager.downloadInBackground()
+    fun cancelUpdateDownload() = updateManager.cancelDownload()
+    fun installUpdate() = updateManager.install()
+
+    fun setAutoCheckUpdates(enabled: Boolean) {
+        settingsRepository.setAutoCheckUpdates(enabled)
+        updateScheduler.schedule(enabled)
+    }
 
     fun updateLessonColors(transform: (LessonColorSettings) -> LessonColorSettings) {
         settingsRepository.updateLessonColors(transform)
@@ -173,9 +211,12 @@ class SettingsViewModel(
     fun logout() {
         scheduler.cancelAll()
         sessionStore.clear()
+        settingsRepository.clearAbsenceCategories()
+        settingsRepository.clearFavoriteTargets()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 repository.clear()
+                absenceLessonHistory.clear()
                 schoolData.clear()
                 rawLogStore.clear()
                 widgetUpdater.update()
@@ -196,6 +237,9 @@ class SettingsViewModel(
                 rawLogStore = container.rawLogStore,
                 widgetUpdater = container.widgetUpdater,
                 schoolData = container.schoolData,
+                absenceLessonHistory = container.absenceLessonHistory,
+                updateManager = container.updateManager,
+                updateScheduler = container.updateScheduler,
             ) as T
         }
     }

@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.data.settings
 
 import android.content.Context
+import com.bdersolutions.daybreak.ui.absences.AbsenceCategory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,6 +70,10 @@ data class AppSettings(
     val subjectColorMode: SubjectColorMode = SubjectColorMode.ACCENT_HUES,
     val textScale: TextScale = TextScale.STANDARD,
     val lessonColors: LessonColorSettings = LessonColorSettings(),
+    val absenceCategories: List<AbsenceCategory> = emptyList(),
+    val favoriteTargets: List<FavoriteTarget> = emptyList(),
+    /** Look for new versions in the background and download them on Wi-Fi. */
+    val autoCheckUpdates: Boolean = true,
 )
 
 class SettingsRepository(context: Context) {
@@ -127,6 +132,28 @@ class SettingsRepository(context: Context) {
         update(_settings.value.copy(lessonColors = transform(_settings.value.lessonColors)))
     }
 
+    fun updateAbsenceCategories(transform: (List<AbsenceCategory>) -> List<AbsenceCategory>) {
+        update(_settings.value.copy(absenceCategories = transform(_settings.value.absenceCategories)))
+    }
+
+    /** Categories belong to one student's subjects, so they are dropped on logout. */
+    fun clearAbsenceCategories() {
+        updateAbsenceCategories { emptyList() }
+    }
+
+    fun setAutoCheckUpdates(enabled: Boolean) {
+        update(_settings.value.copy(autoCheckUpdates = enabled))
+    }
+
+    fun updateFavoriteTargets(transform: (List<FavoriteTarget>) -> List<FavoriteTarget>) {
+        update(_settings.value.copy(favoriteTargets = transform(_settings.value.favoriteTargets)))
+    }
+
+    /** Favourites are elements of one school's master data, so they are dropped on logout. */
+    fun clearFavoriteTargets() {
+        updateFavoriteTargets { emptyList() }
+    }
+
     private fun update(value: AppSettings) {
         preferences.edit()
             .putString(KEY_LANGUAGE, value.language.tag)
@@ -141,6 +168,9 @@ class SettingsRepository(context: Context) {
             .putString(KEY_SUBJECT_COLOR_MODE, value.subjectColorMode.name)
             .putString(KEY_TEXT_SCALE, value.textScale.name)
             .putString(KEY_LESSON_COLORS, gson.toJson(value.lessonColors))
+            .putString(KEY_ABSENCE_CATEGORIES, gson.toJson(value.absenceCategories))
+            .putString(KEY_FAVORITE_TARGETS, gson.toJson(value.favoriteTargets))
+            .putBoolean(KEY_AUTO_CHECK_UPDATES, value.autoCheckUpdates)
             .apply()
         _settings.value = value
     }
@@ -162,7 +192,36 @@ class SettingsRepository(context: Context) {
         ),
         textScale = enumOrDefault(preferences.getString(KEY_TEXT_SCALE, null), TextScale.STANDARD),
         lessonColors = decodeLessonColors(preferences.getString(KEY_LESSON_COLORS, null)),
+        absenceCategories = decodeAbsenceCategories(preferences.getString(KEY_ABSENCE_CATEGORIES, null)),
+        favoriteTargets = decodeFavoriteTargets(preferences.getString(KEY_FAVORITE_TARGETS, null)),
+        autoCheckUpdates = preferences.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
     )
+
+    private fun decodeFavoriteTargets(json: String?): List<FavoriteTarget> {
+        if (json.isNullOrBlank()) return emptyList()
+        val type = object : com.google.gson.reflect.TypeToken<List<FavoriteTarget?>>() {}.type
+        val decoded: List<FavoriteTarget?>? = runCatching { gson.fromJson<List<FavoriteTarget?>>(json, type) }
+            .getOrNull()
+        // A field missing from the JSON arrives as null despite the Kotlin type, which drops the entry.
+        return decoded.orEmpty().filterNotNull().filter { favorite ->
+            runCatching { favorite.name.isNotBlank() && favorite.toElement() != null }.getOrDefault(false)
+        }.distinctBy { it.key }
+    }
+
+    private fun decodeAbsenceCategories(json: String?): List<AbsenceCategory> {
+        if (json.isNullOrBlank()) return emptyList()
+        val type = object : com.google.gson.reflect.TypeToken<List<AbsenceCategory?>>() {}.type
+        val decoded: List<AbsenceCategory?>? = runCatching { gson.fromJson<List<AbsenceCategory?>>(json, type) }
+            .getOrNull()
+        // Gson ignores Kotlin defaults, so a field missing from the JSON arrives as null or 0.
+        return decoded.orEmpty().filterNotNull().filter { category ->
+            // A null String that slipped past the type system throws here, which drops the entry.
+            runCatching {
+                category.id.isNotEmpty() && category.subject.isNotBlank() &&
+                    category.name.length >= 0 && category.maxLessons > 0
+            }.getOrDefault(false)
+        }
+    }
 
     private fun decodeLessonColors(json: String?): LessonColorSettings {
         if (json.isNullOrBlank()) return LessonColorSettings()
@@ -194,6 +253,9 @@ class SettingsRepository(context: Context) {
         private const val KEY_SUBJECT_COLOR_MODE = "subject_color_mode"
         private const val KEY_TEXT_SCALE = "text_scale"
         private const val KEY_LESSON_COLORS = "lesson_colors"
+        private const val KEY_ABSENCE_CATEGORIES = "absence_categories"
+        private const val KEY_FAVORITE_TARGETS = "favorite_targets"
+        private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
         private val gson = com.google.gson.Gson()
     }
 }

@@ -1,0 +1,97 @@
+name: Release APK
+
+# Runs when you publish a release on GitHub. The release's tag (v1.2.3) becomes the app version, the
+# release notes become the changelog, and the signed APK is attached to the release. The update
+# server (update-server/) then serves both to the app. Setup is described in update-server/README.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version from the tag
+        id: version
+        run: |
+          if [[ ! "$TAG" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
+            echo "The tag '$TAG' must look like v1.2.3" >&2
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
+          if [ "$minor" -gt 99 ] || [ "$patch" -gt 99 ]; then
+            echo "Minor and patch must stay below 100: the version code is major*10000 + minor*100 + patch" >&2
+            exit 1
+          fi
+          # The update server uses the same formula (update-server/src/version.js).
+          echo "name=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run the unit tests
+        run: ./gradlew :untis:testDebugUnitTest :app:testDebugUnitTest --no-daemon
+
+      - name: Decode the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "The secret ANDROID_KEYSTORE_BASE64 is missing, so the APK cannot be signed." >&2
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build the signed APK
+        env:
+          DAYBREAK_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          DAYBREAK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          DAYBREAK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DAYBREAK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          UPDATE_API_URL: ${{ vars.UPDATE_API_URL }}
+        run: |
+          ./gradlew :app:assembleRelease --no-daemon \
+            -Pdaybreak.versionName="${{ steps.version.outputs.name }}" \
+            -Pdaybreak.versionCode="${{ steps.version.outputs.code }}" \
+            -Pdaybreak.updateApiUrl="$UPDATE_API_URL"
+
+      - name: Check that the APK is signed
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Attach the APK to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "daybreak-$TAG.apk"
+          gh release upload "$TAG" "daybreak-$TAG.apk" --clobber --repo "${{ github.repository }}"
+
+      # Optional: tells the update server about the release at once. Without it the server notices
+      # within a few minutes by itself.
+      - name: Tell the update server
+        env:
+          UPDATE_SERVER_URL: ${{ vars.UPDATE_API_URL }}
+          REFRESH_TOKEN: ${{ secrets.UPDATE_SERVER_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$UPDATE_SERVER_URL" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "Skipping: UPDATE_API_URL or UPDATE_SERVER_REFRESH_TOKEN is not set."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 120 -X POST \
+            -H "Authorization: Bearer $REFRESH_TOKEN" \
+            "${UPDATE_SERVER_URL%/}/v1/refresh" || echo "The update server could not be reached; it will catch up by itself."
