@@ -193,6 +193,16 @@
     <string name="motion_calm">Calm</string>
     <string name="settings_start_view">Start view</string>
     <string name="exam_badge">Exam</string>
+    <string name="settings_lesson_colors">Lesson colours</string>
+    <string name="settings_lesson_colors_desc">Colour each subject and status separately.</string>
+    <string name="lesson_colors_title">Lesson colours</string>
+    <string name="lesson_colors_fill_card">Colour the whole card</string>
+    <string name="lesson_colors_fill_card_desc">Fill the whole lesson with the colour instead of only the edge stripe.</string>
+    <string name="lesson_colors_statuses">Statuses</string>
+    <string name="lesson_colors_subjects">Subjects</string>
+    <string name="lesson_colors_no_subjects">Subjects appear once the timetable has loaded.</string>
+    <string name="lesson_colors_automatic">Automatic</string>
+    <string name="lesson_colors_reset">Reset to automatic</string>
     <string name="settings_text_size">Text size</string>
     <string name="text_scale_standard">Normal</string>
     <string name="text_scale_large">Large</string>

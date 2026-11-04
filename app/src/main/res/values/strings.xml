@@ -193,6 +193,16 @@
     <string name="motion_calm">Ruhig</string>
     <string name="settings_start_view">Startansicht</string>
     <string name="exam_badge">Prüfung</string>
+    <string name="settings_lesson_colors">Stundenfarben</string>
+    <string name="settings_lesson_colors_desc">Fächer und Status einzeln einfärben.</string>
+    <string name="lesson_colors_title">Stundenfarben</string>
+    <string name="lesson_colors_fill_card">Ganze Karte einfärben</string>
+    <string name="lesson_colors_fill_card_desc">Die Farbe füllt die ganze Stunde statt nur den Streifen am Rand.</string>
+    <string name="lesson_colors_statuses">Status</string>
+    <string name="lesson_colors_subjects">Fächer</string>
+    <string name="lesson_colors_no_subjects">Die Fächer erscheinen, sobald der Stundenplan geladen ist.</string>
+    <string name="lesson_colors_automatic">Automatisch</string>
+    <string name="lesson_colors_reset">Auf automatisch zurücksetzen</string>
     <string name="settings_text_size">Textgröße</string>
     <string name="text_scale_standard">Normal</string>
     <string name="text_scale_large">Groß</string>

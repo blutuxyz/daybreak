@@ -66,7 +66,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -94,6 +94,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -117,13 +118,18 @@ import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
+import com.bdersolutions.daybreak.ui.components.LocalLessonColors
 import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
+import com.bdersolutions.daybreak.ui.components.cancelledAccent
+import com.bdersolutions.daybreak.ui.components.onColorFor
+import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
+import com.bdersolutions.daybreak.ui.components.SubjectTone
+import com.bdersolutions.daybreak.ui.components.substitutionAccent
 import com.bdersolutions.daybreak.ui.components.examAccent
 import com.bdersolutions.daybreak.ui.components.examContainer
 import com.bdersolutions.daybreak.ui.components.examContent
 import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.ui.components.rememberStaggeredReveal
-import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.warningAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -940,6 +946,56 @@ private fun FreeGapBands(
     }
 }
 
+/** How a lesson block is drawn once status and the user's colour choices are applied. */
+private class LessonLook(
+    /** The edge stripe, or null when the whole card is coloured instead. */
+    val stripe: Color?,
+    val fill: Color,
+    val content: Color,
+    /** Used for the progress bar and borders. */
+    val accent: Color,
+)
+
+@Composable
+private fun rememberLessonLook(
+    block: TimelineBlock,
+    exam: UntisExam?,
+    tone: SubjectTone,
+    subject: String,
+): LessonLook {
+    val lessonColors = LocalLessonColors.current
+    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val customSubject = lessonColors.subjectColors.containsKey(subject)
+    val fullCard = lessonColors.fillWholeCard
+    if (roles && !customSubject && !fullCard) {
+        // The role palette fills the card itself, as before.
+        return LessonLook(
+            stripe = null,
+            fill = tone.container,
+            content = tone.onContainer,
+            accent = tone.accent,
+        )
+    }
+    val stripe = when {
+        block.isCancelled -> cancelledAccent()
+        exam != null -> examAccent()
+        block.hasRoomChange || block.hasSubstitution -> substitutionAccent()
+        else -> tone.accent
+    }
+    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val fill = when {
+        fullCard -> lerp(surface, stripe, 0.24f)
+        exam != null -> lerp(surface, stripe, 0.25f)
+        else -> surface
+    }
+    return LessonLook(
+        stripe = if (fullCard) null else stripe,
+        fill = fill,
+        content = MaterialTheme.colorScheme.onSurface,
+        accent = stripe,
+    )
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DayLessonBlock(
@@ -958,19 +1014,13 @@ private fun DayLessonBlock(
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
-    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        cancelled -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-        block.hasSubstitution -> BorderStroke(1.5.dp, warningAccent())
+        cancelled -> BorderStroke(1.5.dp, cancelledAccent())
+        block.hasSubstitution -> BorderStroke(1.5.dp, substitutionAccent())
         else -> null
-    }
-    val stripe = when {
-        cancelled -> MaterialTheme.colorScheme.error
-        exam != null -> examAccent()
-        block.hasSubstitution -> warningAccent()
-        else -> tone.accent
     }
     val badge = when {
         cancelled -> stringResource(R.string.lesson_cancelled)
@@ -978,12 +1028,7 @@ private fun DayLessonBlock(
         block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
         else -> null
     }
-    // An exam is the one block that takes a full fill, so it stands out from the grid.
-    val container = when {
-        roles -> tone.container
-        exam != null -> examContainer()
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
-    }
+    val badgeAccent = if (cancelled) cancelledAccent() else substitutionAccent()
     Surface(
         onClick = onClick,
         modifier = modifier.graphicsLayer {
@@ -991,18 +1036,14 @@ private fun DayLessonBlock(
             scaleY = pressScale
         },
         shape = RoundedCornerShape(if (block.lessons.size > 1) 18.dp else 14.dp),
-        color = container,
-        contentColor = when {
-            roles -> tone.onContainer
-            exam != null -> examContent()
-            else -> MaterialTheme.colorScheme.onSurface
-        },
+        color = look.fill,
+        contentColor = look.content,
         border = border,
         tonalElevation = if (current) 3.dp else 0.dp,
         interactionSource = interactionSource,
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            if (!roles) {
+            look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -1046,24 +1087,19 @@ private fun DayLessonBlock(
                         AccentBadge(
                             text = stringResource(R.string.exam_badge),
                             containerColor = examAccent(),
-                            // Near-black text on the gold badge keeps it above 4.5:1 in both themes.
-                            contentColor = Color(0xFF1F1700),
+                            contentColor = onColorFor(examAccent()),
                         )
                     }
                     if (badge != null) {
                         Spacer(Modifier.width(4.dp))
                         AccentBadge(
                             text = badge,
-                            containerColor = if (cancelled) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                warningContainer()
-                            },
-                            contentColor = if (cancelled) {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            } else {
-                                warningAccent()
-                            },
+                            containerColor = lerp(
+                                MaterialTheme.colorScheme.surface,
+                                badgeAccent,
+                                0.22f,
+                            ),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -1099,11 +1135,18 @@ private fun DayLessonBlock(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    LinearWavyProgressIndicator(
+                    // A thin, straight bar: how far through the lesson it is.
+                    LinearProgressIndicator(
                         progress = { animatedProgress.value },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp),
+                        color = if (look.stripe == null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            look.accent
+                        },
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
                 }
             }
@@ -1311,45 +1354,56 @@ private fun WeekAllDayRow(
     longEventsByDay: Map<LocalDate, List<UntisLesson>>,
     onLessonClick: (UntisLesson) -> Unit,
 ) {
-    Row(
+    val context = LocalContext.current
+    val locale = currentLocale(context)
+    val dayLabel = DateTimeFormatter.ofPattern("EEE d. MMM", locale)
+    // A day column is too narrow for a long event's name, so long events are listed
+    // full width, with the day and time next to the name.
+    val events = days.flatMap { day -> longEventsByDay[day].orEmpty() }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 14.dp, bottom = 4.dp),
+            .padding(start = 16.dp, end = 14.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Spacer(Modifier.width(52.dp))
-        Spacer(Modifier.width(8.dp))
-        Row(modifier = Modifier.weight(1f)) {
-            days.forEach { day ->
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 1.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+        events.forEach { lesson ->
+            val subject = lesson.subject.ifBlank {
+                stringResource(R.string.lesson_unknown_subject)
+            }
+            val tone = rememberSubjectTone(subject)
+            val dayText = lesson.date.format(dayLabel).replaceFirstChar { it.titlecase(locale) }
+            Surface(
+                onClick = { onLessonClick(lesson) },
+                shape = RoundedCornerShape(12.dp),
+                color = tone.container,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    longEventsByDay[day].orEmpty().take(2).forEach { lesson ->
-                        val subject = lesson.subject.ifBlank {
-                            stringResource(R.string.lesson_unknown_subject)
-                        }
-                        val tone = rememberSubjectTone(subject)
-                        Surface(
-                            onClick = { onLessonClick(lesson) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = tone.container,
-                            contentColor = tone.onContainer,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = subject,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    lineHeight = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(tone.accent, CircleShape),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = subject,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "$dayText · ${formatTime(lesson.start)} – ${formatTime(lesson.end)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -1464,35 +1518,21 @@ private fun WeekLessonBlock(
         stringResource(R.string.lesson_unknown_subject)
     }
     val tone = rememberSubjectTone(subject)
-    val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
+    val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
-    val stripe = when {
-        cancelled -> MaterialTheme.colorScheme.error
-        exam != null -> examAccent()
-        block.hasRoomChange || block.hasSubstitution -> warningAccent()
-        else -> tone.accent
-    }
     val border = when {
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        cancelled -> BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        cancelled -> BorderStroke(1.dp, cancelledAccent())
         exam != null -> BorderStroke(1.dp, examAccent())
-        block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, warningAccent())
+        block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, substitutionAccent())
         else -> null
     }
     // Week columns are narrow, so status is written out as a line of text rather than a badge.
-    val status: Pair<String, Color>? = when {
-        cancelled -> stringResource(R.string.lesson_cancelled) to MaterialTheme.colorScheme.error
-        exam != null -> stringResource(R.string.exam_badge) to examContent()
-        block.hasRoomChange || block.hasSubstitution -> {
-            stringResource(R.string.lesson_substitution_short) to warningAccent()
-        }
-
+    val status: String? = when {
+        cancelled -> stringResource(R.string.lesson_cancelled)
+        exam != null -> stringResource(R.string.exam_badge)
+        block.hasRoomChange || block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
         else -> null
-    }
-    val container = when {
-        roles -> tone.container
-        exam != null -> examContainer()
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     Surface(
         onClick = onClick,
@@ -1501,17 +1541,13 @@ private fun WeekLessonBlock(
             scaleY = pressScale
         },
         shape = RoundedCornerShape(9.dp),
-        color = container,
-        contentColor = when {
-            roles -> tone.onContainer
-            exam != null -> examContent()
-            else -> MaterialTheme.colorScheme.onSurface
-        },
+        color = look.fill,
+        contentColor = look.content,
         border = border,
         interactionSource = interactionSource,
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            if (!roles) {
+            look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -1543,13 +1579,13 @@ private fun WeekLessonBlock(
                 if (block.durationMinutes >= 35) {
                     if (status != null) {
                         Text(
-                            text = status.first,
+                            text = status,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
                                 lineHeight = 12.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
-                            color = status.second,
+                            color = look.content,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1954,13 +1990,26 @@ private fun LessonDetailsSheet(
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp),
         ) {
+            // Close sits on its own row above the card, so it does not crowd the status chip.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.action_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Surface(
                 shape = MaterialTheme.shapes.large,
                 color = tone.container,
                 contentColor = tone.onContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 14.dp, bottom = 18.dp)) {
+                Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 18.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             text = subject,
@@ -1981,12 +2030,6 @@ private fun LessonDetailsSheet(
                             contentColor = statusContent,
                             modifier = Modifier.padding(top = 4.dp),
                         )
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.action_close),
-                            )
-                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(

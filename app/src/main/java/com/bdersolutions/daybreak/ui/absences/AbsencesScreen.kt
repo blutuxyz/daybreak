@@ -285,12 +285,26 @@ private fun DateHeader(date: LocalDate) {
     )
 }
 
+/**
+ * "07:55 – 13:15" for one day. An absence over several days shows both dates, like the
+ * school's own list: "Wed 23.09. 07:55 – Thu 24.09. 17:30".
+ */
+private fun absenceRange(absence: UntisAbsence): String {
+    val time = DateTimeFormatter.ofPattern("HH:mm")
+    if (absence.start.toLocalDate() == absence.end.toLocalDate()) {
+        return "${absence.start.format(time)} – ${absence.end.format(time)}"
+    }
+    val day = DateTimeFormatter.ofPattern("EEE dd.MM.", Locale.getDefault())
+    return "${absence.start.format(day)} ${absence.start.format(time)} – " +
+        "${absence.end.format(day)} ${absence.end.format(time)}"
+}
+
 @Composable
 private fun AbsenceCard(
     absence: UntisAbsence,
     reasons: Map<Long, String>,
 ) {
-    val timeFormat = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val range = remember(absence) { absenceRange(absence) }
     val reason = absence.reasonName
         .ifBlank { absence.reasonId?.let { reasons[it] }.orEmpty() }
         .ifBlank { stringResource(R.string.absences_reason_unknown) }
@@ -303,7 +317,7 @@ private fun AbsenceCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${absence.start.format(timeFormat)} – ${absence.end.format(timeFormat)}",
+                    text = range,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),

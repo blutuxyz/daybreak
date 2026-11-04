@@ -80,6 +80,7 @@ import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
+import com.bdersolutions.daybreak.ui.settings.LessonColorsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
@@ -158,6 +159,7 @@ private fun LoggedInContent(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
+    var showLessonColors by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
@@ -202,6 +204,18 @@ private fun LoggedInContent(
         key = "settings_${session.studentId}",
         factory = SettingsViewModel.Factory(container),
     )
+
+    BackHandler(enabled = showLessonColors) {
+        showLessonColors = false
+    }
+
+    if (showLessonColors) {
+        LessonColorsScreen(
+            viewModel = settingsViewModel,
+            onBack = { showLessonColors = false },
+        )
+        return
+    }
 
     val motion = MaterialTheme.motionScheme
     Scaffold(
@@ -256,6 +270,7 @@ private fun LoggedInContent(
                 else -> SettingsScreen(
                     viewModel = settingsViewModel,
                     onOpenDebug = { showDebug = true },
+                    onOpenLessonColors = { showLessonColors = true },
                 )
             }
         }

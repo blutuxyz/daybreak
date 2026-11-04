@@ -28,6 +28,7 @@ import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.ui.components.LocalLessonColors
 import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
 
 private val DarkColorScheme = darkColorScheme(
@@ -269,6 +270,7 @@ fun DaybreakTheme(
     CompositionLocalProvider(
         LocalDensity provides scaledDensity,
         LocalSubjectColorMode provides settings.subjectColorMode,
+        LocalLessonColors provides settings.lessonColors,
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,

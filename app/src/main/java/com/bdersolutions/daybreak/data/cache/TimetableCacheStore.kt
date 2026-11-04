@@ -26,6 +26,8 @@ data class TimetableCache(
     val lastSyncAt: Long = 0L,
     /** The student's exams for the cached weeks. Empty for class, teacher and room views. */
     val exams: List<UntisExam> = emptyList(),
+    /** Subject short name by subject id, so exams can be matched to lessons by subject. */
+    val subjectNames: Map<Long, String> = emptyMap(),
 )
 
 /**
@@ -77,6 +79,9 @@ class TimetableCacheStore(context: Context) {
             })
             add("exams", JsonArray().apply {
                 cache.exams.forEach { exam -> add(encodeExam(exam)) }
+            })
+            add("subjectNames", JsonObject().apply {
+                cache.subjectNames.forEach { (id, name) -> addProperty(id.toString(), name) }
             })
         }
         return root.toString()
@@ -150,7 +155,11 @@ class TimetableCacheStore(context: Context) {
         val exams = root.getAsJsonArray("exams")?.mapNotNull { element ->
             runCatching { decodeExam(element.asJsonObject) }.getOrNull()
         }.orEmpty()
-        return TimetableCache(studentId, weeks, lastSyncAt, exams)
+        val subjectNames = root.getAsJsonObject("subjectNames")?.entrySet()?.mapNotNull { (key, value) ->
+            val id = key.toLongOrNull() ?: return@mapNotNull null
+            runCatching { value.asString }.getOrNull()?.let { id to it }
+        }?.toMap().orEmpty()
+        return TimetableCache(studentId, weeks, lastSyncAt, exams, subjectNames)
     }
 
     private fun decodeLesson(obj: JsonObject): UntisLesson? = runCatching {
@@ -184,7 +193,10 @@ class TimetableCacheStore(context: Context) {
         const val FILE_NAME = "timetable_cache.json"
         const val MAX_WEEKS = 8
 
-        /** 2 added the exams list. Version 1 caches load fine and fill in exams on the next sync. */
-        const val VERSION = 2
+        /**
+         * 2 added the exams list, 3 added the subject names exams are matched with. Older caches
+         * load fine and fill in the new data on the next sync.
+         */
+        const val VERSION = 3
     }
 }

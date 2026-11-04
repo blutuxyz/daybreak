@@ -34,7 +34,11 @@ internal object TimetableParser {
         return UntisTimetable(
             lessons = lessons,
             masterDataTimestamp = master.longOrNull("timeStamp", "timestamp") ?: 0L,
-            directory = SchoolDataParser.directory(root),
+            directory = SchoolDataParser.directory(root).copy(
+                subjectNamesById = lookup.subjects
+                    .mapValues { (_, subject) -> subject.name.trim() }
+                    .filterValues { it.isNotBlank() },
+            ),
         )
     }
 

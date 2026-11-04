@@ -16,6 +16,7 @@ import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
+import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
@@ -26,12 +27,20 @@ import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.Locale
+
+/** Taps on the theme "System" option that reveal the debug log. */
+private const val DEBUG_UNLOCK_TAPS = 10
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
@@ -53,6 +62,40 @@ class SettingsViewModel(
     /** Emits when a manual sync finished without errors. */
     private val _syncSucceeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val syncSucceeded: SharedFlow<Unit> = _syncSucceeded
+
+    /**
+     * The subjects in the student's own timetable, from the cached weeks. The school's master
+     * data also lists subjects of other classes, which are not shown here. Sorted, so the list
+     * is stable.
+     */
+    val subjects: StateFlow<List<String>> = repository.cache.map { cache ->
+        cache.weeks.values
+            .flatMap { week -> week.lessons.map { it.subject } }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun updateLessonColors(transform: (LessonColorSettings) -> LessonColorSettings) {
+        settingsRepository.updateLessonColors(transform)
+    }
+
+    private val _debugUnlocked = MutableStateFlow(false)
+
+    /**
+     * Whether the debug log is shown. It stays hidden until the "System" theme option has been
+     * tapped [DEBUG_UNLOCK_TAPS] times. The state lives in this ViewModel, so it is hidden again
+     * after the app restarts.
+     */
+    val debugUnlocked: StateFlow<Boolean> = _debugUnlocked.asStateFlow()
+    private var systemThemeTaps = 0
+
+    fun onSystemThemeTapped() {
+        if (_debugUnlocked.value) return
+        systemThemeTaps++
+        if (systemThemeTaps >= DEBUG_UNLOCK_TAPS) _debugUnlocked.value = true
+    }
 
     fun setLanguage(language: AppLanguage) {
         settingsRepository.setLanguage(language)

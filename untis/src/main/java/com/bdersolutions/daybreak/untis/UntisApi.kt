@@ -143,6 +143,7 @@ class UntisApi(
         session: UntisSession,
         startDate: LocalDate,
         endDate: LocalDate,
+        subjectNames: Map<Long, String> = emptyMap(),
     ): List<UntisExam> {
         require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
         val safeServer = normalizeInputs(session.server, session.school, session.username)
@@ -164,7 +165,7 @@ class UntisApi(
             method = "getExams2017",
             params = params,
         )
-        return ExamParser.parse(result)
+        return ExamParser.parse(result, subjectNames)
     }
 
     private suspend fun requestTimetable(

@@ -16,12 +16,12 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 
 /**
- * A stable tonal triad per subject, taken from the active colour scheme. Each subject
- * maps to one of the primary, secondary or tertiary role families, so the lesson
- * colours always follow Material You or the chosen accent and keep their contrast.
+ * The colours of one lesson. [accent] is the stripe or badge colour and [container] is a faint
+ * tint of it, used when the whole card is coloured.
  */
 @Immutable
 data class SubjectTone(
@@ -30,28 +30,51 @@ data class SubjectTone(
     val onContainer: Color,
 )
 
-/** Which palette lesson colours come from. Provided by [com.bdersolutions.daybreak.ui.theme.DaybreakTheme]. */
+/** Which palette automatic lesson colours come from. Provided by DaybreakTheme. */
 val LocalSubjectColorMode = staticCompositionLocalOf { SubjectColorMode.ACCENT_HUES }
 
-/**
- * Colour for one subject.
- *
- * - [SubjectColorMode.ACCENT_HUES]: a stripe colour on one of eight hues around the
- *   primary hue, with a faint tint of it as the container.
- * - [SubjectColorMode.ROLES]: the older primary, secondary and tertiary role families.
- */
+/** The user's lesson colour choices. Provided by DaybreakTheme. */
+val LocalLessonColors = staticCompositionLocalOf { LessonColorSettings() }
+
+/** Colour for one subject: the user's choice if there is one, otherwise the automatic colour. */
 @Composable
 fun rememberSubjectTone(subject: String): SubjectTone {
     val scheme = MaterialTheme.colorScheme
     val mode = LocalSubjectColorMode.current
+    val custom = LocalLessonColors.current.subjectColors[subject]
     val dark = scheme.surface.luminance() < 0.5f
-    return remember(subject, scheme, mode, dark) {
-        when (mode) {
-            SubjectColorMode.ROLES -> roleTone(subject, scheme)
-            SubjectColorMode.ACCENT_HUES -> accentHueTone(subject, scheme, dark)
+    return remember(subject, scheme, mode, dark, custom) {
+        if (custom != null) {
+            toneFor(Color(custom.toInt()), scheme)
+        } else {
+            automaticTone(subject, scheme, dark, mode)
         }
     }
 }
+
+/** The automatic colour a subject gets when the user has not chosen one. */
+fun automaticSubjectColor(
+    subject: String,
+    scheme: ColorScheme,
+    dark: Boolean,
+    mode: SubjectColorMode,
+): Color = automaticTone(subject, scheme, dark, mode).accent
+
+private fun automaticTone(
+    subject: String,
+    scheme: ColorScheme,
+    dark: Boolean,
+    mode: SubjectColorMode,
+): SubjectTone = when (mode) {
+    SubjectColorMode.ROLES -> roleTone(subject, scheme)
+    SubjectColorMode.ACCENT_HUES -> accentHueTone(subject, scheme, dark)
+}
+
+private fun toneFor(accent: Color, scheme: ColorScheme): SubjectTone = SubjectTone(
+    container = lerp(scheme.surfaceContainerLow, accent, 0.14f),
+    accent = accent,
+    onContainer = scheme.onSurface,
+)
 
 private fun roleTone(subject: String, scheme: ColorScheme): SubjectTone =
     when (stableSubjectHash(subject) % 3) {
@@ -88,40 +111,55 @@ private fun accentHueTone(subject: String, scheme: ColorScheme, dark: Boolean): 
             hueDegrees = subjectHueDegrees(subject, primaryHue),
         ),
     )
-    val stripe = Color(rgb[0].toFloat(), rgb[1].toFloat(), rgb[2].toFloat())
-    return SubjectTone(
-        container = lerp(scheme.surfaceContainerLow, stripe, 0.14f),
-        accent = stripe,
-        onContainer = scheme.onSurface,
-    )
+    return toneFor(Color(rgb[0].toFloat(), rgb[1].toFloat(), rgb[2].toFloat()), scheme)
 }
 
-/** Warm accent used for substitutions and room changes, independent of the wallpaper. */
+/** Text colour that stays readable on [background]. */
+fun onColorFor(background: Color): Color =
+    if (background.luminance() > 0.35f) Color(0xFF1B1B1F) else Color.White
+
+/** Warm accent used for room changes, independent of the wallpaper. */
 @Composable
 fun warningAccent(): Color {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     return if (isDark) Color(0xFFFFB35C) else Color(0xFFC45A00)
 }
 
+/** Substitution colour: the user's choice, or the warm default. */
+@Composable
+fun substitutionAccent(): Color =
+    LocalLessonColors.current.substitutionColor?.let { Color(it.toInt()) } ?: warningAccent()
+
+/** Cancelled colour: the user's choice, or the theme's error colour. */
+@Composable
+fun cancelledAccent(): Color =
+    LocalLessonColors.current.cancelledColor?.let { Color(it.toInt()) }
+        ?: MaterialTheme.colorScheme.error
+
 /**
- * Yellow used for exams (Prüfungen). The accent is a dark gold on light backgrounds so the
- * stripe and dot still reach 3:1 against the card. Exams always carry the word "Prüfung",
- * so the colour is never the only signal.
+ * Yellow used for exams (Prüfungen). The default is a dark gold on light backgrounds so the
+ * stripe and dot still reach 3:1 against the card. Exams always carry the word "Prüfung", so
+ * the colour is never the only signal.
  */
 @Composable
 fun examAccent(): Color {
+    LocalLessonColors.current.examColor?.let { return Color(it.toInt()) }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     return if (isDark) Color(0xFFFFD54F) else Color(0xFFB38600)
 }
 
 @Composable
 fun examContainer(): Color {
+    LocalLessonColors.current.examColor?.let {
+        return lerp(MaterialTheme.colorScheme.surfaceContainerLow, Color(it.toInt()), 0.3f)
+    }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     return if (isDark) Color(0xFF5C4A00) else Color(0xFFFFE38A)
 }
 
 @Composable
 fun examContent(): Color {
+    if (LocalLessonColors.current.examColor != null) return MaterialTheme.colorScheme.onSurface
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     return if (isDark) Color(0xFFFFE38A) else Color(0xFF3D2E00)
 }
