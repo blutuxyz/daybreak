@@ -86,6 +86,14 @@ data class UntisTimetable(
     val masterDataTimestamp: Long = 0L,
 )
 
+/** Outcome of one diagnostic call. The raw response itself goes to the debug log. */
+data class ProbeResult(
+    val label: String,
+    val method: String,
+    val ok: Boolean,
+    val message: String,
+)
+
 /** Callback for the debug screen. It must never receive request bodies or secrets. */
 fun interface RawResponseSink {
     fun onResponse(method: String, receivedAt: Long, body: String)

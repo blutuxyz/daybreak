@@ -192,4 +192,10 @@
     <string name="login_more_options">Andere Anmeldung</string>
     <string name="login_fewer_options">Weniger Optionen</string>
     <string name="login_back_to_qr">Zurück zum QR-Code</string>
+    <!-- Debug test calls -->
+    <string name="probe_title">Testaufrufe</string>
+    <string name="probe_body">Ruft einmal Fehlstunden sowie Klassen-, Lehrkräfte- und Raumpläne ab. Die Rohantworten erscheinen unten im Protokoll. Vor dem Teilen Namen entfernen.</string>
+    <string name="probe_start">Testaufrufe starten</string>
+    <string name="probe_running">Läuft…</string>
+    <string name="probe_no_session">Keine aktive Anmeldung. Bitte zuerst anmelden.</string>
 </resources>

@@ -192,4 +192,10 @@
     <string name="login_more_options">Other sign-in options</string>
     <string name="login_fewer_options">Fewer options</string>
     <string name="login_back_to_qr">Back to QR code</string>
+    <!-- Debug test calls -->
+    <string name="probe_title">Test calls</string>
+    <string name="probe_body">Calls absences and the class, teacher and room timetables once. The raw responses appear in the log below. Remove names before sharing.</string>
+    <string name="probe_start">Run test calls</string>
+    <string name="probe_running">Running…</string>
+    <string name="probe_no_session">No active sign-in. Please sign in first.</string>
 </resources>
