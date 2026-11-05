@@ -5,6 +5,7 @@ import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
+import com.bdersolutions.daybreak.data.legal.TermsStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
 import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
@@ -25,6 +26,7 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val settingsRepository = SettingsRepository(appContext)
+    val termsStore = TermsStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(appContext, secretVault)
     val rawLogStore = RawLogStore(appContext)

@@ -1246,15 +1246,9 @@ private fun WeekPage(
             }
         }
     }
-    val longEventsByDay = remember(allLessons, days) {
-        days.associateWith { day ->
-            allLessons.filter { it.date == day && it.isLongEvent() }
-        }
-    }
+    // Long events such as a school event stay in the grid, beside the lessons they replace.
     val gridLessonsByDay = remember(allLessons, days) {
-        days.associateWith { day ->
-            allLessons.filter { it.date == day && !it.isLongEvent() }
-        }
+        days.associateWith { day -> allLessons.filter { it.date == day } }
     }
     val pxPerMinute = 1.05.dp
     // One fade for the whole week when it is shown, instead of an animation per lesson.
@@ -1302,13 +1296,6 @@ private fun WeekPage(
                             weekStart = weekStart,
                             today = today,
                         )
-                        if (longEventsByDay.values.any { it.isNotEmpty() }) {
-                            WeekAllDayRow(
-                                days = days,
-                                longEventsByDay = longEventsByDay,
-                                onLessonClick = { selectedLesson = it },
-                            )
-                        }
                         PullToRefreshBox(
                             isRefreshing = status.isLoading,
                             onRefresh = onRetry,
@@ -1439,69 +1426,6 @@ private fun WeekDayHeaderRow(
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeekAllDayRow(
-    days: List<LocalDate>,
-    longEventsByDay: Map<LocalDate, List<UntisLesson>>,
-    onLessonClick: (UntisLesson) -> Unit,
-) {
-    val context = LocalContext.current
-    val locale = currentLocale(context)
-    val dayLabel = DateTimeFormatter.ofPattern("EEE d. MMM", locale)
-    // A day column is too narrow for a long event's name, so long events are listed
-    // full width, with the day and time next to the name.
-    val events = days.flatMap { day -> longEventsByDay[day].orEmpty() }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 14.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        events.forEach { lesson ->
-            val subject = lesson.subject.ifBlank {
-                stringResource(R.string.lesson_unknown_subject)
-            }
-            val tone = rememberSubjectTone(subject)
-            val dayText = lesson.date.format(dayLabel).replaceFirstChar { it.titlecase(locale) }
-            Surface(
-                onClick = { onLessonClick(lesson) },
-                shape = RoundedCornerShape(12.dp),
-                color = tone.container,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(tone.accent, CircleShape),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = subject,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "$dayText · ${formatTime(lesson.start)} – ${formatTime(lesson.end)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -1998,10 +1922,6 @@ private fun holidayFill(): Color {
     val dark = scheme.surface.luminance() < 0.5f
     return lerp(scheme.surfaceContainerLow, scheme.tertiary, if (dark) 0.32f else 0.24f)
 }
-
-// A holiday block fills the whole day on purpose; it belongs in the grid, not in the all-day row.
-private fun UntisLesson.isLongEvent(): Boolean =
-    !isHoliday && Duration.between(start, end).toMinutes() >= 180
 
 /** The holiday that covers [date], if any. */
 internal fun holidayOn(holidays: List<UntisHoliday>, date: LocalDate): UntisHoliday? =

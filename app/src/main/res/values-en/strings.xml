@@ -418,4 +418,41 @@
     <string name="messages_confirm_text">The message goes to %1$s. It cannot be taken back.</string>
     <string name="messages_one_teacher_hint">Students can only write to one teacher at a time.</string>
     <string name="messages_send_failed">The message may not have been sent. Check the Sent folder before you try again.</string>
+
+    <!-- Privacy policy and terms of use. Raise LegalTerms.VERSION when the meaning changes. -->
+    <string name="settings_legal">Privacy and terms</string>
+    <string name="legal_screen_title">Privacy and terms</string>
+    <string name="legal_gate_intro">Please read and confirm the following before you use Daybreak.</string>
+    <string name="legal_gate_updated">The privacy policy or the terms of use have changed. Please read them and confirm again.</string>
+    <string name="legal_version_line">Version %1$d · As of 5 November 2026</string>
+    <string name="legal_accept">Accept and continue</string>
+    <string name="legal_decline">Decline and exit</string>
+    <string name="legal_accept_hint">By tapping “Accept” you confirm that you have read the privacy policy and the terms of use and agree to them. You can read them again later under More → Privacy and terms.</string>
+
+    <string name="legal_what_title">What Daybreak is</string>
+    <string name="legal_what_body">Daybreak is an unofficial timetable client for WebUntis. It is not part of Untis GmbH, and Untis GmbH neither supports nor has reviewed it. WebUntis is a trademark of Untis GmbH.\n\nDaybreak uses the same mobile interface as the official Untis Mobile app. That interface is not publicly documented and can change at any time.</string>
+
+    <string name="legal_privacy_title">Privacy in short</string>
+    <string name="legal_privacy_body">• Daybreak has no account with the developer.\n• There is no advertising, no analytics or tracking, and no automatic crash reporting.\n• Your data goes only to your school’s WebUntis server and otherwise stays on your device.\n• The app never stores your password.</string>
+
+    <string name="legal_stored_title">What is stored on your device</string>
+    <string name="legal_stored_body">• Sign-in data: the server, school and username of your school, and the Untis access key. The key is encrypted with a key from the Android Keystore. If you sign in with a password, the password is sent to WebUntis once to fetch the access key and is then discarded.\n• School data: the timetable, exams, absences and other details WebUntis returns for you are cached so the app also works without a network.\n• Settings, such as appearance, language and your own colours.\n• Debug log: the latest raw WebUntis responses, only for troubleshooting and only on your device. Passwords and keys are not in it.\n\nSigning out deletes the key, the session, the cache and the debug log. Uninstalling the app removes everything. The data is excluded from Android backups.</string>
+
+    <string name="legal_sent_title">Where data is sent</string>
+    <string name="legal_sent_body">• Your school’s WebUntis server: for the timetable, absences, exams, homework, messages and notices, the app queries your school’s server over HTTPS. If you write a message to a teacher, its content goes to that server. The privacy policy of your school and of Untis applies to that data, not the developer’s.\n• Attachments: if you download the attachment of a message, the app fetches it from the storage address that WebUntis names for it.\n• Update server: if the update feature is active in your version, the app asks the developer’s update server for new versions and downloads updates from it. The server necessarily sees your IP address. No sign-in data or school data is sent.\n• Scanning a QR code: this is done by the Google Play services code scanner on your device. Daybreak does not store a camera image.\n\nThe developer runs no server that receives your school data and cannot see it.</string>
+
+    <string name="legal_rights_title">Your rights</string>
+    <string name="legal_rights_body">The developer stores no personal data about you. You can delete the data on your device yourself at any time by signing out or uninstalling the app. For access to, correction of or deletion of the data in WebUntis, contact your school, which is responsible for it.\n\nProcessing on your device is based on the consent you give here. You can withdraw it by no longer using the app and uninstalling it.</string>
+
+    <string name="legal_terms_title">Terms of use</string>
+    <string name="legal_terms_body">• Use Daybreak only with your own WebUntis access and only as your school’s rules allow.\n• Do not share your access key or sign-in data.\n• You are responsible for the messages you send through the app.\n• Daybreak must not be used for attacks, excessive requests or access to other people’s data.\n• The app is free. There is no entitlement to particular features, to support, or to the app continuing to work.</string>
+
+    <string name="legal_liability_title">Liability and reliability</string>
+    <string name="legal_liability_body">The app shows data as WebUntis delivers it and without warranty. Timetable changes, cancellations and exam dates may be missing, late or wrong in the app. Do not rely on Daybreak alone for important dates; check WebUntis or your school if in doubt.\n\nTo the extent the law allows, the developer is not liable for damage caused by using the app. This does not apply to intent and gross negligence, to injury to life, body or health, and where the law mandatorily provides otherwise.</string>
+
+    <string name="legal_changes_title">Changes</string>
+    <string name="legal_changes_body">These texts are stored in the app and are not loaded from the internet. If they change with a new version, the app asks you again at the next start. An update that leaves the texts unchanged does not ask you again. If you decline, the app closes.</string>
+
+    <string name="legal_contact_title">Contact</string>
+    <string name="legal_contact_body">The developer of the app is responsible for Daybreak. You can reach them about these texts and about privacy through the GitHub project blutuxyz/daybreak.</string>
 </resources>

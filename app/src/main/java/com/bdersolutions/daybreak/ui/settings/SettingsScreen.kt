@@ -58,6 +58,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
@@ -325,6 +326,12 @@ fun SettingsScreen(
                         )
                         SettingsDivider()
                     }
+                    NavigationRow(
+                        icon = Icons.Outlined.PrivacyTip,
+                        title = stringResource(R.string.settings_legal),
+                        onClick = { onOpenPage(SettingsPage.LEGAL) },
+                    )
+                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),

@@ -89,6 +89,7 @@ enum class SettingsPage {
     NOTIFICATIONS,
     UPDATES,
     ABOUT,
+    LEGAL,
 }
 
 /** Shows the screen of [page]. */
@@ -107,6 +108,7 @@ fun SettingsPageHost(
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
+        SettingsPage.LEGAL -> LegalScreen(onBack = onBack)
     }
 }
 
