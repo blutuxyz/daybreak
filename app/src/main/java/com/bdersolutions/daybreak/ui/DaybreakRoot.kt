@@ -6,8 +6,10 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.SizeTransform
@@ -71,10 +73,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.ui.absences.AbsencesScreen
@@ -82,6 +86,7 @@ import com.bdersolutions.daybreak.ui.absences.AbsencesViewModel
 import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
+import com.bdersolutions.daybreak.ui.legal.TermsGateScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
 import com.bdersolutions.daybreak.ui.account.AccountScreen
@@ -100,6 +105,7 @@ import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
@@ -112,8 +118,27 @@ fun DaybreakApp(
     openUpdates: Boolean = false,
 ) {
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
+    val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
+    val termsAccepted = TermsAcceptance.covers(acceptedVersion)
     DaybreakTheme(settings = settings) {
-        DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
+        // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
+        Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
+            if (accepted) {
+                DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
+            } else {
+                TermsGateScreen(
+                    isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
+                    onAccept = { container.termsStore.accept() },
+                    onLanguageChange = { language ->
+                        container.settingsRepository.setLanguage(language)
+                        container.lessonNotificationManager.ensureChannel()
+                        AppCompatDelegate.setApplicationLocales(
+                            LocaleListCompat.forLanguageTags(Locale.forLanguageTag(language.tag).toLanguageTag()),
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 

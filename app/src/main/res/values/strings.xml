@@ -407,4 +407,41 @@
     <string name="messages_confirm_text">Die Nachricht geht an %1$s. Das lässt sich nicht zurückholen.</string>
     <string name="messages_one_teacher_hint">Schüler dürfen eine Nachricht nur an eine Lehrkraft schicken.</string>
     <string name="messages_send_failed">Die Nachricht wurde nicht sicher gesendet. Schau im Ordner Gesendet nach, bevor du es nochmal versuchst.</string>
+
+    <!-- Datenschutz und Nutzungsbedingungen. Bei inhaltlichen Änderungen LegalTerms.VERSION erhöhen. -->
+    <string name="settings_legal">Datenschutz und Nutzungsbedingungen</string>
+    <string name="legal_screen_title">Datenschutz und Nutzungsbedingungen</string>
+    <string name="legal_gate_intro">Bitte lies und bestätige die folgenden Punkte, bevor du Daybreak nutzt.</string>
+    <string name="legal_gate_updated">Die Datenschutzerklärung oder die Nutzungsbedingungen haben sich geändert. Bitte lies sie und bestätige sie erneut.</string>
+    <string name="legal_version_line">Fassung %1$d · Stand: 5. November 2026</string>
+    <string name="legal_accept">Akzeptieren und fortfahren</string>
+    <string name="legal_decline">Ablehnen und beenden</string>
+    <string name="legal_accept_hint">Mit dem Tippen auf „Akzeptieren“ bestätigst du, dass du die Datenschutzerklärung und die Nutzungsbedingungen gelesen hast und mit ihnen einverstanden bist. Du findest sie später unter Mehr → Datenschutz und Nutzungsbedingungen.</string>
+
+    <string name="legal_what_title">Was Daybreak ist</string>
+    <string name="legal_what_body">Daybreak ist ein inoffizieller Stundenplan-Client für WebUntis. Die App gehört nicht zu Untis GmbH und wird von ihr weder unterstützt noch geprüft. WebUntis ist eine Marke der Untis GmbH.\n\nDaybreak nutzt dieselbe mobile Schnittstelle wie die offizielle Untis-Mobile-App. Diese Schnittstelle ist nicht öffentlich dokumentiert und kann sich jederzeit ändern.</string>
+
+    <string name="legal_privacy_title">Datenschutz in Kürze</string>
+    <string name="legal_privacy_body">• Daybreak hat kein Benutzerkonto beim Entwickler.\n• Es gibt keine Werbung, keine Analyse- oder Tracking-Dienste und keine automatische Fehlerübermittlung.\n• Deine Daten gehen nur an den WebUntis-Server deiner Schule und bleiben sonst auf deinem Gerät.\n• Dein Passwort speichert die App nie.</string>
+
+    <string name="legal_stored_title">Was auf deinem Gerät gespeichert wird</string>
+    <string name="legal_stored_body">• Anmeldedaten: Server, Schule und Benutzername der Schule sowie der Untis-Zugangsschlüssel. Der Schlüssel wird mit einem Schlüssel aus dem Android Keystore verschlüsselt. Wenn du dich mit Passwort anmeldest, wird das Passwort einmal an WebUntis gesendet, um den Zugangsschlüssel zu holen, und danach verworfen.\n• Schuldaten: Stundenplan, Prüfungen, Abwesenheiten und weitere Angaben, die WebUntis für dich liefert, werden zwischengespeichert, damit die App auch ohne Netz funktioniert.\n• Einstellungen, zum Beispiel Aussehen, Sprache und eigene Farben.\n• Debug-Protokoll: Die letzten Rohantworten von WebUntis, nur zur Fehlersuche und nur auf deinem Gerät. Passwörter und Schlüssel stehen nicht darin.\n\nBeim Abmelden werden Schlüssel, Sitzung, Zwischenspeicher und Debug-Protokoll gelöscht. Wenn du die App deinstallierst, wird alles entfernt. Die Daten sind von der Android-Datensicherung ausgenommen.</string>
+
+    <string name="legal_sent_title">Wohin Daten gesendet werden</string>
+    <string name="legal_sent_body">• WebUntis-Server deiner Schule: Für Stundenplan, Abwesenheiten, Prüfungen, Hausaufgaben, Nachrichten und Mitteilungen fragt die App den Server deiner Schule über HTTPS ab. Schreibst du eine Nachricht an eine Lehrkraft, geht ihr Inhalt an diesen Server. Für diese Daten gilt die Datenschutzerklärung deiner Schule und von Untis, nicht die des Entwicklers.\n• Anhänge: Lädst du den Anhang einer Nachricht herunter, holt die App ihn von der Speicheradresse, die WebUntis dafür nennt.\n• Update-Server: Ist die Update-Funktion in deiner Version aktiv, fragt die App den Update-Server des Entwicklers nach neuen Versionen und lädt Updates von dort. Dabei sieht der Server technisch bedingt deine IP-Adresse. Anmeldedaten oder Schuldaten werden nicht gesendet.\n• QR-Code scannen: Das übernimmt der Code-Scanner von Google Play Services auf deinem Gerät. Daybreak speichert kein Kamerabild.\n\nDer Entwickler betreibt keinen Server, der deine Schuldaten empfängt, und kann sie nicht einsehen.</string>
+
+    <string name="legal_rights_title">Deine Rechte</string>
+    <string name="legal_rights_body">Der Entwickler speichert keine personenbezogenen Daten von dir. Du kannst die Daten auf deinem Gerät jederzeit selbst löschen, indem du dich abmeldest oder die App deinstallierst. Für Auskunft, Berichtigung oder Löschung der Daten in WebUntis wende dich an deine Schule, die dafür verantwortlich ist.\n\nDie Verarbeitung auf deinem Gerät beruht auf deiner Zustimmung, die du hier gibst. Du kannst sie widerrufen, indem du die App nicht mehr nutzt und deinstallierst.</string>
+
+    <string name="legal_terms_title">Nutzungsbedingungen</string>
+    <string name="legal_terms_body">• Nutze Daybreak nur mit deinem eigenen WebUntis-Zugang und nur so, wie es die Regeln deiner Schule erlauben.\n• Gib deinen Zugangsschlüssel und deine Zugangsdaten nicht weiter.\n• Du bist für die Nachrichten verantwortlich, die du über die App sendest.\n• Daybreak darf nicht für Angriffe, übermäßige Abfragen oder den Zugriff auf fremde Daten verwendet werden.\n• Die App ist kostenlos. Es besteht kein Anspruch auf bestimmte Funktionen, auf Support oder darauf, dass sie weiter funktioniert.</string>
+
+    <string name="legal_liability_title">Haftung und Verlässlichkeit</string>
+    <string name="legal_liability_body">Die App zeigt Daten so an, wie WebUntis sie liefert, und stellt sie ohne Gewähr dar. Stundenplanänderungen, Ausfälle und Prüfungstermine können in der App fehlen, verspätet oder fehlerhaft sein. Verlass dich bei wichtigen Terminen nicht allein auf Daybreak und prüfe sie bei Zweifeln in WebUntis oder bei deiner Schule.\n\nSoweit gesetzlich zulässig, haftet der Entwickler nicht für Schäden durch die Nutzung der App. Das gilt nicht bei Vorsatz und grober Fahrlässigkeit, bei Verletzung von Leben, Körper oder Gesundheit und soweit das Gesetz zwingend etwas anderes vorschreibt.</string>
+
+    <string name="legal_changes_title">Änderungen</string>
+    <string name="legal_changes_body">Diese Texte sind in der App gespeichert und werden nicht aus dem Internet geladen. Ändern sie sich mit einer neuen Version, fragt dich die App beim nächsten Start erneut. Bei einem Update ohne Änderung der Texte musst du nichts erneut bestätigen. Lehnst du ab, schließt sich die App.</string>
+
+    <string name="legal_contact_title">Kontakt</string>
+    <string name="legal_contact_body">Verantwortlich für Daybreak ist der Entwickler der App. Fragen zu diesen Texten und zum Datenschutz erreichst du über das GitHub-Projekt blutuxyz/daybreak.</string>
 </resources>

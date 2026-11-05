@@ -89,6 +89,9 @@ authentication). Daybreak stores only the derived key, never your password.
   for credentials and cached data.
 - The app is read-only and only stores timetable data on the device.
 - Logging out removes the key, session, cache and raw debug responses.
+- The privacy policy and terms of use are part of the app (German and English). They must be accepted
+  once at the first start. The choice is remembered across restarts and updates; the app asks again only
+  when a release changes the text (`LegalTerms.VERSION`). They stay readable under More → Privacy and terms.
 
 ## Licence and disclaimer
 
