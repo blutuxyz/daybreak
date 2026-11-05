@@ -63,6 +63,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.update.UpdateFailure
 import com.bdersolutions.daybreak.data.update.UpdateManager
 import com.bdersolutions.daybreak.data.update.UpdateState
@@ -85,6 +87,15 @@ fun UpdatesScreen(
 
     // Back from Android's "install unknown apps" screen: the permission may have changed.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { canInstall = viewModel.canInstallUpdates() }
+
+    // A swell when a download has just finished; opening the screen on an old download stays silent.
+    val haptics = LocalHaptics.current
+    val updateReady = state is UpdateState.Ready
+    var wasReady by remember { mutableStateOf(updateReady) }
+    LaunchedEffect(updateReady) {
+        if (updateReady && !wasReady) haptics.perform(HapticEvent.UPDATE_READY)
+        wasReady = updateReady
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshUpdateReleases()

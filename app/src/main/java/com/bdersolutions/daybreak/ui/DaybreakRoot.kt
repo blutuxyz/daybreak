@@ -80,6 +80,9 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import androidx.compose.runtime.CompositionLocalProvider
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.ui.absences.AbsencesScreen
 import com.bdersolutions.daybreak.ui.absences.AbsencesViewModel
@@ -120,23 +123,25 @@ fun DaybreakApp(
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
     val termsAccepted = TermsAcceptance.covers(acceptedVersion)
-    DaybreakTheme(settings = settings) {
-        // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
-        Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
-            if (accepted) {
-                DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
-            } else {
-                TermsGateScreen(
-                    isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
-                    onAccept = { container.termsStore.accept() },
-                    onLanguageChange = { language ->
-                        container.settingsRepository.setLanguage(language)
-                        container.lessonNotificationManager.ensureChannel()
-                        AppCompatDelegate.setApplicationLocales(
-                            LocaleListCompat.forLanguageTags(Locale.forLanguageTag(language.tag).toLanguageTag()),
-                        )
-                    },
-                )
+    CompositionLocalProvider(LocalHaptics provides container.haptics) {
+        DaybreakTheme(settings = settings) {
+            // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
+            Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
+                if (accepted) {
+                    DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
+                } else {
+                    TermsGateScreen(
+                        isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
+                        onAccept = { container.termsStore.accept() },
+                        onLanguageChange = { language ->
+                            container.settingsRepository.setLanguage(language)
+                            container.lessonNotificationManager.ensureChannel()
+                            AppCompatDelegate.setApplicationLocales(
+                                LocaleListCompat.forLanguageTags(Locale.forLanguageTag(language.tag).toLanguageTag()),
+                            )
+                        },
+                    )
+                }
             }
         }
     }
@@ -151,6 +156,13 @@ fun DaybreakRoot(
 ) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
+    // A swell when signing in succeeds. Opening the app while already signed in stays silent.
+    val haptics = LocalHaptics.current
+    var wasLoggedOut by remember { mutableStateOf(session == null) }
+    LaunchedEffect(session == null) {
+        if (session != null && wasLoggedOut) haptics.perform(HapticEvent.LOGIN_SUCCESS)
+        wasLoggedOut = session == null
+    }
     AnimatedContent(
         targetState = session,
         contentKey = { it?.studentId ?: 0L },
@@ -213,6 +225,7 @@ private fun LoggedInContent(
     var shownMainPage by remember { mutableStateOf(mainPage) }
     if (mainPage != null) shownMainPage = mainPage
     val context = LocalContext.current
+    val haptics = LocalHaptics.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -245,6 +258,7 @@ private fun LoggedInContent(
     }
 
     BackHandler(enabled = showDebug) {
+        haptics.perform(HapticEvent.BACK)
         showDebug = false
     }
 
@@ -252,7 +266,10 @@ private fun LoggedInContent(
         val debugViewModel: DebugViewModel = viewModel(factory = DebugViewModel.Factory(container))
         DebugScreen(
             viewModel = debugViewModel,
-            onBack = { showDebug = false },
+            onBack = {
+                haptics.perform(HapticEvent.BACK)
+                showDebug = false
+            },
         )
         return
     }
@@ -267,9 +284,11 @@ private fun LoggedInContent(
     )
 
     BackHandler(enabled = settingsPage != null) {
+        haptics.perform(HapticEvent.BACK)
         settingsPage = null
     }
     BackHandler(enabled = mainPage != null) {
+        haptics.perform(HapticEvent.BACK)
         mainPage = null
     }
 
@@ -282,7 +301,10 @@ private fun LoggedInContent(
             bottomBar = {
                 DaybreakBottomBar(
                     selectedTab = selectedTab,
-                    onSelect = { selectedTab = it },
+                    onSelect = {
+                        if (it != selectedTab) haptics.perform(HapticEvent.TAB_SWITCH)
+                        selectedTab = it
+                    },
                 )
             },
         ) { innerPadding ->
@@ -347,7 +369,10 @@ private fun LoggedInContent(
                 SettingsPageHost(
                     page = page,
                     viewModel = settingsViewModel,
-                    onBack = { settingsPage = null },
+                    onBack = {
+                        haptics.perform(HapticEvent.BACK)
+                        settingsPage = null
+                    },
                 )
             }
         }
@@ -364,7 +389,10 @@ private fun LoggedInContent(
                         key = "upcoming_${session.studentId}",
                         factory = UpcomingViewModel.Factory(container),
                     ),
-                    onBack = { mainPage = null },
+                    onBack = {
+                        haptics.perform(HapticEvent.BACK)
+                        mainPage = null
+                    },
                 )
 
                 MainPage.ACCOUNT -> AccountScreen(
@@ -373,7 +401,10 @@ private fun LoggedInContent(
                         key = "account_${session.studentId}",
                         factory = AccountViewModel.Factory(container),
                     ),
-                    onBack = { mainPage = null },
+                    onBack = {
+                        haptics.perform(HapticEvent.BACK)
+                        mainPage = null
+                    },
                 )
 
                 MainPage.MESSAGES -> MessagesScreen(
@@ -381,7 +412,10 @@ private fun LoggedInContent(
                         key = "messages_${session.studentId}",
                         factory = MessagesViewModel.Factory(container),
                     ),
-                    onBack = { mainPage = null },
+                    onBack = {
+                        haptics.perform(HapticEvent.BACK)
+                        mainPage = null
+                    },
                 )
 
                 null -> Unit

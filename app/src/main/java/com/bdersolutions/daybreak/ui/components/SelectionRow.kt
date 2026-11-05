@@ -22,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 
 /**
  * A single-choice row for lists in sheets and dialogs. The selected row is tinted and
@@ -35,6 +37,7 @@ fun SelectionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val haptics = LocalHaptics.current
     val interactionSource = remember { MutableInteractionSource() }
     val corner by rememberMorphCorner(
         interactionSource = interactionSource,
@@ -49,7 +52,10 @@ fun SelectionRow(
         MaterialTheme.colorScheme.onSurface
     }
     Surface(
-        onClick = onClick,
+        onClick = {
+            if (!selected) haptics.perform(HapticEvent.SELECT)
+            onClick()
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(corner),
         color = if (selected) {

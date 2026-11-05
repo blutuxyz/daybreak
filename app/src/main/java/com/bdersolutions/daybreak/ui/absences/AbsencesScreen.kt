@@ -50,11 +50,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -105,6 +110,10 @@ fun AbsencesScreen(
     // Owned here: the list shows the selected card's absences, and deleting the visible category
     // first moves the pager off its card.
     val pagerState = rememberPagerState(pageCount = { 1 + categories.categories.size })
+    val haptics = LocalHaptics.current
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.drop(1).collect { haptics.perform(HapticEvent.PAGE_SNAP) }
+    }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

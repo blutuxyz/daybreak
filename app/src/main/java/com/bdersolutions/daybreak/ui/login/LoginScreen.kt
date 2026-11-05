@@ -97,6 +97,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.settings.AppLanguage
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.untis.UntisChild
 import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.ui.components.rememberPressCorner
@@ -176,6 +178,11 @@ fun LoginScreen(
             errorShake.animateTo(-10f, animationSpec = tween(45))
         }
         errorShake.animateTo(0f, animationSpec = tween(45))
+    }
+    // The head shake is felt as well as seen.
+    val haptics = LocalHaptics.current
+    LaunchedEffect(state.error) {
+        if (state.error != null) haptics.perform(HapticEvent.ERROR)
     }
 
     Scaffold(

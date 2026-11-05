@@ -5,6 +5,8 @@ import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
+import com.bdersolutions.daybreak.data.haptics.Haptics
+import com.bdersolutions.daybreak.data.haptics.VibratorHapticOutput
 import com.bdersolutions.daybreak.data.legal.TermsStore
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
 import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
@@ -26,6 +28,13 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val settingsRepository = SettingsRepository(appContext)
+
+    // One haptics engine for the whole app. It reads the settings on every call, so edits apply at once.
+    val haptics = Haptics(
+        settings = { settingsRepository.current().haptics },
+        output = VibratorHapticOutput(appContext),
+        systemAllows = { VibratorHapticOutput.systemTouchFeedbackOn(appContext) },
+    )
     val termsStore = TermsStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(appContext, secretVault)

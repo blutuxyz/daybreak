@@ -130,6 +130,9 @@ import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.components.rememberPressScale
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
+import androidx.compose.material.icons.outlined.Vibration
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -185,6 +188,12 @@ fun SettingsScreen(
             accentLabel(settings.accent)
         },
     ).joinToString(" · ")
+    val hapticsSummary = if (settings.haptics.enabled) {
+        hapticPresetLabel(settings.haptics.preset) + " · " +
+            stringResource(R.string.haptics_percent, kotlin.math.round(settings.haptics.intensity * 100f).toInt())
+    } else {
+        off
+    }
     val timetableSummary = stringResource(R.string.settings_start_view) + ": " +
         startViewLabel(settings.startView)
     val syncSummary = if (settings.syncEnabled) {
@@ -300,6 +309,13 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_notifications),
                         subtitle = if (settings.notificationsEnabled) on else off,
                         onClick = { onOpenPage(SettingsPage.NOTIFICATIONS) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.Vibration,
+                        title = stringResource(R.string.settings_haptics),
+                        subtitle = hapticsSummary,
+                        onClick = { onOpenPage(SettingsPage.HAPTICS) },
                     )
                 }
             }
@@ -632,9 +648,13 @@ internal fun SpringSwitch(
         scale.snapTo(0.9f)
         scale.animateTo(1f, animationSpec = spring)
     }
+    val haptics = LocalHaptics.current
     Switch(
         checked = checked,
-        onCheckedChange = onCheckedChange,
+        onCheckedChange = { value ->
+            haptics.perform(if (value) HapticEvent.TOGGLE_ON else HapticEvent.TOGGLE_OFF)
+            onCheckedChange(value)
+        },
         modifier = Modifier.graphicsLayer {
             scaleX = scale.value
             scaleY = scale.value
@@ -694,11 +714,15 @@ internal fun SettingsRow(
     // items. The row gives the same spring press feedback as the timetable blocks.
     val interactionSource = remember { MutableInteractionSource() }
     val pressScale by rememberPressScale(interactionSource)
+    val haptics = LocalHaptics.current
     val clickModifier = if (onClick != null) {
         Modifier.clickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
-            onClick = onClick,
+            onClick = {
+                haptics.perform(HapticEvent.TAP)
+                onClick()
+            },
         )
     } else {
         Modifier
@@ -814,11 +838,15 @@ internal fun <T> SegmentChoice(
     selected: T,
     onSelect: (T) -> Unit,
 ) {
+    val haptics = LocalHaptics.current
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (value, label) ->
             SegmentedButton(
                 selected = value == selected,
-                onClick = { onSelect(value) },
+                onClick = {
+                    if (value != selected) haptics.perform(HapticEvent.SELECT)
+                    onSelect(value)
+                },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                 label = {
                     Text(
@@ -840,6 +868,7 @@ internal fun AccentSwatch(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val haptics = LocalHaptics.current
     val scale by animateFloatAsState(
         targetValue = if (selected) 1f else 0.84f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -859,7 +888,10 @@ internal fun AccentSwatch(
             .width(64.dp)
             .selectable(
                 selected = selected,
-                onClick = onClick,
+                onClick = {
+                    if (!selected) haptics.perform(HapticEvent.SELECT)
+                    onClick()
+                },
                 role = Role.RadioButton,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,

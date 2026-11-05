@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.ui.settings.SettingsPageScaffold
 import com.bdersolutions.daybreak.ui.toUserMessage
 import com.bdersolutions.daybreak.ui.upcoming.EmptyText
@@ -154,6 +156,11 @@ fun MessagesScreen(
             onDismissConfirm = viewModel::dismissConfirm,
             onRetryRecipients = viewModel::loadRecipients,
         )
+    }
+
+    val haptics = LocalHaptics.current
+    LaunchedEffect(viewModel) {
+        viewModel.sentEvents.collect { haptics.perform(HapticEvent.MESSAGE_SENT) }
     }
 
     val activity = LocalContext.current

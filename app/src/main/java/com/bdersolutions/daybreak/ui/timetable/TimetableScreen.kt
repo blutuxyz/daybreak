@@ -78,7 +78,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,6 +90,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -211,6 +215,14 @@ fun TimetableScreen(
     )
     val pagerState = if (mode == 0) dayPager else weekPager
     val scope = rememberCoroutineScope()
+    // A detent tick each time a day or week settles into place, not while the finger drags.
+    val haptics = LocalHaptics.current
+    LaunchedEffect(dayPager) {
+        snapshotFlow { dayPager.settledPage }.drop(1).collect { haptics.perform(HapticEvent.PAGE_SNAP) }
+    }
+    LaunchedEffect(weekPager) {
+        snapshotFlow { weekPager.settledPage }.drop(1).collect { haptics.perform(HapticEvent.PAGE_SNAP) }
+    }
     val now = rememberNow()
     val selectedDate = if (mode == 0) {
         dayOrigin.plusDays(pagerState.currentPage.toLong())
@@ -251,6 +263,7 @@ fun TimetableScreen(
     val latestDate by rememberUpdatedState(selectedDate)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { error ->
+            haptics.perform(HapticEvent.ERROR)
             val result = snackbarHostState.showSnackbar(
                 message = error.toUserMessage(context),
                 actionLabel = retryLabel,
@@ -261,6 +274,7 @@ fun TimetableScreen(
     }
     LaunchedEffect(viewModel) {
         viewModel.refreshSucceeded.collect {
+            haptics.perform(HapticEvent.REFRESH_DONE)
             snackbarHostState.showSnackbar(context.getString(R.string.timetable_refreshed))
         }
     }
@@ -567,7 +581,7 @@ private fun DayPage(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    PullToRefreshBox(
+                    HapticPullToRefreshBox(
                         isRefreshing = status.isLoading,
                         onRefresh = onRetry,
                         modifier = Modifier
@@ -1305,7 +1319,7 @@ private fun WeekPage(
                         Spacer(Modifier.height(8.dp))
                     }
                     if (allLessons.isEmpty()) {
-                        PullToRefreshBox(
+                        HapticPullToRefreshBox(
                             isRefreshing = status.isLoading,
                             onRefresh = onRetry,
                             modifier = Modifier
@@ -1324,7 +1338,7 @@ private fun WeekPage(
                             weekStart = weekStart,
                             today = today,
                         )
-                        PullToRefreshBox(
+                        HapticPullToRefreshBox(
                             isRefreshing = status.isLoading,
                             onRefresh = onRetry,
                             modifier = Modifier
@@ -1895,7 +1909,7 @@ private fun LoadingPane() {
 @Composable
 private fun ErrorPane(message: String, isRefreshing: Boolean, onRetry: () -> Unit) {
     // Pull-to-refresh also works from the error state, so a retry does not need the button.
-    PullToRefreshBox(
+    HapticPullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRetry,
         modifier = Modifier.fillMaxSize(),
@@ -2173,6 +2187,8 @@ private fun LessonDetailsSheet(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val haptics = LocalHaptics.current
+    LaunchedEffect(lesson.id) { haptics.perform(HapticEvent.SHEET_OPEN) }
     val locale = currentLocale(context)
     val subject = lesson.subject.ifBlank { stringResource(R.string.lesson_unknown_subject) }
     val tone = rememberSubjectTone(subject)
