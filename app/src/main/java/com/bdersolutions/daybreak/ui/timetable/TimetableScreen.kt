@@ -2,7 +2,6 @@ package com.bdersolutions.daybreak.ui.timetable
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -23,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -68,6 +68,7 @@ import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -102,6 +103,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -531,6 +534,7 @@ private fun DayPage(
     }
     val isToday = date == today
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
+    var overflowShown by remember { mutableStateOf<TimelineOverflow?>(null) }
     val examDates = remember(cache.exams) { cache.exams.map { it.date }.toSet() }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -542,7 +546,9 @@ private fun DayPage(
                 onRetry = onRetry,
             )
             else -> {
-                val blocks = remember(lessons) { layoutTimeline(mergeLessons(lessons)) }
+                val layout = remember(lessons, cache.exams) {
+                    layoutTimeline(mergeLessons(lessons), priority = { blockPriority(it, cache.exams) })
+                }
                 val range = remember(lessons) { timelineRange(lessons) }
                 val periodStarts = remember(week) {
                     periodStartsFor(week?.lessons.orEmpty())
@@ -589,7 +595,7 @@ private fun DayPage(
                                     .padding(bottom = 112.dp),
                             ) {
                                 DayTimeline(
-                                    blocks = blocks,
+                                    layout = layout,
                                     range = range,
                                     periodStarts = periodStarts,
                                     isToday = isToday,
@@ -598,12 +604,23 @@ private fun DayPage(
                                     exams = cache.exams,
                                     absences = cache.absences,
                                     onLessonClick = { selectedLesson = it },
+                                    onOverflowClick = { overflowShown = it },
                                 )
                             }
                         }
                     }
                 }
             }
+        }
+        overflowShown?.let { overflow ->
+            OverflowSheet(
+                overflow = overflow,
+                onLessonClick = {
+                    overflowShown = null
+                    selectedLesson = it
+                },
+                onDismiss = { overflowShown = null },
+            )
         }
         selectedLesson?.let { lesson ->
             if (lesson.isHoliday) {
@@ -823,7 +840,7 @@ private fun NowLine(
 
 @Composable
 private fun DayTimeline(
-    blocks: List<TimelineBlock>,
+    layout: TimelineLayout,
     range: TimelineRange,
     periodStarts: List<LocalTime>,
     isToday: Boolean,
@@ -832,7 +849,9 @@ private fun DayTimeline(
     exams: List<UntisExam>,
     absences: List<UntisAbsence>,
     onLessonClick: (UntisLesson) -> Unit,
+    onOverflowClick: (TimelineOverflow) -> Unit,
 ) {
+    val blocks = layout.visible
     val pxPerMinute = 1.5.dp
     val contentHeight = (pxPerMinute.value * range.minutes).dp
     Row(
@@ -860,7 +879,7 @@ private fun DayTimeline(
                 pxPerMinute = pxPerMinute,
             )
             FreeGapBands(
-                blocks = blocks,
+                blocks = layout.all,
                 range = range,
                 pxPerMinute = pxPerMinute,
             )
@@ -914,6 +933,14 @@ private fun DayTimeline(
                     )
                 }
             }
+            OverflowChips(
+                overflows = layout.overflows,
+                range = range,
+                pxPerMinute = pxPerMinute,
+                chipHeight = 26.dp,
+                chipWidth = 40.dp,
+                onClick = onOverflowClick,
+            )
             if (isToday && nowTime >= range.start && nowTime < range.end) {
                 NowLine(range = range, now = nowTime, pxPerMinute = pxPerMinute)
             }
@@ -1258,6 +1285,7 @@ private fun WeekPage(
     }
     val contentHeight = (pxPerMinute.value * range.minutes).dp
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
+    var overflowShown by remember { mutableStateOf<TimelineOverflow?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -1337,6 +1365,7 @@ private fun WeekPage(
                                                 exams = cache.exams,
                                                 absences = cache.absences,
                                                 onLessonClick = { selectedLesson = it },
+                                                onOverflowClick = { overflowShown = it },
                                                 modifier = Modifier.weight(1f),
                                             )
                                         }
@@ -1354,6 +1383,16 @@ private fun WeekPage(
                     }
                 }
             }
+        }
+        overflowShown?.let { overflow ->
+            OverflowSheet(
+                overflow = overflow,
+                onLessonClick = {
+                    overflowShown = null
+                    selectedLesson = it
+                },
+                onDismiss = { overflowShown = null },
+            )
         }
         selectedLesson?.let { lesson ->
             if (lesson.isHoliday) {
@@ -1447,10 +1486,14 @@ private fun WeekDayColumn(
     exams: List<UntisExam>,
     absences: List<UntisAbsence>,
     onLessonClick: (UntisLesson) -> Unit,
+    onOverflowClick: (TimelineOverflow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isToday = date == today
-    val blocks = remember(lessons) { layoutTimeline(mergeLessons(lessons)) }
+    val layout = remember(lessons, exams) {
+        layoutTimeline(mergeLessons(lessons), priority = { blockPriority(it, exams) })
+    }
+    val blocks = layout.visible
     val nowTime = now.toLocalTime()
     Box(
         modifier = modifier
@@ -1503,6 +1546,14 @@ private fun WeekDayColumn(
                     )
                 }
             }
+            OverflowChips(
+                overflows = layout.overflows,
+                range = range,
+                pxPerMinute = pxPerMinute,
+                chipHeight = 20.dp,
+                chipWidth = 28.dp,
+                onClick = onOverflowClick,
+            )
         }
         Box(
             modifier = Modifier
@@ -1510,6 +1561,160 @@ private fun WeekDayColumn(
                 .width(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         )
+    }
+}
+
+/**
+ * Which lessons to keep when more run at once than fit beside each other: exams first, then
+ * substitutions, then cancelled lessons, then the rest.
+ */
+private fun blockPriority(block: TimelineBlock, exams: List<UntisExam>): Int = when {
+    examFor(block.lesson, exams) != null -> 4
+    block.hasSubstitution && !block.isCancelled -> 3
+    block.isCancelled -> 2
+    else -> 1
+}
+
+/** One "+N" chip per run of lessons that did not fit, near the top of where the run starts. */
+@Composable
+private fun BoxScope.OverflowChips(
+    overflows: List<TimelineOverflow>,
+    range: TimelineRange,
+    pxPerMinute: Dp,
+    chipHeight: Dp,
+    chipWidth: Dp,
+    onClick: (TimelineOverflow) -> Unit,
+) {
+    overflows.forEach { overflow ->
+        val top = pxPerMinute * minutesBetween(range.start, overflow.start)
+        // The bottom of the run's first 50 minutes: the text of a block sits at its top, so the chip
+        // covers the emptier part.
+        val slot = minOf(minutesBetween(overflow.start, overflow.end), 50)
+        val y = maxOf(top, top + pxPerMinute * slot - chipHeight - 3.dp)
+        val count = overflow.hidden.size
+        val description = stringResource(R.string.timetable_overflow_description, count)
+        Surface(
+            onClick = { onClick(overflow) },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shadowElevation = 2.dp,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = (-2).dp, y = y)
+                .size(width = chipWidth, height = chipHeight)
+                .semantics { contentDescription = description },
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Text(
+                    text = "+$count",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = if (chipHeight > 22.dp) 13.sp else 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** Every lesson that runs in the span of a "+N" chip, to pick one from. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OverflowSheet(
+    overflow: TimelineOverflow,
+    onLessonClick: (UntisLesson) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.timetable_overflow_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = "${formatTime(overflow.start)} – ${formatTime(overflow.end)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            overflow.concurrent.forEach { block ->
+                OverflowRow(block = block, onClick = { onLessonClick(block.lesson) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverflowRow(block: TimelineBlock, onClick: () -> Unit) {
+    val lesson = block.lesson
+    val subject = lesson.subject.ifBlank { stringResource(R.string.lesson_unknown_subject) }
+    val tone = rememberSubjectTone(subject)
+    val cancelled = block.isCancelled
+    val detail = listOf(lesson.room, lesson.teacher).filter { it.isNotBlank() }.joinToString(" · ")
+    val status = when {
+        cancelled -> stringResource(R.string.lesson_cancelled)
+        block.hasSubstitution -> stringResource(R.string.lesson_substitution_short)
+        else -> null
+    }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = tone.container,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(tone.accent, CircleShape),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = subject,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = if (cancelled) TextDecoration.LineThrough else TextDecoration.None,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOf("${formatTime(block.start)} – ${formatTime(block.end)}", detail)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (status != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
     }
 }
 
@@ -1837,49 +2042,6 @@ private fun periodStartsFor(lessons: List<UntisLesson>): List<LocalTime> {
     return collapsed
 }
 
-/**
- * Lays overlapping blocks out in side-by-side columns. Each cluster is processed
- * independently so an all-morning event can sit next to the single lessons that
- * run underneath it.
- */
-private fun layoutTimeline(blocks: List<TimelineBlock>): List<TimelineBlock> {
-    if (blocks.size <= 1) return blocks
-    val sorted = blocks.sortedWith(compareBy({ it.start }, { it.end }))
-    val result = mutableListOf<TimelineBlock>()
-    var cluster = mutableListOf<TimelineBlock>()
-    var clusterEnd = LocalTime.MIN
-
-    fun flush() {
-        if (cluster.isEmpty()) return
-        val columnEnds = mutableListOf<LocalTime>()
-        val placed = cluster.map { block ->
-            val freeColumn = columnEnds.indexOfFirst { !it.isAfter(block.start) }
-            val column = if (freeColumn == -1) {
-                columnEnds += block.end
-                columnEnds.lastIndex
-            } else {
-                columnEnds[freeColumn] = block.end
-                freeColumn
-            }
-            block.copy(column = column)
-        }
-        val count = columnEnds.size.coerceAtLeast(1)
-        result += placed.map { it.copy(columnCount = count) }
-        cluster = mutableListOf()
-        clusterEnd = LocalTime.MIN
-    }
-
-    for (block in sorted) {
-        if (cluster.isNotEmpty() && !block.start.isBefore(clusterEnd)) {
-            flush()
-        }
-        cluster += block
-        if (block.end > clusterEnd) clusterEnd = block.end
-    }
-    flush()
-    return result.sortedWith(compareBy({ it.start }, { it.column }))
-}
-
 private fun freeGaps(blocks: List<TimelineBlock>, range: TimelineRange): List<FreeGap> {
     var cursor = range.start
     val gaps = mutableListOf<FreeGap>()
@@ -2050,15 +2212,19 @@ private fun LessonDetailsSheet(
         lesson.date.format(DateTimeFormatter.ofPattern(pattern, locale))
             .replaceFirstChar { it.titlecase(locale) }
     }
-    // The sheet handles its own dismissal (scrim, swipe, back). The content does not scroll
-    // itself, so it cannot fight the sheet's drag gesture.
+    // One anchor only (fully expanded, or as tall as the content): with a half-height stop, content
+    // that changes size made the sheet jump between the two. The content scrolls when it is taller
+    // than the screen, and the sheet still closes by swiping down from the top.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp),
         ) {
@@ -2254,9 +2420,9 @@ private fun InfoNotice(text: String) {
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+        // No animated resize: the sheet around it sizes itself to its content, and animating the
+        // content made the sheet change height on every frame.
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
