@@ -355,4 +355,11 @@
     <string name="account_username">Username</string>
     <string name="account_messages">Notices</string>
     <string name="account_messages_empty">No notices today</string>
+    <string name="account_class_services">Class services</string>
+    <string name="class_services_hint">WebUntis only shows class services after a web sign-in. Your password is used for this request only and is not stored.</string>
+    <string name="class_services_password">Password</string>
+    <string name="class_services_show">Show</string>
+    <string name="class_services_hide">Hide</string>
+    <string name="class_services_empty">No class services in this period</string>
+    <string name="class_services_wrong_password">Sign-in failed. Check your password. Accounts with a second factor do not work here.</string>
 </resources>

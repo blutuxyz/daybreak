@@ -194,6 +194,67 @@ class UntisApi(
         return HomeworkParser.parse(result)
     }
 
+    /**
+     * The class services (Klassendienste) of the student's class. WebUntis only serves them to a
+     * web login, not to the mobile key, so this signs in with [password] for the length of one
+     * request and signs out again. The password is never stored or logged.
+     */
+    suspend fun fetchClassServices(
+        session: UntisSession,
+        password: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<UntisClassService> {
+        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        if (password.isBlank()) throw UntisAuthException("The password is empty.")
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+
+        val login = rpc.call(
+            server = safeServer,
+            school = session.school,
+            method = "authenticate",
+            params = JsonArray().apply {
+                add(JsonObject().apply {
+                    addProperty("user", session.username)
+                    addProperty("password", password)
+                    addProperty("client", "Daybreak")
+                })
+            },
+            // The response holds the web session id.
+            recordRaw = false,
+            path = "WebUntis/jsonrpc.do",
+        )
+        val sessionId = login.asJsonObjectOrNull()?.stringOrNull("sessionId")
+            ?: throw UntisAuthException("WebUntis did not start a session.")
+        val schoolCookie = java.util.Base64.getEncoder().encodeToString(session.school.toByteArray())
+        val cookie = "JSESSIONID=$sessionId; schoolname=\"_$schoolCookie\""
+        try {
+            val body = rpc.getRest(
+                server = safeServer,
+                path = "WebUntis/api/classreg/classservices",
+                query = mapOf(
+                    "startDate" to utisDate(startDate).toString(),
+                    "endDate" to utisDate(endDate).toString(),
+                ),
+                cookie = cookie,
+                label = "classservices",
+            )
+            return ClassServiceParser.parse(body)
+        } finally {
+            runCatching {
+                rpc.call(
+                    server = safeServer,
+                    school = session.school,
+                    method = "logout",
+                    params = JsonArray(),
+                    recordRaw = false,
+                    path = "WebUntis/jsonrpc.do",
+                    cookie = cookie,
+                )
+            }
+        }
+    }
+
     /** The school's notices (Mitteilungen) that are shown on [date]. */
     suspend fun fetchMessages(session: UntisSession, date: LocalDate): List<UntisMessage> {
         val safeServer = normalizeInputs(session.server, session.school, session.username)

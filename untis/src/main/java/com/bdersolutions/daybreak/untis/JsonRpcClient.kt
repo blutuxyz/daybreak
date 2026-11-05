@@ -24,11 +24,13 @@ internal class JsonRpcClient(
         method: String,
         params: JsonArray,
         recordRaw: Boolean = true,
+        path: String = "WebUntis/jsonrpc_intern.do",
+        cookie: String? = null,
     ): JsonElement = withContext(Dispatchers.IO) {
         val base = UntisEndpoints.normalizeServer(server)
         val url = base.toHttpUrl()
             .newBuilder()
-            .addPathSegments("WebUntis/jsonrpc_intern.do")
+            .addPathSegments(path)
             .addQueryParameter("school", school)
             .build()
 
@@ -43,6 +45,7 @@ internal class JsonRpcClient(
             .url(url)
             .header("Accept", "application/json")
             .header("User-Agent", "UntisMobileAndroid")
+            .apply { if (cookie != null) header("Cookie", cookie) }
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
@@ -109,6 +112,60 @@ internal class JsonRpcClient(
                 throw UntisNoDataException("WebUntis returned no data.")
             }
             result
+        }
+    }
+
+    /**
+     * GET on the school's WebUntis REST API with the cookie of a web session. The body goes to the
+     * debug log under [label]; the cookie never does.
+     */
+    suspend fun getRest(
+        server: String,
+        path: String,
+        query: Map<String, String>,
+        cookie: String,
+        label: String,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val url = UntisEndpoints.normalizeServer(server).toHttpUrl().newBuilder().apply {
+            addPathSegments(path.trim('/'))
+            query.forEach { (key, value) -> addQueryParameter(key, value) }
+        }.build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "UntisMobileAndroid")
+            .header("Cookie", cookie)
+            .get()
+            .build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the WebUntis server.", error)
+        }
+        response.use { received ->
+            val body = try {
+                received.body?.string().orEmpty()
+            } catch (error: IOException) {
+                throw UntisNetworkException("The server response could not be read.", error)
+            }
+            rawSink.onResponse(
+                method = label,
+                receivedAt = System.currentTimeMillis(),
+                body = body.take(MAX_RAW_BODY_CHARS),
+            )
+            if (received.code == 401 || received.code == 403) {
+                throw UntisAuthException("WebUntis rejected the login.")
+            }
+            if (!received.isSuccessful) {
+                throw UntisProtocolException("WebUntis returned HTTP ${received.code}.")
+            }
+            val root = runCatching { JsonParser.parseString(body) }.getOrNull()
+                ?: throw UntisParseException("WebUntis returned an invalid response.")
+            // A session that is not accepted answers 200 with a LOGIN_ERROR state.
+            if (root.asJsonObjectOrNull()?.stringOrNull("state") == "LOGIN_ERROR") {
+                throw UntisAuthException("WebUntis rejected the login.")
+            }
+            root
         }
     }
 

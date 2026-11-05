@@ -4,6 +4,7 @@ import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.untis.UntisAuthException
+import com.bdersolutions.daybreak.untis.UntisClassService
 import com.bdersolutions.daybreak.untis.UntisDirectory
 import com.bdersolutions.daybreak.untis.UntisElement
 import com.bdersolutions.daybreak.untis.UntisExam
@@ -54,6 +55,10 @@ class SchoolDataRepository(
 
     suspend fun homework(startDate: LocalDate, endDate: LocalDate): List<UntisHomework> =
         api.fetchHomework(requireSession(), startDate, endDate)
+
+    /** Signs in with [password] for this one request. The password is not kept. */
+    suspend fun classServices(password: String, startDate: LocalDate, endDate: LocalDate): List<UntisClassService> =
+        api.fetchClassServices(requireSession(), password, startDate, endDate)
 
     suspend fun messages(date: LocalDate): List<UntisMessage> =
         api.fetchMessages(requireSession(), date)
