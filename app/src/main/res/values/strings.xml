@@ -369,6 +369,7 @@
     <string name="messages_from">Von</string>
     <string name="messages_to">An</string>
     <string name="messages_unread">Ungelesen</string>
-    <string name="messages_attachments">Anhänge nur in WebUntis</string>
+    <string name="messages_attachments">Anhänge</string>
+    <string name="messages_attachments_hint">Herunterladen geht hier noch nicht. Öffne die Datei in WebUntis.</string>
     <string name="messages_unknown_person">Unbekannt</string>
 </resources>

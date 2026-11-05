@@ -16,7 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -42,6 +45,7 @@ import com.bdersolutions.daybreak.ui.toUserMessage
 import com.bdersolutions.daybreak.ui.upcoming.EmptyText
 import com.bdersolutions.daybreak.ui.upcoming.ErrorBlock
 import com.bdersolutions.daybreak.untis.MailFolder
+import com.bdersolutions.daybreak.untis.UntisAttachment
 import com.bdersolutions.daybreak.untis.UntisMail
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -249,15 +253,58 @@ private fun MailSheetContent(open: OpenMail, folder: MailFolder, locale: Locale)
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
-                if (mail.hasAttachments) {
-                    Spacer(Modifier.height(16.dp))
+                if (mail.attachments.isNotEmpty()) {
+                    Spacer(Modifier.height(20.dp))
                     Text(
                         text = stringResource(R.string.messages_attachments),
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    mail.attachments.forEach { file -> AttachmentRow(file) }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.messages_attachments_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (mail.hasAttachments) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.messages_attachments_hint),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentRow(file: UntisAttachment) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.AttachFile,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = file.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

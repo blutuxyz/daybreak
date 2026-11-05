@@ -69,4 +69,17 @@ class MailParserTest {
         assertNull(MailParser.parseMessage(JsonParser.parseString("[]")))
         assertTrue(MailParser.parseList(MailFolder.INBOX, JsonParser.parseString("[]")).isEmpty())
     }
+
+    @Test
+    fun readsTheNamesOfStorageAttachments() {
+        val json = JsonParser.parseString(
+            """{"id":9,"subject":"S","content":"x","hasAttachments":true,"attachments":[],"blobAttachment":null,""" +
+                """"storageAttachments":[{"id":"abc","name":"Aufgabe.pdf"},{"id":"def"}]}""",
+        )
+
+        val mail = MailParser.parseMessage(json)!!
+
+        assertEquals(listOf(UntisAttachment("abc", "Aufgabe.pdf")), mail.attachments)
+    }
+
 }

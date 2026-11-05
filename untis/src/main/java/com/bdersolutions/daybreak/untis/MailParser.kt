@@ -41,8 +41,20 @@ internal object MailParser {
             sentAt = parseTime(obj.stringOrNull("sentDateTime", "lastModifiedDateTime", "creationDateTime")),
             read = obj.booleanOrNull("isMessageRead") ?: true,
             hasAttachments = obj.booleanOrNull("hasAttachments") ?: false,
+            attachments = parseAttachments(obj),
         )
     }
+
+    /** Attached files sit in `storageAttachments` (id and name); `attachments` has the same shape. */
+    private fun parseAttachments(obj: JsonObject): List<UntisAttachment> =
+        listOf("storageAttachments", "attachments").flatMap { key ->
+            obj.arrayOrNull(key)?.mapNotNull { element ->
+                val file = element.asJsonObjectOrNull() ?: return@mapNotNull null
+                val name = file.stringOrNull("name", "fileName")?.trim().orEmpty()
+                if (name.isBlank()) return@mapNotNull null
+                UntisAttachment(id = file.stringOrNull("id").orEmpty(), name = name)
+            }.orEmpty()
+        }
 
     private fun parsePerson(obj: JsonObject): UntisMailPerson? {
         val name = obj.stringOrNull("displayName", "name")?.trim().orEmpty()

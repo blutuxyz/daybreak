@@ -180,6 +180,12 @@ data class UntisMailPerson(
     val name: String,
 )
 
+/** A file attached to a message. [id] is the storage id WebUntis gives it. */
+data class UntisAttachment(
+    val id: String,
+    val name: String,
+)
+
 /**
  * One message of the message box. Lists only carry a [preview]; [content] is filled when a single
  * message is loaded.
@@ -194,4 +200,5 @@ data class UntisMail(
     val sentAt: LocalDateTime? = null,
     val read: Boolean = true,
     val hasAttachments: Boolean = false,
+    val attachments: List<UntisAttachment> = emptyList(),
 )
