@@ -2,11 +2,13 @@ import { ApkCache } from './apk-cache.js';
 import { loadConfig } from './config.js';
 import { ReleaseService } from './releases.js';
 import { buildServer } from './server.js';
+import { SupportLedger } from './support.js';
 
 const config = loadConfig();
 const releases = new ReleaseService({ config });
 const apks = new ApkCache({ config });
-const { app, warm } = buildServer({ config, releases, apks, logger: true });
+const support = new SupportLedger({ config });
+const { app, warm } = buildServer({ config, releases, apks, support, logger: true });
 
 try {
   await listen(config.host);

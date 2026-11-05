@@ -29,5 +29,12 @@ export function loadConfig(env = process.env) {
     apkPattern: new RegExp(env.APK_ASSET_PATTERN ?? '\\.apk$', 'i'),
     /** How many APK versions to keep on disk. */
     keepApks: Number(env.KEEP_APKS ?? 3),
+    /**
+     * Optional. The verification token from Ko-fi (Settings > API > Webhooks). With it the server
+     * accepts Ko-fi's payment notifications on POST /v1/kofi; without it that route does not exist.
+     */
+    kofiToken: env.KOFI_VERIFICATION_TOKEN || undefined,
+    /** The smallest payment that unlocks "Hide this popup", in whatever currency Ko-fi reports. */
+    supportMinAmount: Number(env.SUPPORT_MIN_AMOUNT ?? 1),
   };
 }

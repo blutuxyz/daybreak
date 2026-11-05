@@ -65,20 +65,22 @@ class SupportPromptPolicyTest {
         val shown = SupportPromptPolicy.afterShown(opened(10), today = 110)
         assertEquals(1, shown.shownCount)
         assertFalse(SupportPromptPolicy.shouldShow(shown, today = 110))
-        assertFalse(SupportPromptPolicy.shouldShow(shown, today = 110 + SupportPromptPolicy.REPEAT_AFTER_DAYS - 1))
-        assertTrue(SupportPromptPolicy.shouldShow(shown, today = 110 + SupportPromptPolicy.REPEAT_AFTER_DAYS))
+        assertFalse(SupportPromptPolicy.shouldShow(shown, today = 110L + SupportPromptPolicy.REPEAT_AFTER_DAYS - 1))
+        assertTrue(SupportPromptPolicy.shouldShow(shown, today = 110L + SupportPromptPolicy.REPEAT_AFTER_DAYS))
     }
 
     @Test
-    fun neverMoreThanThreeTimes() {
+    fun keepsComingBackEveryMonthUntilItIsPaid() {
         var state = opened(10)
         var day = 110L
-        repeat(SupportPromptPolicy.MAX_PROMPTS) {
+        repeat(12) {
             assertTrue(SupportPromptPolicy.shouldShow(state, day))
             state = SupportPromptPolicy.afterShown(state, day)
+            assertFalse(SupportPromptPolicy.shouldShow(state, day + 1))
             day += SupportPromptPolicy.REPEAT_AFTER_DAYS
         }
-        assertFalse(SupportPromptPolicy.shouldShow(state, day + 1000))
+        assertTrue(SupportPromptPolicy.shouldShow(state, day))
+        assertFalse(SupportPromptPolicy.shouldShow(SupportPromptPolicy.afterPaid(state), day))
     }
 
     @Test
@@ -86,6 +88,48 @@ class SupportPromptPolicyTest {
         val state = SupportPromptPolicy.afterOptOut(opened(10))
         assertTrue(state.optedOut)
         assertFalse(SupportPromptPolicy.shouldShow(state, today = 10_000))
+    }
+
+    @Test
+    fun aConfirmedPaymentStopsItForGood() {
+        val state = SupportPromptPolicy.afterPaid(opened(10))
+        assertTrue(state.paid)
+        assertFalse(SupportPromptPolicy.shouldShow(state, today = 10_000))
+    }
+
+    @Test
+    fun anUnlockCodeHasTheFormatTheServerExpects() {
+        repeat(200) {
+            val code = SupportCode.generate()
+            assertTrue(code, SupportCode.isValid(code))
+        }
+    }
+
+    @Test
+    fun anUnlockCodeNeverUsesLookAlikeCharacters() {
+        repeat(200) {
+            val body = SupportCode.generate().removePrefix("DB-").replace("-", "")
+            assertFalse(body, body.any { it in "01ILO" })
+        }
+    }
+
+    @Test
+    fun malformedUnlockCodesAreRejected() {
+        assertFalse(SupportCode.isValid(""))
+        assertFalse(SupportCode.isValid("DB-K7M2-9QX"))
+        assertFalse(SupportCode.isValid("DB-K7M2-9QX0"))
+        assertFalse(SupportCode.isValid("db-k7m2-9qxp"))
+        assertTrue(SupportCode.isValid("DB-K7M2-9QXP"))
+    }
+
+    @Test
+    fun theServerAnswerIsReadStrictly() {
+        assertEquals(PaymentCheck.PAID, SupportApi.parse("""{"paid":true}"""))
+        assertEquals(PaymentCheck.NOT_FOUND, SupportApi.parse("""{"paid":false}"""))
+        assertEquals(PaymentCheck.UNAVAILABLE, SupportApi.parse("""{"paid":"true"}"""))
+        assertEquals(PaymentCheck.UNAVAILABLE, SupportApi.parse("""{"ok":true}"""))
+        assertEquals(PaymentCheck.UNAVAILABLE, SupportApi.parse("<html>"))
+        assertEquals(PaymentCheck.UNAVAILABLE, SupportApi.parse(null))
     }
 
     @Test

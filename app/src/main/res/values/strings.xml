@@ -438,10 +438,10 @@
     <string name="legal_privacy_body">• Daybreak hat kein Benutzerkonto beim Entwickler.\n• Es gibt keine Werbung, keine Analyse- oder Tracking-Dienste und keine automatische Fehlerübermittlung.\n• Deine Daten gehen nur an den WebUntis-Server deiner Schule und bleiben sonst auf deinem Gerät.\n• Dein Passwort speichert die App nie.</string>
 
     <string name="legal_stored_title">Was auf deinem Gerät gespeichert wird</string>
-    <string name="legal_stored_body">• Anmeldedaten: Server, Schule und Benutzername der Schule sowie der Untis-Zugangsschlüssel. Der Schlüssel wird mit einem Schlüssel aus dem Android Keystore verschlüsselt. Wenn du dich mit Passwort anmeldest, wird das Passwort einmal an WebUntis gesendet, um den Zugangsschlüssel zu holen, und danach verworfen.\n• Schuldaten: Stundenplan, Prüfungen, Abwesenheiten und weitere Angaben, die WebUntis für dich liefert, werden zwischengespeichert, damit die App auch ohne Netz funktioniert.\n• Einstellungen, zum Beispiel Aussehen, Sprache und eigene Farben.\n• Debug-Protokoll: Die letzten Rohantworten von WebUntis, nur zur Fehlersuche und nur auf deinem Gerät. Passwörter und Schlüssel stehen nicht darin.\n\nBeim Abmelden werden Schlüssel, Sitzung, Zwischenspeicher und Debug-Protokoll gelöscht. Wenn du die App deinstallierst, wird alles entfernt. Die Daten sind von der Android-Datensicherung ausgenommen.</string>
+    <string name="legal_stored_body">• Anmeldedaten: Server, Schule und Benutzername der Schule sowie der Untis-Zugangsschlüssel. Der Schlüssel wird mit einem Schlüssel aus dem Android Keystore verschlüsselt. Wenn du dich mit Passwort anmeldest, wird das Passwort einmal an WebUntis gesendet, um den Zugangsschlüssel zu holen, und danach verworfen.\n• Schuldaten: Stundenplan, Prüfungen, Abwesenheiten und weitere Angaben, die WebUntis für dich liefert, werden zwischengespeichert, damit die App auch ohne Netz funktioniert.\n• Einstellungen, zum Beispiel Aussehen, Sprache und eigene Farben.\n• Support: ein zufälliger Freischalt-Code für das Support-Popup und die Angabe, ob eine Zahlung dazu bestätigt wurde.\n• Debug-Protokoll: Die letzten Rohantworten von WebUntis, nur zur Fehlersuche und nur auf deinem Gerät. Passwörter und Schlüssel stehen nicht darin.\n\nBeim Abmelden werden Schlüssel, Sitzung, Zwischenspeicher und Debug-Protokoll gelöscht. Wenn du die App deinstallierst, wird alles entfernt. Die Daten sind von der Android-Datensicherung ausgenommen.</string>
 
     <string name="legal_sent_title">Wohin Daten gesendet werden</string>
-    <string name="legal_sent_body">• WebUntis-Server deiner Schule: Für Stundenplan, Abwesenheiten, Prüfungen, Hausaufgaben, Nachrichten und Mitteilungen fragt die App den Server deiner Schule über HTTPS ab. Schreibst du eine Nachricht an eine Lehrkraft, geht ihr Inhalt an diesen Server. Für diese Daten gilt die Datenschutzerklärung deiner Schule und von Untis, nicht die des Entwicklers.\n• Anhänge: Lädst du den Anhang einer Nachricht herunter, holt die App ihn von der Speicheradresse, die WebUntis dafür nennt.\n• Update-Server: Ist die Update-Funktion in deiner Version aktiv, fragt die App den Update-Server des Entwicklers nach neuen Versionen und lädt Updates von dort. Dabei sieht der Server technisch bedingt deine IP-Adresse. Anmeldedaten oder Schuldaten werden nicht gesendet.\n• QR-Code scannen: Das übernimmt der Code-Scanner von Google Play Services auf deinem Gerät. Daybreak speichert kein Kamerabild.\n\nDer Entwickler betreibt keinen Server, der deine Schuldaten empfängt, und kann sie nicht einsehen.</string>
+    <string name="legal_sent_body">• WebUntis-Server deiner Schule: Für Stundenplan, Abwesenheiten, Prüfungen, Hausaufgaben, Nachrichten und Mitteilungen fragt die App den Server deiner Schule über HTTPS ab. Schreibst du eine Nachricht an eine Lehrkraft, geht ihr Inhalt an diesen Server. Für diese Daten gilt die Datenschutzerklärung deiner Schule und von Untis, nicht die des Entwicklers.\n• Anhänge: Lädst du den Anhang einer Nachricht herunter, holt die App ihn von der Speicheradresse, die WebUntis dafür nennt.\n• Update-Server: Ist die Update-Funktion in deiner Version aktiv, fragt die App den Update-Server des Entwicklers nach neuen Versionen und lädt Updates von dort. Dabei sieht der Server technisch bedingt deine IP-Adresse. Anmeldedaten oder Schuldaten werden nicht gesendet.\n• Zahlungsprüfung: Tippst du im Support-Popup auf „Zahlung prüfen“, sendet die App den zufälligen Freischalt-Code an den Update-Server des Entwicklers, um zu erfahren, ob dazu eine Ko-fi-Zahlung eingegangen ist. Dabei sieht der Server technisch bedingt deine IP-Adresse. Der Code ist nicht mit deinen Schuldaten verknüpft. Zahlst du bei Ko-fi, gelten dort die Datenschutzbestimmungen von Ko-fi; der Update-Server speichert aus einer Zahlung nur Code, Betrag, Währung, Zeitpunkt und Transaktionsnummer, nicht Name, E-Mail-Adresse oder Nachricht.\n• QR-Code scannen: Das übernimmt der Code-Scanner von Google Play Services auf deinem Gerät. Daybreak speichert kein Kamerabild.\n\nDer Entwickler betreibt keinen Server, der deine Schuldaten empfängt, und kann sie nicht einsehen.</string>
 
     <string name="legal_rights_title">Deine Rechte</string>
     <string name="legal_rights_body">Der Entwickler speichert keine personenbezogenen Daten von dir. Du kannst die Daten auf deinem Gerät jederzeit selbst löschen, indem du dich abmeldest oder die App deinstallierst. Für Auskunft, Berichtigung oder Löschung der Daten in WebUntis wende dich an deine Schule, die dafür verantwortlich ist.\n\nDie Verarbeitung auf deinem Gerät beruht auf deiner Zustimmung, die du hier gibst. Du kannst sie widerrufen, indem du die App nicht mehr nutzt und deinstallierst.</string>
@@ -527,10 +527,30 @@
     <!-- Support -->
     <string name="settings_support">Daybreak unterstützen</string>
     <string name="settings_support_desc">Spendiere einen Kaffee auf Ko-fi</string>
+    <string name="settings_support_button">Unterstütze mich auf Ko-fi</string>
+    <string name="settings_support_hide">Diesen Button ausblenden</string>
+    <string name="settings_support_hide_note">Dieser Button verschwindet, sobald du auf Ko-fi zahlst.</string>
     <string name="support_title">Gefällt dir Daybreak?</string>
     <string name="support_body">Daybreak ist kostenlos und ohne Werbung. Wenn dir die App hilft, kannst du die Entwicklung mit einem Kaffee auf Ko-fi unterstützen. Alle Funktionen bleiben auch ohne Spende frei.</string>
     <string name="support_privacy">Der Link öffnet sich im Browser. Die App sendet dabei keine Daten von dir.</string>
     <string name="support_action">Auf Ko-fi unterstützen</string>
     <string name="support_later">Vielleicht später</string>
     <string name="support_never">Nicht mehr fragen</string>
+    <string name="support_hide">Dieses Popup ausblenden</string>
+    <string name="support_hide_title">Popup ausblenden</string>
+    <string name="support_hide_body">Das Popup verschwindet für immer, sobald du Daybreak einmalig mit einem Kaffee (oder mehr) auf Ko-fi unterstützt. Daybreak finanziert sich so; alle Funktionen bleiben auch ohne Spende frei.</string>
+    <string name="support_hide_code_label">Dein Freischalt-Code</string>
+    <string name="support_hide_copy">Kopieren</string>
+    <string name="support_hide_copied">Kopiert</string>
+    <string name="support_hide_steps">1. Kopiere den Code. 2. Öffne Ko-fi, spende und füge den Code in das Nachrichtenfeld ein. 3. Komm zurück und tippe auf „Zahlung prüfen“.</string>
+    <string name="support_hide_open">Ko-fi öffnen</string>
+    <string name="support_hide_check">Zahlung prüfen</string>
+    <string name="support_hide_checking">Prüfe …</string>
+    <string name="support_hide_not_found">Zu diesem Code ist noch keine Zahlung eingegangen. Hast du den Code in die Nachricht geschrieben? Es kann ein paar Minuten dauern, dann tippe erneut.</string>
+    <string name="support_hide_offline">Der Server ist gerade nicht erreichbar. Versuche es später noch einmal.</string>
+    <string name="support_hide_privacy">Beim Prüfen sendet die App nur diesen Code an den Daybreak-Server, sonst nichts.</string>
+    <string name="support_hide_back">Zurück</string>
+    <string name="support_thanks_title">Danke dir!</string>
+    <string name="support_thanks_body">Deine Zahlung ist angekommen. Das Popup erscheint nicht mehr. Danke, dass du Daybreak unterstützt.</string>
+    <string name="support_thanks_done">Fertig</string>
 </resources>

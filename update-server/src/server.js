@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
 import { pickLanguage, renderPage } from './page.js';
+import { RateLimiter, extractCode, normalizeCode, parseKofiBody, sameSecret } from './support.js';
 import { isSafeTag } from './version.js';
 
 /**
@@ -14,9 +15,18 @@ import { isSafeTag } from './version.js';
  *   GET  /v1/releases       the release history with changelogs (?limit=, default 20)
  *   GET  /v1/apk/:tag       the APK of a release; supports Range for resuming a download
  *   POST /v1/refresh        asks GitHub right now (needs REFRESH_TOKEN); CI calls it after a release
+ *   POST /v1/kofi           Ko-fi's webhook: a payment whose message holds an unlock code (needs
+ *                           KOFI_VERIFICATION_TOKEN)
+ *   GET  /v1/support/status ?code=DB-XXXX-XXXX  { paid } whether that unlock code was paid for
  */
-export function buildServer({ config, releases, apks, logger = false }) {
+export function buildServer({ config, releases, apks, support, logger = false, now = () => Date.now() }) {
   const app = Fastify({ logger, trustProxy: true });
+
+  // Ko-fi posts a form ("data=<json>"). Reading it needs no extra package.
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 65_536 }, (_, body, done) => {
+    done(null, Object.fromEntries(new URLSearchParams(body)));
+  });
+  const statusLimiter = new RateLimiter({ limit: 30, windowMs: 60_000, now });
 
   const baseUrl = (request) => config.publicUrl ?? `${request.protocol}://${request.host}`;
 
@@ -180,6 +190,38 @@ export function buildServer({ config, releases, apks, logger = false }) {
       request.log.error(error);
       return reply.code(502).send({ error: 'upstream_unavailable' });
     }
+  });
+
+  app.post('/v1/kofi', async (request, reply) => {
+    if (!config.kofiToken || !support) return reply.code(404).send({ error: 'not_found' });
+    const payment = parseKofiBody(request.body);
+    if (!payment) return reply.code(400).send({ error: 'bad_request' });
+    if (!sameSecret(payment.verification_token, config.kofiToken)) {
+      return reply.code(401).send({ error: 'unauthorized' });
+    }
+    // Everything below answers 200: Ko-fi would only retry a payment that has no code in it.
+    const code = extractCode(payment.message);
+    const amount = Number(payment.amount);
+    if (!code) return { ok: true, unlocked: false, reason: 'no_code' };
+    if (!Number.isFinite(amount) || amount < config.supportMinAmount) {
+      return { ok: true, unlocked: false, reason: 'too_small' };
+    }
+    await support.record({
+      code,
+      transactionId: typeof payment.kofi_transaction_id === 'string' ? payment.kofi_transaction_id : undefined,
+      amount,
+      currency: typeof payment.currency === 'string' ? payment.currency.slice(0, 8) : undefined,
+    });
+    return { ok: true, unlocked: true };
+  });
+
+  app.get('/v1/support/status', async (request, reply) => {
+    if (!support) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!statusLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const code = normalizeCode(request.query.code);
+    if (!code) return reply.code(400).send({ error: 'bad_code' });
+    return { paid: await support.isPaid(code) };
   });
 
   return { app, warm };

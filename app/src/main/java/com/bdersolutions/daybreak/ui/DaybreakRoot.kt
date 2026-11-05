@@ -80,6 +80,7 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import com.bdersolutions.daybreak.data.support.PaymentCheck
 import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
 import com.bdersolutions.daybreak.ui.support.SupportSheet
 import com.bdersolutions.daybreak.ui.support.openSupportPage
@@ -442,10 +443,12 @@ private fun LoggedInContent(
         }
 
         if (showSupport) {
+            val supportApi = container.supportApi
             SupportSheet(
+                // Hiding the popup is paid where there is a server to confirm it (see SupportSheet).
+                unlockCode = remember { supportApi?.let { container.supportStore.unlockCode() } },
                 onSupport = {
-                    // The person went to Ko-fi, so do not ask again.
-                    container.supportStore.optOut()
+                    // Going to Ko-fi does not hide the popup: only a confirmed payment does.
                     showSupport = false
                     openSupportPage(context)
                 },
@@ -454,6 +457,10 @@ private fun LoggedInContent(
                     container.supportStore.optOut()
                     showSupport = false
                 },
+                onCheckPayment = {
+                    supportApi?.check(container.supportStore.unlockCode()) ?: PaymentCheck.UNAVAILABLE
+                },
+                onPaid = { container.supportStore.markPaid() },
             )
         }
 

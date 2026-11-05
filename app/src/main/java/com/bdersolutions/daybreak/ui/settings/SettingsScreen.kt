@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -110,6 +111,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -134,6 +136,8 @@ import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material.icons.outlined.Favorite
+import com.bdersolutions.daybreak.ui.support.HideSupportButtonSheet
+import com.bdersolutions.daybreak.ui.support.KofiButton
 import com.bdersolutions.daybreak.ui.support.openSupportPage
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
@@ -167,6 +171,8 @@ fun SettingsScreen(
     }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var confirmingLogout by remember { mutableStateOf(false) }
+    val supportPaid by viewModel.supportPaid.collectAsStateWithLifecycle()
+    var showHideSupport by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // Back closes the confirmation first, and the card is scrolled into view when it opens.
@@ -247,6 +253,24 @@ fun SettingsScreen(
                     school = session?.school.orEmpty(),
                     username = session?.username.orEmpty(),
                 )
+            }
+            // The Ko-fi button goes away once a payment is confirmed. "Hide this button" opens the
+            // sheet where that payment is made and checked.
+            if (!supportPaid) {
+                item {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        KofiButton(onClick = { openSupportPage(context) })
+                        if (viewModel.canHideSupportButton) {
+                            TextButton(onClick = { showHideSupport = true }) {
+                                Text(
+                                    text = stringResource(R.string.settings_support_hide),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             item { GroupLabel(stringResource(R.string.more_group_profile)) }
@@ -380,6 +404,14 @@ fun SettingsScreen(
         }
     }
 
+    // Outside the list, so the thank-you stays up after the button above has gone.
+    if (showHideSupport) {
+        HideSupportButtonSheet(
+            unlockCode = remember { viewModel.supportUnlockCode() },
+            onDismiss = { showHideSupport = false },
+            onCheckPayment = { viewModel.checkSupportPayment() },
+        )
+    }
 }
 
 /** The small heading above a group of rows on the More page. */
