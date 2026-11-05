@@ -32,6 +32,9 @@ enum class MotionStyle { EXPRESSIVE, CALM }
 /** Which timetable view opens first when the app starts. */
 enum class StartView { DAY, WEEK }
 
+/** How missed time is shown on the absences page: as hours and minutes, or in school lessons of 50 minutes. */
+enum class AbsenceUnit { MINUTES, LESSONS }
+
 /**
  * How lesson stripes pick their colour. [ACCENT_HUES] spreads subjects around the
  * accent hue; [ROLES] uses the primary, secondary and tertiary role families.
@@ -67,6 +70,7 @@ data class AppSettings(
     val accent: AccentColor = AccentColor.OCEAN,
     val motionStyle: MotionStyle = MotionStyle.EXPRESSIVE,
     val startView: StartView = StartView.DAY,
+    val absenceUnit: AbsenceUnit = AbsenceUnit.MINUTES,
     val subjectColorMode: SubjectColorMode = SubjectColorMode.ACCENT_HUES,
     val textScale: TextScale = TextScale.STANDARD,
     val lessonColors: LessonColorSettings = LessonColorSettings(),
@@ -114,6 +118,10 @@ class SettingsRepository(context: Context) {
 
     fun setMotionStyle(style: MotionStyle) {
         update(_settings.value.copy(motionStyle = style))
+    }
+
+    fun setAbsenceUnit(unit: AbsenceUnit) {
+        update(_settings.value.copy(absenceUnit = unit))
     }
 
     fun setStartView(view: StartView) {
@@ -165,6 +173,7 @@ class SettingsRepository(context: Context) {
             .putString(KEY_ACCENT, value.accent.name)
             .putString(KEY_MOTION_STYLE, value.motionStyle.name)
             .putString(KEY_START_VIEW, value.startView.name)
+            .putString(KEY_ABSENCE_UNIT, value.absenceUnit.name)
             .putString(KEY_SUBJECT_COLOR_MODE, value.subjectColorMode.name)
             .putString(KEY_TEXT_SCALE, value.textScale.name)
             .putString(KEY_LESSON_COLORS, gson.toJson(value.lessonColors))
@@ -186,6 +195,7 @@ class SettingsRepository(context: Context) {
         accent = enumOrDefault(preferences.getString(KEY_ACCENT, null), AccentColor.OCEAN),
         motionStyle = enumOrDefault(preferences.getString(KEY_MOTION_STYLE, null), MotionStyle.EXPRESSIVE),
         startView = enumOrDefault(preferences.getString(KEY_START_VIEW, null), StartView.DAY),
+        absenceUnit = enumOrDefault(preferences.getString(KEY_ABSENCE_UNIT, null), AbsenceUnit.MINUTES),
         subjectColorMode = enumOrDefault(
             preferences.getString(KEY_SUBJECT_COLOR_MODE, null),
             SubjectColorMode.ACCENT_HUES,
@@ -250,6 +260,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ACCENT = "accent"
         private const val KEY_MOTION_STYLE = "motion_style"
         private const val KEY_START_VIEW = "start_view"
+        private const val KEY_ABSENCE_UNIT = "absence_unit"
         private const val KEY_SUBJECT_COLOR_MODE = "subject_color_mode"
         private const val KEY_TEXT_SCALE = "text_scale"
         private const val KEY_LESSON_COLORS = "lesson_colors"

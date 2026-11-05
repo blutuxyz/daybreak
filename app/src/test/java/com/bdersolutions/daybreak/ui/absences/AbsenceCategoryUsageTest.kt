@@ -230,4 +230,15 @@ class AbsenceCategoryUsageTest {
         reasonName = "",
         text = "",
     )
+
+    @Test
+    fun schoolLessonsAreFiftyMinutesWithOneDecimal() {
+        assertEquals("42,3", formatSchoolLessons(2115, java.util.Locale.GERMAN))
+        assertEquals("42.3", formatSchoolLessons(2115, java.util.Locale.ENGLISH))
+        assertEquals("2", formatSchoolLessons(100, java.util.Locale.GERMAN))
+        assertEquals("2,1", formatSchoolLessons(105, java.util.Locale.GERMAN))
+        assertEquals("0,5", formatSchoolLessons(25, java.util.Locale.GERMAN))
+        assertEquals("0", formatSchoolLessons(0, java.util.Locale.GERMAN))
+    }
+
 }
