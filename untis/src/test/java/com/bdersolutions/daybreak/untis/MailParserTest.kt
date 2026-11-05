@@ -99,4 +99,24 @@ class MailParserTest {
         assertEquals(RecipientGroup.OTHER, recipients[2].group)
     }
 
+
+    @Test
+    fun readsTheDownloadLinkAndDropsTheHostHeader() {
+        val json = JsonParser.parseString(
+            """{"downloadUrl":"https://storage.example/bucket/file","additionalHeaders":[""" +
+                """{"key":"x-amz-server-side-encryption-customer-algorithm","value":"AES256"},""" +
+                """{"key":"host","value":"storage.example"}]}""",
+        )
+
+        val link = AttachmentLinkParser.parse(json)!!
+
+        assertEquals("https://storage.example/bucket/file", link.url)
+        assertEquals(mapOf("x-amz-server-side-encryption-customer-algorithm" to "AES256"), link.headers)
+    }
+
+    @Test
+    fun aLinkWithoutAnAddressIsNothing() {
+        assertNull(AttachmentLinkParser.parse(JsonParser.parseString("""{"additionalHeaders":[]}""")))
+    }
+
 }

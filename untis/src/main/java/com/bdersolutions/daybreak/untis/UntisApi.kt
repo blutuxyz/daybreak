@@ -217,7 +217,12 @@ class UntisApi(
      * GET on the message REST API. It does not take the mobile key itself but a short-lived token
      * that `getAuthToken` hands out for it, so no password is involved.
      */
-    private suspend fun restGet(session: UntisSession, path: String, label: String): JsonElement {
+    private suspend fun restGet(
+        session: UntisSession,
+        path: String,
+        label: String,
+        recordRaw: Boolean = true,
+    ): JsonElement {
         val safeServer = normalizeInputs(session.server, session.school, session.username)
         val token = restToken(session, safeServer)
         return rpc.getRest(
@@ -226,8 +231,25 @@ class UntisApi(
             query = emptyMap(),
             token = token,
             label = label,
+            recordRaw = recordRaw,
         )
     }
+
+    /**
+     * The signed address and headers for one attached file. [attachmentId] is the id of an entry of
+     * `storageAttachments`. The answer holds secrets, so it is not written to the debug log.
+     */
+    suspend fun fetchAttachmentLink(session: UntisSession, attachmentId: String): UntisDownloadLink {
+        if (attachmentId.isBlank() || attachmentId.any { it == '/' || it == '\\' || it == '?' || it == '#' }) {
+            throw UntisParseException("The attachment id is not valid.")
+        }
+        val body = restGet(session, "messages/$attachmentId/attachmentstorageurl", "mail-attachment-link", recordRaw = false)
+        return AttachmentLinkParser.parse(body) ?: throw UntisParseException("The attachment has no download address.")
+    }
+
+    /** Downloads the file behind [link] into [out]. Returns its size in bytes. */
+    suspend fun downloadAttachment(link: UntisDownloadLink, out: java.io.OutputStream, maxBytes: Long): Long =
+        rpc.downloadFile(link.url, link.headers, out, maxBytes)
 
     /** The people the student may write to: class teachers, teachers and others. */
     suspend fun fetchRecipients(session: UntisSession): List<UntisRecipient> =

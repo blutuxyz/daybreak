@@ -8,6 +8,7 @@ import com.bdersolutions.daybreak.untis.UntisDirectory
 import com.bdersolutions.daybreak.untis.UntisElement
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisHomework
+import com.bdersolutions.daybreak.untis.UntisDownloadLink
 import com.bdersolutions.daybreak.untis.UntisMail
 import com.bdersolutions.daybreak.untis.UntisRecipient
 import com.bdersolutions.daybreak.untis.UntisMessage
@@ -70,6 +71,14 @@ class SchoolDataRepository(
     /** Sends a message to one teacher. Returns how many recipients the server counted. */
     suspend fun sendMail(subject: String, content: String, recipientUserId: Long): Int =
         api.sendMail(requireSession(), subject, content, recipientUserId)
+
+    /** The signed address of one attached file. */
+    suspend fun attachmentLink(attachmentId: String): UntisDownloadLink =
+        api.fetchAttachmentLink(requireSession(), attachmentId)
+
+    /** Streams the file behind [link] into [out] and returns its size. */
+    suspend fun downloadAttachment(link: UntisDownloadLink, out: java.io.OutputStream, maxBytes: Long): Long =
+        api.downloadAttachment(link, out, maxBytes)
 
     /** One message with its full text. */
     suspend fun mail(id: Long): UntisMail = api.fetchMail(requireSession(), id)

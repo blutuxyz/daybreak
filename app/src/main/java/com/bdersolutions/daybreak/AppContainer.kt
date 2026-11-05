@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak
 
 import android.content.Context
+import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
@@ -35,6 +36,7 @@ class AppContainer(context: Context) {
         api = untisApi,
     )
     val schoolData = SchoolDataRepository(untisApi, sessionStore)
+    val attachmentDownloader = AttachmentDownloader(appContext, schoolData)
     val absenceLessonHistory = AbsenceLessonHistory(
         store = AbsenceLessonStore(appContext),
         timetable = timetableRepository,

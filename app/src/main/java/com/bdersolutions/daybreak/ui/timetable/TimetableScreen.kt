@@ -1049,7 +1049,7 @@ private fun DayLessonBlock(
     val cancelled = block.isCancelled
     val border = when {
         // An exam gets a thick bright frame, so it is the first thing the eye finds.
-        exam != null -> BorderStroke(3.dp, examHighlight())
+        exam != null -> BorderStroke(4.5.dp, examHighlight())
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         cancelled -> BorderStroke(1.5.dp, cancelledAccent())
         block.hasSubstitution -> BorderStroke(1.5.dp, substitutionAccent())
@@ -1530,7 +1530,7 @@ private fun WeekLessonBlock(
     val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
     val border = when {
-        exam != null -> BorderStroke(2.5.dp, examHighlight())
+        exam != null -> BorderStroke(3.5.dp, examHighlight())
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         cancelled -> BorderStroke(1.dp, cancelledAccent())
         block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, substitutionAccent())

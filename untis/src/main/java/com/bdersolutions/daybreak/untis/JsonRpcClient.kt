@@ -123,6 +123,7 @@ internal class JsonRpcClient(
         query: Map<String, String>,
         token: String,
         label: String,
+        recordRaw: Boolean = true,
     ): JsonElement = withContext(Dispatchers.IO) {
         val url = UntisEndpoints.normalizeServer(server).toHttpUrl().newBuilder().apply {
             addPathSegments(path.trim('/'))
@@ -146,7 +147,7 @@ internal class JsonRpcClient(
             } catch (error: IOException) {
                 throw UntisNetworkException("The server response could not be read.", error)
             }
-            rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
+            if (recordRaw) rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
             if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
             if (!received.isSuccessful) {
                 val message = runCatching {
@@ -225,6 +226,61 @@ internal class JsonRpcClient(
             }?.takeIf { it.isNotEmpty() }?.let { add(it.joinToString("; ")) }
         }
         return "HTTP $status" + if (parts.isEmpty()) "" else " " + parts.joinToString(" ")
+    }
+
+    /**
+     * Downloads a file from a signed storage address into [out] and returns its size. The address
+     * carries its own signature, so no WebUntis token is sent to the storage server. Only https is
+     * accepted. Only the status and size go to the debug log, never the address or the content.
+     */
+    suspend fun downloadFile(
+        url: String,
+        headers: Map<String, String>,
+        out: java.io.OutputStream,
+        maxBytes: Long,
+    ): Long = withContext(Dispatchers.IO) {
+        val target = runCatching { url.toHttpUrl() }.getOrNull()
+            ?: throw UntisParseException("The download address is not valid.")
+        if (target.scheme != "https") throw UntisProtocolException("The download address is not https.")
+        val request = Request.Builder()
+            .url(target)
+            .header("User-Agent", "UntisMobileAndroid")
+            .apply { headers.forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        // A large file can take longer than the 35 seconds that the normal calls get.
+        val downloader = client.newBuilder().callTimeout(0, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+        val response = try {
+            downloader.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the file server.", error)
+        }
+        response.use { received ->
+            if (!received.isSuccessful) {
+                rawSink.onResponse("attachment-download", System.currentTimeMillis(), "HTTP ${received.code}")
+                throw UntisProtocolException("The file server returned HTTP ${received.code}.")
+            }
+            val body = received.body ?: throw UntisParseException("The file server sent no file.")
+            val declared = body.contentLength()
+            if (declared > maxBytes) throw UntisProtocolException("The file is too large.")
+            var total = 0L
+            try {
+                val buffer = ByteArray(16 * 1024)
+                body.byteStream().use { input ->
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > maxBytes) throw UntisProtocolException("The file is too large.")
+                        out.write(buffer, 0, read)
+                    }
+                }
+            } catch (error: IOException) {
+                throw UntisNetworkException("The download was interrupted.", error)
+            }
+            rawSink.onResponse("attachment-download", System.currentTimeMillis(), "HTTP ${received.code}, $total bytes")
+            total
+        }
     }
 
     private fun parseError(body: String): Pair<Int?, String>? {

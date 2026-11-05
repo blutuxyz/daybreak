@@ -192,6 +192,15 @@ data class UntisRecipient(
     val tags: List<String> = emptyList(),
 )
 
+/**
+ * Where an attached file can be fetched: a short-lived signed address on the storage server and
+ * the headers it needs. Both are secrets for as long as they live, so they are never logged.
+ */
+data class UntisDownloadLink(
+    val url: String,
+    val headers: Map<String, String>,
+)
+
 /** A file attached to a message. [id] is the storage id WebUntis gives it. */
 data class UntisAttachment(
     val id: String,

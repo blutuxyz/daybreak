@@ -104,3 +104,28 @@ internal object RecipientParser {
         }
     }
 }
+
+/** Reads `messages/{id}/attachmentstorageurl`: a signed `downloadUrl` and the headers it needs. */
+internal object AttachmentLinkParser {
+
+    fun parse(result: JsonElement): UntisDownloadLink? {
+        val root = result.asJsonObjectOrNull() ?: return null
+        val url = root.stringOrNull("downloadUrl", "url")?.takeIf { it.isNotBlank() } ?: return null
+        val headers = linkedMapOf<String, String>()
+        val raw = root.get("additionalHeaders")
+        when {
+            raw != null && raw.isJsonArray -> raw.asJsonArray.forEach { entry ->
+                val pair = entry.asJsonObjectOrNull() ?: return@forEach
+                val name = pair.stringOrNull("key", "name") ?: return@forEach
+                val value = pair.stringOrNull("value") ?: return@forEach
+                headers[name] = value
+            }
+            raw != null && raw.isJsonObject -> raw.asJsonObject.entrySet().forEach { (name, value) ->
+                if (value.isJsonPrimitive) headers[name] = value.asString
+            }
+        }
+        // The Host header names the server the address already points to; the client sets it itself.
+        headers.keys.removeAll { it.equals("host", ignoreCase = true) }
+        return UntisDownloadLink(url = url, headers = headers)
+    }
+}

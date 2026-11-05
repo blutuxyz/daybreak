@@ -5,12 +5,18 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
+import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
+import com.bdersolutions.daybreak.data.attachments.SavedAttachment
 import com.bdersolutions.daybreak.untis.MailFolder
+import com.bdersolutions.daybreak.untis.UntisAttachment
 import com.bdersolutions.daybreak.untis.RecipientGroup
 import com.bdersolutions.daybreak.untis.UntisMail
 import com.bdersolutions.daybreak.untis.UntisRecipient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -46,18 +52,30 @@ data class ComposeState(
         get() = recipient != null && subject.isNotBlank() && content.isNotBlank() && !sending
 }
 
+/** One-off results of an attachment download, for the screen to show. */
+sealed interface AttachmentEvent {
+    data class Ready(val saved: SavedAttachment) : AttachmentEvent
+    data class Failed(val error: Throwable) : AttachmentEvent
+}
+
 data class MessagesUiState(
     val folder: MailFolder = MailFolder.INBOX,
     val lists: Map<MailFolder, MailListState> = emptyMap(),
     val open: OpenMail? = null,
     val compose: ComposeState? = null,
+    /** Ids of the attachments that are being downloaded. */
+    val downloading: Set<String> = emptySet(),
 ) {
     val current: MailListState get() = lists[folder] ?: MailListState()
 }
 
 class MessagesViewModel(
     private val schoolData: SchoolDataRepository,
+    private val downloader: AttachmentDownloader,
 ) : ViewModel() {
+    private val _attachmentEvents = MutableSharedFlow<AttachmentEvent>(extraBufferCapacity = 4)
+    val attachmentEvents: SharedFlow<AttachmentEvent> = _attachmentEvents.asSharedFlow()
+
     private val _state = MutableStateFlow(MessagesUiState())
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
 
@@ -103,6 +121,23 @@ class MessagesViewModel(
 
     fun close() {
         _state.update { it.copy(open = null) }
+    }
+
+    /** Downloads one attached file, then tells the screen to open it. */
+    fun downloadAttachment(attachment: UntisAttachment) {
+        if (attachment.id in _state.value.downloading) return
+        _state.update { it.copy(downloading = it.downloading + attachment.id) }
+        viewModelScope.launch {
+            try {
+                _attachmentEvents.emit(AttachmentEvent.Ready(downloader.download(attachment)))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _attachmentEvents.emit(AttachmentEvent.Failed(error))
+            } finally {
+                _state.update { it.copy(downloading = it.downloading - attachment.id) }
+            }
+        }
     }
 
     fun openCompose() {
@@ -184,7 +219,7 @@ class MessagesViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(MessagesViewModel::class.java))
-            return MessagesViewModel(container.schoolData) as T
+            return MessagesViewModel(container.schoolData, container.attachmentDownloader) as T
         }
     }
 }

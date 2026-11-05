@@ -1,5 +1,7 @@
 package com.bdersolutions.daybreak.ui.messages
 
+import android.content.ActivityNotFoundException
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +42,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.ui.settings.SettingsPageScaffold
 import com.bdersolutions.daybreak.ui.toUserMessage
 import com.bdersolutions.daybreak.ui.upcoming.EmptyText
@@ -150,12 +154,51 @@ fun MessagesScreen(
         )
     }
 
+    val activity = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.attachmentEvents.collect { event ->
+            when (event) {
+                is AttachmentEvent.Ready -> {
+                    val saved = event.saved
+                    if (saved.inDownloads) {
+                        Toast.makeText(
+                            activity,
+                            activity.getString(R.string.messages_attachment_saved, saved.file.name),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    if (AttachmentDownloader.canOpen(activity, saved)) {
+                        try {
+                            activity.startActivity(AttachmentDownloader.viewIntent(activity, saved))
+                        } catch (_: ActivityNotFoundException) {
+                            Toast.makeText(activity, R.string.messages_attachment_no_app, Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        Toast.makeText(activity, R.string.messages_attachment_no_app, Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                is AttachmentEvent.Failed -> Toast.makeText(
+                    activity,
+                    activity.getString(R.string.messages_attachment_failed, event.error.toUserMessage(activity)),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
     state.open?.let { open ->
         ModalBottomSheet(
             onDismissRequest = viewModel::close,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
-            MailSheetContent(open = open, folder = state.folder, locale = locale)
+            MailSheetContent(
+                open = open,
+                folder = state.folder,
+                locale = locale,
+                downloading = state.downloading,
+                onDownload = viewModel::downloadAttachment,
+            )
         }
     }
 }
@@ -244,7 +287,13 @@ private fun MailCard(mail: UntisMail, folder: MailFolder, locale: Locale, onClic
 }
 
 @Composable
-private fun MailSheetContent(open: OpenMail, folder: MailFolder, locale: Locale) {
+private fun MailSheetContent(
+    open: OpenMail,
+    folder: MailFolder,
+    locale: Locale,
+    downloading: Set<String>,
+    onDownload: (UntisAttachment) -> Unit,
+) {
     val context = LocalContext.current
     val mail = open.full ?: open.summary
     Column(
@@ -301,7 +350,9 @@ private fun MailSheetContent(open: OpenMail, folder: MailFolder, locale: Locale)
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
-                    mail.attachments.forEach { file -> AttachmentRow(file) }
+                    mail.attachments.forEach { file ->
+                        AttachmentRow(file, loading = file.id in downloading, onClick = { onDownload(file) })
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = stringResource(R.string.messages_attachments_hint),
@@ -311,7 +362,7 @@ private fun MailSheetContent(open: OpenMail, folder: MailFolder, locale: Locale)
                 } else if (mail.hasAttachments) {
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = stringResource(R.string.messages_attachments_hint),
+                        text = stringResource(R.string.messages_attachment_unsupported),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -463,8 +514,10 @@ private fun ComposeSheet(
 }
 
 @Composable
-private fun AttachmentRow(file: UntisAttachment) {
+private fun AttachmentRow(file: UntisAttachment, loading: Boolean, onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
+        enabled = !loading && file.id.isNotBlank(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
@@ -485,7 +538,12 @@ private fun AttachmentRow(file: UntisAttachment) {
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            if (loading) {
+                Spacer(Modifier.width(10.dp))
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
         }
     }
 }

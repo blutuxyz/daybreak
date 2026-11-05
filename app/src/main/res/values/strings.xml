@@ -370,7 +370,11 @@
     <string name="messages_to">An</string>
     <string name="messages_unread">Ungelesen</string>
     <string name="messages_attachments">Anhänge</string>
-    <string name="messages_attachments_hint">Herunterladen geht hier noch nicht. Öffne die Datei in WebUntis.</string>
+    <string name="messages_attachments_hint">Tippen, um die Datei herunterzuladen und zu öffnen.</string>
+    <string name="messages_attachment_unsupported">Diesen Anhang kann die App nicht laden. Öffne ihn in WebUntis.</string>
+    <string name="messages_attachment_saved">In Downloads gespeichert: %1$s</string>
+    <string name="messages_attachment_no_app">Keine App zum Öffnen dieser Datei gefunden.</string>
+    <string name="messages_attachment_failed">Der Download hat nicht geklappt: %1$s</string>
     <string name="messages_unknown_person">Unbekannt</string>
     <string name="messages_new">Neue Nachricht</string>
     <string name="messages_recipient">Empfänger</string>
