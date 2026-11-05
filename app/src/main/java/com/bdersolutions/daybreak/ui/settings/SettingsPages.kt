@@ -45,6 +45,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.settings.AbsenceUnit
 import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.MotionStyle
@@ -178,6 +180,12 @@ internal fun themeLabel(mode: ThemeMode): String = when (mode) {
 internal fun startViewLabel(view: StartView): String = when (view) {
     StartView.DAY -> stringResource(R.string.timetable_day)
     StartView.WEEK -> stringResource(R.string.timetable_week)
+}
+
+@Composable
+internal fun absenceUnitLabel(unit: AbsenceUnit): String = when (unit) {
+    AbsenceUnit.MINUTES -> stringResource(R.string.settings_absence_unit_time)
+    AbsenceUnit.LESSONS -> stringResource(R.string.settings_absence_unit_lessons)
 }
 
 @Composable
@@ -327,6 +335,23 @@ fun TimetableSettingsScreen(
                         options = StartView.entries.map { it to startViewLabel(it) },
                         selected = settings.startView,
                         onSelect = viewModel::setStartView,
+                    )
+                }
+                AppearanceDivider()
+                AppearanceOption(
+                    icon = Icons.Outlined.EventBusy,
+                    title = stringResource(R.string.settings_absence_unit),
+                ) {
+                    SegmentChoice(
+                        options = AbsenceUnit.entries.map { it to absenceUnitLabel(it) },
+                        selected = settings.absenceUnit,
+                        onSelect = viewModel::setAbsenceUnit,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_absence_unit_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
                 AppearanceDivider()

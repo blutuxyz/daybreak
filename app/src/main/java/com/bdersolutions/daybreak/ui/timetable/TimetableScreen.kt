@@ -112,6 +112,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.cache.TimetableCache
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
+import com.bdersolutions.daybreak.untis.ElementType
+import com.bdersolutions.daybreak.untis.UntisElement
+import com.bdersolutions.daybreak.untis.UntisHoliday
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.res.pluralStringResource
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.untis.LessonStatus
@@ -227,6 +233,17 @@ fun TimetableScreen(
         is TimetableTarget.Element -> targetLabel(current)
     }
     val retryLabel = stringResource(R.string.action_retry)
+    // The names in a lesson's details (class, teacher, room) lead to that timetable.
+    val findElement: (ElementType, String) -> UntisElement? = { type, name ->
+        directory?.let { master ->
+            when (type) {
+                ElementType.CLASS -> master.classes
+                ElementType.TEACHER -> master.teachers
+                ElementType.ROOM -> master.rooms
+            }.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        }
+    }
+    val openElement: (UntisElement) -> Unit = { viewModel.setTarget(TimetableTarget.Element(it)) }
     // Read the date at the time of the tap, not the date from when this effect started.
     val latestDate by rememberUpdatedState(selectedDate)
     LaunchedEffect(viewModel) {
@@ -390,6 +407,8 @@ fun TimetableScreen(
                             cache = cache,
                             status = status,
                             onRetry = { viewModel.refresh(pageDate) },
+                            findElement = findElement,
+                            onOpenElement = openElement,
                             onSelectDate = { targetDate ->
                                 scope.launch {
                                     dayPager.animateScrollToPage(
@@ -409,6 +428,8 @@ fun TimetableScreen(
                             cache = cache,
                             status = status,
                             onRetry = { viewModel.refresh(pageDate) },
+                            findElement = findElement,
+                            onOpenElement = openElement,
                         )
                     }
                 }
@@ -486,13 +507,27 @@ private fun DayPage(
     cache: TimetableCache,
     status: TimetableSyncStatus,
     onRetry: () -> Unit,
+    findElement: (ElementType, String) -> UntisElement?,
+    onOpenElement: (UntisElement) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
 ) {
     val context = LocalContext.current
     val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val week = cache.weeks[weekStart]
-    val lessons = remember(week, date) {
+    val genericHoliday = stringResource(R.string.holiday_generic)
+    val realLessons = remember(week, date) {
         week?.lessons?.filter { it.date == date }?.sortedBy { it.start }.orEmpty()
+    }
+    // A day without lessons inside a holiday shows the holiday as one block that fills the day,
+    // like a subject, instead of a blank screen.
+    val lessons = remember(realLessons, cache.holidays, date, week, genericHoliday) {
+        val holiday = holidayOn(cache.holidays, date)
+        if (realLessons.isEmpty() && holiday != null) {
+            val range = timelineRange(week?.lessons.orEmpty())
+            listOf(holidayLesson(holiday, date, range, genericHoliday))
+        } else {
+            realLessons
+        }
     }
     val isToday = date == today
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
@@ -571,12 +606,20 @@ private fun DayPage(
             }
         }
         selectedLesson?.let { lesson ->
-            // The detail sheet itself is implemented in LessonDetailsSheet.
-            LessonDetailsSheet(
-                lesson = lesson,
-                exam = examFor(lesson, cache.exams),
-                onDismiss = { selectedLesson = null },
-            )
+            if (lesson.isHoliday) {
+                cache.holidays.firstOrNull { it.id == -lesson.id }?.let { holiday ->
+                    HolidaySheet(holiday = holiday, onDismiss = { selectedLesson = null })
+                }
+            } else {
+                // The detail sheet itself is implemented in LessonDetailsSheet.
+                LessonDetailsSheet(
+                    lesson = lesson,
+                    exam = examFor(lesson, cache.exams),
+                    findElement = findElement,
+                    onOpenElement = onOpenElement,
+                    onDismiss = { selectedLesson = null },
+                )
+            }
         }
     }
 }
@@ -990,6 +1033,18 @@ private fun rememberLessonLook(
     tone: SubjectTone,
     subject: String,
 ): LessonLook {
+    if (block.lesson.isHoliday) {
+        // Holidays have their own calm colour, apart from every subject and status.
+        val scheme = MaterialTheme.colorScheme
+        return LessonLook(
+            stripe = scheme.tertiary,
+            // A tint of the tertiary colour over the surface, like the subject blocks, so it sits calmly
+            // in both themes instead of shouting as a bright container.
+            fill = holidayFill(),
+            content = scheme.onSurface,
+            accent = scheme.tertiary,
+        )
+    }
     val lessonColors = LocalLessonColors.current
     val roles = LocalSubjectColorMode.current == SubjectColorMode.ROLES
     val customSubject = lessonColors.subjectColors.containsKey(subject)
@@ -1169,14 +1224,27 @@ private fun WeekPage(
     cache: TimetableCache,
     status: TimetableSyncStatus,
     onRetry: () -> Unit,
+    findElement: (ElementType, String) -> UntisElement?,
+    onOpenElement: (UntisElement) -> Unit,
 ) {
     val context = LocalContext.current
     val week = cache.weeks[weekStart]
-    val allLessons = remember(week) { week?.lessons.orEmpty() }
+    val genericHoliday = stringResource(R.string.holiday_generic)
+    val realLessons = remember(week) { week?.lessons.orEmpty() }
     val days = remember(weekStart) { (0L..4L).map { weekStart.plusDays(it) } }
-    val range = remember(allLessons) { timelineRange(allLessons) }
-    val periodStarts = remember(allLessons) {
-        periodStartsFor(allLessons)
+    val range = remember(realLessons) { timelineRange(realLessons) }
+    val periodStarts = remember(realLessons) {
+        periodStartsFor(realLessons)
+    }
+    // Days without lessons inside a holiday get the holiday as one block that fills the column.
+    val allLessons = remember(realLessons, days, cache.holidays, range, genericHoliday) {
+        realLessons + days.mapNotNull { day ->
+            if (realLessons.any { it.date == day }) {
+                null
+            } else {
+                holidayOn(cache.holidays, day)?.let { holidayLesson(it, day, range, genericHoliday) }
+            }
+        }
     }
     // Long events such as a school event stay in the grid, beside the lessons they replace.
     val gridLessonsByDay = remember(allLessons, days) {
@@ -1288,11 +1356,19 @@ private fun WeekPage(
             }
         }
         selectedLesson?.let { lesson ->
-            LessonDetailsSheet(
-                lesson = lesson,
-                exam = examFor(lesson, cache.exams),
-                onDismiss = { selectedLesson = null },
-            )
+            if (lesson.isHoliday) {
+                cache.holidays.firstOrNull { it.id == -lesson.id }?.let { holiday ->
+                    HolidaySheet(holiday = holiday, onDismiss = { selectedLesson = null })
+                }
+            } else {
+                LessonDetailsSheet(
+                    lesson = lesson,
+                    exam = examFor(lesson, cache.exams),
+                    findElement = findElement,
+                    onOpenElement = onOpenElement,
+                    onDismiss = { selectedLesson = null },
+                )
+            }
         }
     }
 }
@@ -1839,13 +1915,39 @@ private fun minuteToTime(totalMinutes: Int): LocalTime =
 private fun minutesBetween(start: LocalTime, end: LocalTime): Int =
     Duration.between(start, end).toMinutes().toInt().coerceAtLeast(0)
 
+/** The tint of a holiday block and card: the tertiary colour over the surface, as for the subjects. */
+@Composable
+private fun holidayFill(): Color {
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.surface.luminance() < 0.5f
+    return lerp(scheme.surfaceContainerLow, scheme.tertiary, if (dark) 0.32f else 0.24f)
+}
+
+/** The holiday that covers [date], if any. */
+internal fun holidayOn(holidays: List<UntisHoliday>, date: LocalDate): UntisHoliday? =
+    holidays.firstOrNull { !date.isBefore(it.start) && !date.isAfter(it.end) }
+
+/**
+ * A block that stands for [holiday] on [date] and fills the day's time range, so the timetable can
+ * show it like a subject. Its id is the negative holiday id, which the details sheet reads back.
+ */
+private fun holidayLesson(holiday: UntisHoliday, date: LocalDate, range: TimelineRange, generic: String): UntisLesson =
+    UntisLesson(
+        id = -holiday.id,
+        date = date,
+        start = range.start,
+        end = range.end,
+        subject = if (holiday.hasDateName) generic else holiday.displayName,
+        isHoliday = true,
+    )
+
 /**
  * The parts of [block] in which the student was absent, as fractions of its length from the top.
  * An absence from 7:55 to 8:05 over a lesson that starts at 7:55 gives the first tenth of a 100
  * minute lesson, not the whole block. A cancelled lesson has nothing to grey out.
  */
 internal fun absentParts(block: TimelineBlock, absences: List<UntisAbsence>): List<ClosedFloatingPointRange<Float>> {
-    if (absences.isEmpty() || block.isCancelled) return emptyList()
+    if (absences.isEmpty() || block.isCancelled || block.lesson.isHoliday) return emptyList()
     val date = block.lesson.date
     val blockStart = date.atTime(block.start)
     val blockEnd = date.atTime(block.end)
@@ -1884,7 +1986,7 @@ private fun Modifier.greyOutAbsent(parts: List<ClosedFloatingPointRange<Float>>,
  * does carry a subject name, that must match too.
  */
 private fun examFor(lesson: UntisLesson, exams: List<UntisExam>): UntisExam? {
-    if (exams.isEmpty()) return null
+    if (exams.isEmpty() || lesson.isHoliday) return null
     return exams.firstOrNull { exam ->
         exam.date == lesson.date &&
             exam.start < lesson.end &&
@@ -1904,6 +2006,8 @@ private fun currentLocale(context: android.content.Context): Locale =
 private fun LessonDetailsSheet(
     lesson: UntisLesson,
     exam: UntisExam?,
+    findElement: (ElementType, String) -> UntisElement?,
+    onOpenElement: (UntisElement) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -2033,28 +2137,45 @@ private fun LessonDetailsSheet(
             }
 
             Spacer(Modifier.height(10.dp))
-            DetailRow(
+            // Room, teacher and class lead to their own timetable.
+            val open: (UntisElement) -> Unit = { element ->
+                onOpenElement(element)
+                onDismiss()
+            }
+            NameRow(
                 icon = Icons.Outlined.Room,
                 label = stringResource(R.string.label_room),
-                value = lesson.room.ifBlank { "–" },
+                names = lesson.room,
+                type = ElementType.ROOM,
+                findElement = findElement,
+                onOpen = open,
             )
-            DetailRow(
+            NameRow(
                 icon = Icons.Outlined.Person,
                 label = stringResource(R.string.label_teacher),
-                value = lesson.teacher.ifBlank { "–" },
+                names = lesson.teacher,
+                type = ElementType.TEACHER,
+                findElement = findElement,
+                onOpen = open,
             )
             if (lesson.hasTeacherChange) {
-                DetailRow(
+                NameRow(
                     icon = Icons.Outlined.Person,
                     label = stringResource(R.string.label_previous_teacher),
-                    value = lesson.originalTeacher,
+                    names = lesson.originalTeacher,
+                    type = ElementType.TEACHER,
+                    findElement = findElement,
+                    onOpen = open,
                 )
             }
             if (lesson.className.isNotBlank()) {
-                DetailRow(
+                NameRow(
                     icon = Icons.Outlined.CalendarMonth,
                     label = stringResource(R.string.label_class),
-                    value = lesson.className,
+                    names = lesson.className,
+                    type = ElementType.CLASS,
+                    findElement = findElement,
+                    onOpen = open,
                 )
             }
             if (lesson.group.isNotBlank()) {
@@ -2168,6 +2289,130 @@ private fun InfoNotice(text: String) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * A row of names (rooms, teachers or classes) as pills. A name that is in the master data opens that
+ * timetable; one that is not stays plain text.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NameRow(
+    icon: ImageVector,
+    label: String,
+    names: String,
+    type: ElementType,
+    findElement: (ElementType, String) -> UntisElement?,
+    onOpen: (UntisElement) -> Unit,
+) {
+    val parts = remember(names) { names.split(',', ';').map { it.trim() }.filter { it.isNotBlank() } }
+    if (parts.isEmpty()) {
+        DetailRow(icon = icon, label = label, value = "–")
+        return
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 9.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                parts.forEach { name ->
+                    val element = findElement(type, name)
+                    Surface(
+                        onClick = { element?.let(onOpen) },
+                        enabled = element != null,
+                        shape = CircleShape,
+                        color = if (element != null) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        },
+                        contentColor = if (element != null) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    ) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (element != null) FontWeight.SemiBold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** What a holiday block opens: its name and the period it covers. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HolidaySheet(holiday: UntisHoliday, onDismiss: () -> Unit) {
+    val locale = currentLocale(LocalContext.current)
+    val name = if (holiday.hasDateName) stringResource(R.string.holiday_generic) else holiday.displayName
+    val days = (java.time.temporal.ChronoUnit.DAYS.between(holiday.start, holiday.end) + 1).toInt()
+    val period = remember(holiday, locale) {
+        val full = DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", locale)
+        val short = DateTimeFormatter.ofPattern("d. MMMM yyyy", locale)
+        if (holiday.start == holiday.end) {
+            full.format(holiday.start)
+        } else {
+            short.format(holiday.start) + " – " + short.format(holiday.end)
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp),
+        ) {
+            Spacer(Modifier.height(4.dp))
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = holidayFill(),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 18.dp)) {
+                    Text(text = name, style = MaterialTheme.typography.headlineSmallEmphasized)
+                    Spacer(Modifier.height(6.dp))
+                    Text(text = period, style = MaterialTheme.typography.titleSmall)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            DetailRow(
+                icon = Icons.Outlined.CalendarMonth,
+                label = stringResource(R.string.holiday_duration),
+                value = pluralStringResource(R.plurals.holiday_days, days, days),
+            )
         }
     }
 }

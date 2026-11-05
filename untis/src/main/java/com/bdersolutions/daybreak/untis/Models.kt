@@ -64,6 +64,8 @@ data class UntisLesson(
     val group: String = "",
     val originalRoom: String = "",
     val originalTeacher: String = "",
+    /** True for the block that stands for a holiday. It is made for display and never comes from the server. */
+    val isHoliday: Boolean = false,
 ) {
     val isCancelled: Boolean get() = status == LessonStatus.CANCELLED
     val isIrregular: Boolean get() = status == LessonStatus.IRREGULAR
@@ -124,7 +126,26 @@ data class UntisDirectory(
     val absenceReasons: Map<Long, String>,
     /** Short subject name by subject id, the names lessons carry. Exams refer to subjects by id. */
     val subjectNamesById: Map<Long, String> = emptyMap(),
+    /** School-free periods: holidays and single free days. */
+    val holidays: List<UntisHoliday> = emptyList(),
 )
+
+/**
+ * A holiday (Ferien) or a single free day, from the master data. [start] and [end] are both
+ * included. Single days are often named after their date ("30.4."), which says nothing; those
+ * have [hasDateName] set so the app can label them in words.
+ */
+data class UntisHoliday(
+    val id: Long,
+    val name: String,
+    val longName: String,
+    val start: LocalDate,
+    val end: LocalDate,
+) {
+    val displayName: String get() = longName.ifBlank { name }
+    val hasDateName: Boolean
+        get() = displayName.isBlank() || displayName.all { it.isDigit() || it == '.' || it == ' ' }
+}
 
 /** One absence (Fehlstunde) of the student. Times are local school time. */
 data class UntisAbsence(

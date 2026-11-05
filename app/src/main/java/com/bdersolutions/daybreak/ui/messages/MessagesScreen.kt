@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -386,13 +388,19 @@ private fun ComposeSheet(
     onRetryRecipients: () -> Unit,
 ) {
     val context = LocalContext.current
+    // The form needs the keyboard, so the sheet opens at full height; a half-open sheet only gets in the way.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = { if (!form.sending) onDismiss() },
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // The keyboard covers the lower part of the sheet. Without this the message field and the
+                // send button stay behind it and cannot be reached or scrolled to.
+                .imePadding()
                 .padding(horizontal = 22.dp)
                 .padding(bottom = 28.dp)
                 .verticalScroll(rememberScrollState()),

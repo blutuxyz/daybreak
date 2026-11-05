@@ -20,6 +20,7 @@ internal object SchoolDataParser {
             teachers = elements(master, ElementType.TEACHER, "teachers"),
             rooms = elements(master, ElementType.ROOM, "rooms"),
             absenceReasons = absenceReasons(master),
+            holidays = holidays(master),
         )
     }
 
@@ -46,6 +47,23 @@ internal object SchoolDataParser {
                 }
             }
             .sortedBy { it.displayName.lowercase() }
+
+    /** The holidays of the master data, in date order. An entry without a readable period is skipped. */
+    private fun holidays(master: JsonObject): List<UntisHoliday> =
+        (master.arrayOrNull("holidays") ?: JsonArray())
+            .mapNotNull { raw ->
+                val obj = raw.asJsonObjectOrNull() ?: return@mapNotNull null
+                val start = WireDate.parseDate(obj.takeFirstElement("startDate", "start")) ?: return@mapNotNull null
+                val end = WireDate.parseDate(obj.takeFirstElement("endDate", "end")) ?: start
+                UntisHoliday(
+                    id = obj.longOrNull("id") ?: start.toEpochDay(),
+                    name = obj.stringOrNull("name", "shortName").orEmpty().trim(),
+                    longName = obj.stringOrNull("longName", "longname").orEmpty().trim(),
+                    start = start,
+                    end = if (end.isBefore(start)) start else end,
+                )
+            }
+            .sortedBy { it.start }
 
     private fun absenceReasons(master: JsonObject): Map<Long, String> {
         val array = master.arrayOrNull("absenceReasons") ?: return emptyMap()
