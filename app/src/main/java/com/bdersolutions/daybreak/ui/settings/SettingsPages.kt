@@ -60,6 +60,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.NotificationsActive
+import com.bdersolutions.daybreak.data.reminders.ReminderPlanner
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -90,6 +94,8 @@ enum class SettingsPage {
     SYNC,
     NOTIFICATIONS,
     HAPTICS,
+    APP_NAME,
+    APP_ICON,
     UPDATES,
     ABOUT,
     LEGAL,
@@ -110,6 +116,8 @@ fun SettingsPageHost(
         SettingsPage.SYNC -> SyncScreen(viewModel, onBack)
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
         SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
+        SettingsPage.APP_NAME -> AppNameScreen(viewModel, onBack)
+        SettingsPage.APP_ICON -> AppIconScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
         SettingsPage.LEGAL -> LegalScreen(onBack = onBack)
@@ -347,6 +355,18 @@ fun TimetableSettingsScreen(
     SettingsPageScaffold(title = stringResource(R.string.settings_timetable), onBack = onBack) {
         item {
             SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Outlined.Schedule,
+                    title = stringResource(R.string.settings_now_next),
+                    subtitle = stringResource(R.string.settings_now_next_desc),
+                    trailing = {
+                        SpringSwitch(
+                            checked = settings.showNowNext,
+                            onCheckedChange = viewModel::setShowNowNext,
+                        )
+                    },
+                )
+                AppearanceDivider()
                 AppearanceOption(
                     icon = Icons.Outlined.Today,
                     title = stringResource(R.string.settings_start_view),
@@ -585,6 +605,69 @@ fun NotificationsScreen(
                         )
                     },
                 )
+            }
+        }
+        // The reminders need the master switch above: with notifications off they could not be shown.
+        if (settings.notificationsEnabled) {
+            item {
+                SettingsGroup {
+                    SettingsRow(
+                        icon = Icons.Outlined.WbSunny,
+                        title = stringResource(R.string.settings_morning_summary),
+                        subtitle = stringResource(R.string.settings_morning_summary_desc),
+                        trailing = {
+                            SpringSwitch(
+                                checked = settings.morningSummaryEnabled,
+                                onCheckedChange = viewModel::setMorningSummaryEnabled,
+                            )
+                        },
+                    )
+                    AnimatedVisibility(visible = settings.morningSummaryEnabled) {
+                        Column {
+                            AppearanceDivider()
+                            AppearanceOption(
+                                icon = Icons.Outlined.Schedule,
+                                title = stringResource(R.string.settings_morning_lead),
+                            ) {
+                                SegmentChoice(
+                                    options = ReminderPlanner.LEAD_MINUTES.map { minutes ->
+                                        minutes to stringResource(R.string.reminder_lead_minutes, minutes)
+                                    },
+                                    selected = settings.morningLeadMinutes,
+                                    onSelect = viewModel::setMorningLeadMinutes,
+                                )
+                            }
+                            AppearanceDivider()
+                            SettingsRow(
+                                icon = Icons.Outlined.NotificationsActive,
+                                title = stringResource(R.string.settings_send_test),
+                                onClick = { viewModel.sendTestMorningSummary() },
+                            )
+                        }
+                    }
+                    AppearanceDivider()
+                    SettingsRow(
+                        icon = Icons.Outlined.Checklist,
+                        title = stringResource(R.string.settings_exam_reminders),
+                        subtitle = stringResource(R.string.settings_exam_reminders_desc),
+                        trailing = {
+                            SpringSwitch(
+                                checked = settings.examRemindersEnabled,
+                                onCheckedChange = viewModel::setExamRemindersEnabled,
+                            )
+                        },
+                    )
+                    AnimatedVisibility(visible = settings.examRemindersEnabled) {
+                        Column {
+                            AppearanceDivider()
+                            SettingsRow(
+                                icon = Icons.Outlined.NotificationsActive,
+                                title = stringResource(R.string.settings_send_test),
+                                onClick = { viewModel.sendTestEveningReminder() },
+                            )
+                        }
+                    }
+                }
             }
         }
     }

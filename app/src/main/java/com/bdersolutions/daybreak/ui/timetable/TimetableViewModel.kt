@@ -13,6 +13,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.session.SessionStore
+import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.FavoriteTarget
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.settings.reorderedByKeys
@@ -44,6 +45,7 @@ class TimetableViewModel(
     private val schoolData: SchoolDataRepository,
 ) : ViewModel() {
     val status: StateFlow<TimetableSyncStatus> = repository.status
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
 
     private val _target = MutableStateFlow<TimetableTarget>(TimetableTarget.Own)

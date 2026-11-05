@@ -19,8 +19,20 @@ class MainActivity : AppCompatActivity() {
             runCatching { LocalDate.parse(raw) }.getOrNull()
         }
         val openUpdates = intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false)
+        // Long-pressing the app icon offers Today, Week and Search (res/xml/shortcuts.xml).
+        val shortcut = intent.getStringExtra(EXTRA_SHORTCUT)
         setContent {
-            DaybreakApp(container = container, initialDate = widgetDate, openUpdates = openUpdates)
+            DaybreakApp(
+                container = container,
+                initialDate = widgetDate,
+                openUpdates = openUpdates,
+                startMode = when (shortcut) {
+                    SHORTCUT_TODAY -> 0
+                    SHORTCUT_WEEK -> 1
+                    else -> null
+                },
+                openSearch = shortcut == SHORTCUT_SEARCH,
+            )
         }
     }
 
@@ -36,5 +48,9 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_WIDGET_DATE = "com.bdersolutions.daybreak.widget.DATE"
         const val EXTRA_OPEN_UPDATES = "com.bdersolutions.daybreak.OPEN_UPDATES"
+        const val EXTRA_SHORTCUT = "com.bdersolutions.daybreak.SHORTCUT"
+        const val SHORTCUT_TODAY = "today"
+        const val SHORTCUT_WEEK = "week"
+        const val SHORTCUT_SEARCH = "search"
     }
 }

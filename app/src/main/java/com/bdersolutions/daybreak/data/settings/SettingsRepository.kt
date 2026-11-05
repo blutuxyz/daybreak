@@ -1,7 +1,11 @@
 package com.bdersolutions.daybreak.data.settings
 
 import android.content.Context
+import com.bdersolutions.daybreak.data.branding.AppIconStyle
+import com.bdersolutions.daybreak.data.branding.AppNamePreset
+import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.haptics.HapticSettings
+import com.bdersolutions.daybreak.data.reminders.ReminderPlanner
 import com.bdersolutions.daybreak.data.haptics.HapticSettingsCodec
 import com.bdersolutions.daybreak.ui.absences.AbsenceCategory
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +85,20 @@ data class AppSettings(
     /** Look for new versions in the background and download them on Wi-Fi. */
     val autoCheckUpdates: Boolean = true,
     val haptics: HapticSettings = HapticSettings(),
+    /** Supporter extra: the name under the app icon. Only used while a payment is confirmed. */
+    val appNamePreset: AppNamePreset = AppNamePreset.DAYBREAK,
+    /** Supporter extra: a name for the title in the app. Empty means the preset's name. */
+    val customAppName: String = "",
+    /** Supporter extra: the picture of the launcher icon. Only used while a payment is confirmed. */
+    val appIconStyle: AppIconStyle = AppIconStyle.STANDARD,
+    /** The "Now and next" card at the top of today's timetable. */
+    val showNowNext: Boolean = true,
+    /** A notification before the first lesson with the day's lessons, changes and exams. */
+    val morningSummaryEnabled: Boolean = true,
+    /** How many minutes before the first lesson the morning summary comes. */
+    val morningLeadMinutes: Int = ReminderPlanner.DEFAULT_LEAD_MINUTES,
+    /** An evening notification for exams and homework that are due the next day. */
+    val examRemindersEnabled: Boolean = true,
 )
 
 class SettingsRepository(context: Context) {
@@ -125,6 +143,35 @@ class SettingsRepository(context: Context) {
 
     fun setAbsenceUnit(unit: AbsenceUnit) {
         update(_settings.value.copy(absenceUnit = unit))
+    }
+
+    fun setAppNamePreset(preset: AppNamePreset) {
+        update(_settings.value.copy(appNamePreset = preset))
+    }
+
+    fun setShowNowNext(show: Boolean) {
+        update(_settings.value.copy(showNowNext = show))
+    }
+
+    fun setMorningSummaryEnabled(enabled: Boolean) {
+        update(_settings.value.copy(morningSummaryEnabled = enabled))
+    }
+
+    fun setMorningLeadMinutes(minutes: Int) {
+        val safe = if (minutes in ReminderPlanner.LEAD_MINUTES) minutes else ReminderPlanner.DEFAULT_LEAD_MINUTES
+        update(_settings.value.copy(morningLeadMinutes = safe))
+    }
+
+    fun setExamRemindersEnabled(enabled: Boolean) {
+        update(_settings.value.copy(examRemindersEnabled = enabled))
+    }
+
+    fun setAppIconStyle(style: AppIconStyle) {
+        update(_settings.value.copy(appIconStyle = style))
+    }
+
+    fun setCustomAppName(name: String) {
+        update(_settings.value.copy(customAppName = AppNaming.sanitizeCustom(name)))
     }
 
     fun setStartView(view: StartView) {
@@ -188,6 +235,13 @@ class SettingsRepository(context: Context) {
             .putString(KEY_FAVORITE_TARGETS, gson.toJson(value.favoriteTargets))
             .putBoolean(KEY_AUTO_CHECK_UPDATES, value.autoCheckUpdates)
             .putString(KEY_HAPTICS, HapticSettingsCodec.encode(value.haptics))
+            .putString(KEY_APP_NAME_PRESET, value.appNamePreset.name)
+            .putString(KEY_CUSTOM_APP_NAME, value.customAppName)
+            .putString(KEY_APP_ICON_STYLE, value.appIconStyle.name)
+            .putBoolean(KEY_SHOW_NOW_NEXT, value.showNowNext)
+            .putBoolean(KEY_MORNING_SUMMARY, value.morningSummaryEnabled)
+            .putInt(KEY_MORNING_LEAD, value.morningLeadMinutes)
+            .putBoolean(KEY_EXAM_REMINDERS, value.examRemindersEnabled)
             .apply()
         _settings.value = value
     }
@@ -214,6 +268,14 @@ class SettingsRepository(context: Context) {
         favoriteTargets = decodeFavoriteTargets(preferences.getString(KEY_FAVORITE_TARGETS, null)),
         autoCheckUpdates = preferences.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
         haptics = HapticSettingsCodec.decode(preferences.getString(KEY_HAPTICS, null)),
+        appNamePreset = AppNamePreset.fromName(preferences.getString(KEY_APP_NAME_PRESET, null)),
+        customAppName = AppNaming.sanitizeCustom(preferences.getString(KEY_CUSTOM_APP_NAME, null).orEmpty()),
+        appIconStyle = AppIconStyle.fromName(preferences.getString(KEY_APP_ICON_STYLE, null)),
+        showNowNext = preferences.getBoolean(KEY_SHOW_NOW_NEXT, true),
+        morningSummaryEnabled = preferences.getBoolean(KEY_MORNING_SUMMARY, true),
+        morningLeadMinutes = preferences.getInt(KEY_MORNING_LEAD, ReminderPlanner.DEFAULT_LEAD_MINUTES)
+            .takeIf { it in ReminderPlanner.LEAD_MINUTES } ?: ReminderPlanner.DEFAULT_LEAD_MINUTES,
+        examRemindersEnabled = preferences.getBoolean(KEY_EXAM_REMINDERS, true),
     )
 
     private fun decodeFavoriteTargets(json: String?): List<FavoriteTarget> {
@@ -278,6 +340,13 @@ class SettingsRepository(context: Context) {
         private const val KEY_FAVORITE_TARGETS = "favorite_targets"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
         private const val KEY_HAPTICS = "haptics"
+        private const val KEY_APP_NAME_PRESET = "app_name_preset"
+        private const val KEY_CUSTOM_APP_NAME = "custom_app_name"
+        private const val KEY_APP_ICON_STYLE = "app_icon_style"
+        private const val KEY_SHOW_NOW_NEXT = "show_now_next"
+        private const val KEY_MORNING_SUMMARY = "morning_summary"
+        private const val KEY_MORNING_LEAD = "morning_lead_minutes"
+        private const val KEY_EXAM_REMINDERS = "exam_reminders"
         private val gson = com.google.gson.Gson()
     }
 }

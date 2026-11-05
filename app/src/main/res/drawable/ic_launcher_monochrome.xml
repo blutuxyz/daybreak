@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Daybreak logo (Standard) as a single shape, for Android's themed icons, which tint it themselves. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,60a20,20 0,0 1,40 0z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31.5,63.5h45a2.75,2.75 0,0 1,2.75 2.75v0a2.75,2.75 0,0 1,-2.75 2.75h-45a2.75,2.75 0,0 1,-2.75 -2.75v0a2.75,2.75 0,0 1,2.75 -2.75z" />
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M38.5,72h31a2.75,2.75 0,0 1,2.75 2.75v0a2.75,2.75 0,0 1,-2.75 2.75h-31a2.75,2.75 0,0 1,-2.75 -2.75v0a2.75,2.75 0,0 1,2.75 -2.75z" />
+    <path
+        android:fillColor="#66FFFFFF"
+        android:pathData="M45.5,80.5h17a2.75,2.75 0,0 1,2.75 2.75v0a2.75,2.75 0,0 1,-2.75 2.75h-17a2.75,2.75 0,0 1,-2.75 -2.75v0a2.75,2.75 0,0 1,2.75 -2.75z" />
+</vector>

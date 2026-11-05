@@ -80,6 +80,7 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.support.PaymentCheck
 import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
 import com.bdersolutions.daybreak.ui.support.SupportSheet
@@ -109,6 +110,7 @@ import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
+import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
@@ -124,16 +126,29 @@ fun DaybreakApp(
     container: AppContainer,
     initialDate: LocalDate? = null,
     openUpdates: Boolean = false,
+    startMode: Int? = null,
+    openSearch: Boolean = false,
 ) {
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
     val termsAccepted = TermsAcceptance.covers(acceptedVersion)
-    CompositionLocalProvider(LocalHaptics provides container.haptics) {
+    val supportPaid by container.supportStore.paid.collectAsStateWithLifecycle()
+    val appTitle = AppNaming.resolve(supportPaid, settings.appNamePreset, settings.customAppName)
+    CompositionLocalProvider(
+        LocalHaptics provides container.haptics,
+        LocalAppTitle provides appTitle,
+    ) {
         DaybreakTheme(settings = settings) {
             // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
             Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
                 if (accepted) {
-                    DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
+                    DaybreakRoot(
+                        container = container,
+                        initialDate = initialDate,
+                        openUpdates = openUpdates,
+                        startMode = startMode,
+                        openSearch = openSearch,
+                    )
                 } else {
                     TermsGateScreen(
                         isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
@@ -158,6 +173,8 @@ fun DaybreakRoot(
     container: AppContainer,
     initialDate: LocalDate? = null,
     openUpdates: Boolean = false,
+    startMode: Int? = null,
+    openSearch: Boolean = false,
 ) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
@@ -202,6 +219,8 @@ fun DaybreakRoot(
                 session = currentSession,
                 initialDate = initialDate,
                 openUpdates = openUpdates,
+                startMode = startMode,
+                openSearch = openSearch,
             )
         }
     }
@@ -214,6 +233,8 @@ private fun LoggedInContent(
     session: DaybreakSession,
     initialDate: LocalDate?,
     openUpdates: Boolean,
+    startMode: Int?,
+    openSearch: Boolean,
 ) {
     // Tapping the "update available" notification lands on the Updates screen.
     var selectedTab by rememberSaveable { mutableIntStateOf(if (openUpdates) 2 else 0) }
@@ -355,7 +376,9 @@ private fun LoggedInContent(
                     0 -> TimetableScreen(
                         viewModel = timetableViewModel,
                         initialDate = initialDate,
-                        initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
+                        initialMode = startMode
+                            ?: if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
+                        openSearchOnStart = openSearch,
                         onOpenUpcoming = { mainPage = MainPage.UPCOMING },
                     )
 

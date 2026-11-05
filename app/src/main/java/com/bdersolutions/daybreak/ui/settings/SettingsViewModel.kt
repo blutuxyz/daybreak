@@ -30,6 +30,11 @@ import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.data.settings.TextScale
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.data.branding.AppIconStyle
+import com.bdersolutions.daybreak.data.reminders.ReminderNotificationManager
+import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
+import com.bdersolutions.daybreak.data.branding.AppNamePreset
+import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
 import com.bdersolutions.daybreak.data.support.PaymentCheck
 import com.bdersolutions.daybreak.data.support.SupportApi
 import com.bdersolutions.daybreak.data.support.SupportStore
@@ -71,6 +76,9 @@ class SettingsViewModel(
     private val haptics: Haptics,
     private val supportStore: SupportStore,
     private val supportApi: SupportApi?,
+    private val launcherNameSwitcher: LauncherNameSwitcher,
+    private val reminderScheduler: ReminderScheduler,
+    private val reminderNotifier: ReminderNotificationManager,
 ) : ViewModel() {
     // ---- Support (Ko-fi) ----
 
@@ -230,6 +238,48 @@ class SettingsViewModel(
         settingsRepository.setAbsenceUnit(unit)
     }
 
+    fun setShowNowNext(show: Boolean) = settingsRepository.setShowNowNext(show)
+
+    fun setMorningSummaryEnabled(enabled: Boolean) {
+        settingsRepository.setMorningSummaryEnabled(enabled)
+        reminderScheduler.schedule()
+    }
+
+    fun setMorningLeadMinutes(minutes: Int) {
+        settingsRepository.setMorningLeadMinutes(minutes)
+        reminderScheduler.reschedule()
+    }
+
+    fun setExamRemindersEnabled(enabled: Boolean) {
+        settingsRepository.setExamRemindersEnabled(enabled)
+        reminderScheduler.schedule()
+    }
+
+    /** Sends a sample of a reminder now, so the person can see what it looks like. */
+    fun sendTestMorningSummary() = viewModelScope.launch { reminderNotifier.sendMorningPreview() }
+
+    fun sendTestEveningReminder() = viewModelScope.launch { reminderNotifier.sendEveningPreview() }
+
+    /** Supporter extra: the name under the app icon. Ignored without a confirmed payment. */
+    fun setAppNamePreset(preset: AppNamePreset) {
+        if (!supportStore.paid.value) return
+        settingsRepository.setAppNamePreset(preset)
+        launcherNameSwitcher.apply(preset, settingsRepository.current().appIconStyle)
+    }
+
+    /** Supporter extra: the picture of the app icon (Standard or Classic). Ignored without a payment. */
+    fun setAppIconStyle(style: AppIconStyle) {
+        if (!supportStore.paid.value) return
+        settingsRepository.setAppIconStyle(style)
+        launcherNameSwitcher.apply(settingsRepository.current().appNamePreset, style)
+    }
+
+    /** Supporter extra: the title shown in the app. Ignored without a confirmed payment. */
+    fun setCustomAppName(name: String) {
+        if (!supportStore.paid.value) return
+        settingsRepository.setCustomAppName(name)
+    }
+
     fun setStartView(view: StartView) {
         settingsRepository.setStartView(view)
     }
@@ -266,6 +316,7 @@ class SettingsViewModel(
 
     fun logout() {
         scheduler.cancelAll()
+        reminderScheduler.cancelAll()
         sessionStore.clear()
         settingsRepository.clearAbsenceCategories()
         settingsRepository.clearFavoriteTargets()
@@ -299,6 +350,9 @@ class SettingsViewModel(
                 haptics = container.haptics,
                 supportStore = container.supportStore,
                 supportApi = container.supportApi,
+                launcherNameSwitcher = container.launcherNameSwitcher,
+                reminderScheduler = container.reminderScheduler,
+                reminderNotifier = container.reminderNotifier,
             ) as T
         }
     }

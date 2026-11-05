@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon: Today, Week, Search. MainActivity reads the SHORTCUT extra. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="today"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_today"
+        android:shortcutShortLabel="@string/shortcut_today"
+        android:shortcutLongLabel="@string/shortcut_today_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.bdersolutions.daybreak.MainActivity"
+            android:targetPackage="com.bdersolutions.daybreak">
+            <extra
+                android:name="com.bdersolutions.daybreak.SHORTCUT"
+                android:value="today" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="week"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_week"
+        android:shortcutShortLabel="@string/shortcut_week"
+        android:shortcutLongLabel="@string/shortcut_week_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.bdersolutions.daybreak.MainActivity"
+            android:targetPackage="com.bdersolutions.daybreak">
+            <extra
+                android:name="com.bdersolutions.daybreak.SHORTCUT"
+                android:value="week" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.bdersolutions.daybreak.MainActivity"
+            android:targetPackage="com.bdersolutions.daybreak">
+            <extra
+                android:name="com.bdersolutions.daybreak.SHORTCUT"
+                android:value="search" />
+        </intent>
+    </shortcut>
+</shortcuts>

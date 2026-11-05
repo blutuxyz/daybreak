@@ -37,6 +37,9 @@ val LocalSubjectColorMode = staticCompositionLocalOf { SubjectColorMode.ACCENT_H
 /** How the absences page shows missed time. Set from the settings by the theme. */
 val LocalAbsenceUnit = staticCompositionLocalOf { AbsenceUnit.MINUTES }
 
+/** The name the app shows for itself, for example as the timetable title. A supporter extra. */
+val LocalAppTitle = staticCompositionLocalOf { "Daybreak" }
+
 /** The user's lesson colour choices. Provided by DaybreakTheme. */
 val LocalLessonColors = staticCompositionLocalOf { LessonColorSettings() }
 
