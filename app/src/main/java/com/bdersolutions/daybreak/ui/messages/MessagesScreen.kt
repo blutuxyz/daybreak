@@ -2,7 +2,10 @@ package com.bdersolutions.daybreak.ui.messages
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +21,14 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +55,10 @@ import com.bdersolutions.daybreak.ui.toUserMessage
 import com.bdersolutions.daybreak.ui.upcoming.EmptyText
 import com.bdersolutions.daybreak.ui.upcoming.ErrorBlock
 import com.bdersolutions.daybreak.untis.MailFolder
+import com.bdersolutions.daybreak.untis.RecipientGroup
 import com.bdersolutions.daybreak.untis.UntisAttachment
+import com.bdersolutions.daybreak.untis.UntisNetworkException
+import com.bdersolutions.daybreak.untis.UntisRecipient
 import com.bdersolutions.daybreak.untis.UntisMail
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -70,6 +83,18 @@ fun MessagesScreen(
         onBack = onBack,
         modifier = modifier,
     ) {
+        item(key = "new") {
+            FilledTonalButton(
+                onClick = viewModel::openCompose,
+                modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 0.dp),
+            ) {
+                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.messages_new))
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         item(key = "folders") {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 folders.forEachIndexed { index, folder ->
@@ -108,6 +133,20 @@ fun MessagesScreen(
                 )
             }
         }
+    }
+
+    state.compose?.let { form ->
+        ComposeSheet(
+            form = form,
+            onDismiss = viewModel::closeCompose,
+            onPick = viewModel::pickRecipient,
+            onSubject = viewModel::setSubject,
+            onContent = viewModel::setContent,
+            onSend = viewModel::askToSend,
+            onConfirm = viewModel::send,
+            onDismissConfirm = viewModel::dismissConfirm,
+            onRetryRecipients = viewModel::loadRecipients,
+        )
     }
 
     state.open?.let { open ->
@@ -278,6 +317,143 @@ private fun MailSheetContent(open: OpenMail, folder: MailFolder, locale: Locale)
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun ComposeSheet(
+    form: ComposeState,
+    onDismiss: () -> Unit,
+    onPick: (UntisRecipient) -> Unit,
+    onSubject: (String) -> Unit,
+    onContent: (String) -> Unit,
+    onSend: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismissConfirm: () -> Unit,
+    onRetryRecipients: () -> Unit,
+) {
+    val context = LocalContext.current
+    ModalBottomSheet(
+        onDismissRequest = { if (!form.sending) onDismiss() },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                text = stringResource(R.string.messages_new),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.messages_recipient),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            val recipientsError = form.recipientsError
+            when {
+                form.loadingRecipients -> CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                recipientsError != null -> {
+                    Text(recipientsError.toUserMessage(context), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onRetryRecipients) { Text(stringResource(R.string.action_retry)) }
+                }
+                else -> {
+                    listOf(
+                        RecipientGroup.CLASS_TEACHER to R.string.messages_class_teacher,
+                        RecipientGroup.TEACHER to R.string.messages_teachers,
+                    ).forEach { (group, label) ->
+                        val people = form.recipients.filter { it.group == group }
+                        if (people.isNotEmpty()) {
+                            Text(
+                                text = stringResource(label),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                people.forEach { person ->
+                                    FilterChip(
+                                        selected = form.recipient?.userId == person.userId,
+                                        onClick = { onPick(person) },
+                                        enabled = !form.sending,
+                                        label = { Text(person.name) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.messages_one_teacher_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = form.subject,
+                onValueChange = onSubject,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.messages_subject)) },
+                singleLine = true,
+                enabled = !form.sending,
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = form.content,
+                onValueChange = onContent,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.messages_text)) },
+                minLines = 5,
+                enabled = !form.sending,
+            )
+            form.error?.let { error ->
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = error.toUserMessage(context),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                if (error is IllegalStateException || error is UntisNetworkException) {
+                    Text(
+                        text = stringResource(R.string.messages_send_failed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onSend,
+                enabled = form.canSend,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Text(stringResource(if (form.sending) R.string.messages_sending else R.string.messages_send))
+            }
+        }
+    }
+    if (form.confirming) {
+        AlertDialog(
+            onDismissRequest = onDismissConfirm,
+            title = { Text(stringResource(R.string.messages_confirm_title)) },
+            text = {
+                Text(stringResource(R.string.messages_confirm_text, form.recipient?.name.orEmpty()))
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirm) { Text(stringResource(R.string.messages_send)) }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissConfirm) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 }
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -155,6 +156,56 @@ internal class JsonRpcClient(
             }
             runCatching { JsonParser.parseString(text) }.getOrNull()
                 ?: throw UntisParseException("WebUntis returned an invalid response.")
+        }
+    }
+
+    /**
+     * POST of a multipart form with one JSON part, the way the WebUntis web app sends a message: the
+     * JSON travels as the part [partName]. Uses a bearer [token]. The answer goes to the debug log
+     * under [label]; the message text and the token never do.
+     */
+    suspend fun postJsonPart(
+        server: String,
+        path: String,
+        token: String,
+        label: String,
+        partName: String,
+        json: JsonElement,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val url = UntisEndpoints.normalizeServer(server).toHttpUrl().newBuilder()
+            .addPathSegments(path.trim('/'))
+            .build()
+        val form = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(partName, "blob", json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "UntisMobileAndroid")
+            .header("Authorization", "Bearer $token")
+            .post(form)
+            .build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the WebUntis server.", error)
+        }
+        response.use { received ->
+            val text = try {
+                received.body?.string().orEmpty()
+            } catch (error: IOException) {
+                throw UntisNetworkException("The server response could not be read.", error)
+            }
+            rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
+            if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
+            if (!received.isSuccessful) {
+                val message = runCatching {
+                    JsonParser.parseString(text).asJsonObject.stringOrNull("errorMessage")
+                }.getOrNull()
+                throw UntisProtocolException(message?.takeIf { it.isNotBlank() } ?: "WebUntis returned HTTP ${received.code}.")
+            }
+            runCatching { JsonParser.parseString(text) }.getOrNull() ?: JsonObject()
         }
     }
 

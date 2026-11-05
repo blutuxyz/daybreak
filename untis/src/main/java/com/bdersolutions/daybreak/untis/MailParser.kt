@@ -76,3 +76,31 @@ internal object MailParser {
             .replace("&quot;", "\"")
             .trim()
 }
+
+/** Reads `messages/recipients/static/persons`: groups of people, each with a name and user id. */
+internal object RecipientParser {
+
+    fun parse(result: JsonElement): List<UntisRecipient> {
+        val groups = result.asJsonArrayOrNull() ?: return emptyList()
+        return groups.flatMap { element ->
+            val obj = element.asJsonObjectOrNull() ?: return@flatMap emptyList()
+            val group = when (obj.stringOrNull("type")) {
+                "CLASS_TEACHERS" -> RecipientGroup.CLASS_TEACHER
+                "TEACHERS" -> RecipientGroup.TEACHER
+                else -> RecipientGroup.OTHER
+            }
+            obj.arrayOrNull("persons")?.mapNotNull { person ->
+                val entry = person.asJsonObjectOrNull() ?: return@mapNotNull null
+                val userId = entry.longOrNull("userId") ?: return@mapNotNull null
+                val name = entry.stringOrNull("displayName", "name")?.trim().orEmpty()
+                if (name.isBlank()) return@mapNotNull null
+                val tags = entry.arrayOrNull("tags")
+                    ?.mapNotNull { tag ->
+                        tag.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
+                    }
+                    .orEmpty()
+                UntisRecipient(userId = userId, name = name, group = group, tags = tags)
+            }.orEmpty()
+        }
+    }
+}

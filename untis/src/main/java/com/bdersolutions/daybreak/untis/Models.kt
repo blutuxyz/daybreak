@@ -180,6 +180,18 @@ data class UntisMailPerson(
     val name: String,
 )
 
+/** Where a possible recipient is listed: the class teacher first, then the rest. */
+enum class RecipientGroup { CLASS_TEACHER, TEACHER, OTHER }
+
+/** Someone the student may write to. [userId] is what the message API wants. */
+data class UntisRecipient(
+    val userId: Long,
+    val name: String,
+    val group: RecipientGroup,
+    /** Subjects or classes WebUntis shows next to the name. */
+    val tags: List<String> = emptyList(),
+)
+
 /** A file attached to a message. [id] is the storage id WebUntis gives it. */
 data class UntisAttachment(
     val id: String,

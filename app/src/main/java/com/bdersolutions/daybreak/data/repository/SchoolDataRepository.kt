@@ -9,6 +9,7 @@ import com.bdersolutions.daybreak.untis.UntisElement
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisHomework
 import com.bdersolutions.daybreak.untis.UntisMail
+import com.bdersolutions.daybreak.untis.UntisRecipient
 import com.bdersolutions.daybreak.untis.UntisMessage
 import com.bdersolutions.daybreak.untis.MailFolder
 import com.bdersolutions.daybreak.untis.UntisLesson
@@ -62,6 +63,13 @@ class SchoolDataRepository(
 
     /** The messages (Nachrichten) of one folder, newest first. */
     suspend fun mails(folder: MailFolder): List<UntisMail> = api.fetchMailList(requireSession(), folder)
+
+    /** The people the student may write to. */
+    suspend fun recipients(): List<UntisRecipient> = api.fetchRecipients(requireSession())
+
+    /** Sends a message to one teacher. Returns how many recipients the server counted. */
+    suspend fun sendMail(subject: String, content: String, recipientUserId: Long): Int =
+        api.sendMail(requireSession(), subject, content, recipientUserId)
 
     /** One message with its full text. */
     suspend fun mail(id: Long): UntisMail = api.fetchMail(requireSession(), id)

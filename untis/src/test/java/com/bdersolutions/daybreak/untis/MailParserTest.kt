@@ -82,4 +82,21 @@ class MailParserTest {
         assertEquals(listOf(UntisAttachment("abc", "Aufgabe.pdf")), mail.attachments)
     }
 
+
+    @Test
+    fun readsTheRecipientGroupsWithUserIds() {
+        val json = JsonParser.parseString(
+            """[{"type":"CLASS_TEACHERS","persons":[{"displayName":"HUTT","userId":26,"tags":["","D","GGP"]}]},""" +
+                """{"type":"TEACHERS","persons":[{"displayName":"ZOTT","userId":70,"imageUrl":null,"tags":["RK"]},{"displayName":" ","userId":1}]},""" +
+                """{"type":"OTHERS","persons":[{"displayName":"NAGL","userId":73,"tags":[]}]}]""",
+        )
+
+        val recipients = RecipientParser.parse(json)
+
+        assertEquals(3, recipients.size)
+        assertEquals(UntisRecipient(26L, "HUTT", RecipientGroup.CLASS_TEACHER, listOf("D", "GGP")), recipients[0])
+        assertEquals(UntisRecipient(70L, "ZOTT", RecipientGroup.TEACHER, listOf("RK")), recipients[1])
+        assertEquals(RecipientGroup.OTHER, recipients[2].group)
+    }
+
 }

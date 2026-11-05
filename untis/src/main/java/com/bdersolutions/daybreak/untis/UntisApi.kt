@@ -219,6 +219,53 @@ class UntisApi(
      */
     private suspend fun restGet(session: UntisSession, path: String, label: String): JsonElement {
         val safeServer = normalizeInputs(session.server, session.school, session.username)
+        val token = restToken(session, safeServer)
+        return rpc.getRest(
+            server = safeServer,
+            path = "WebUntis/api/rest/view/v1/$path",
+            query = emptyMap(),
+            token = token,
+            label = label,
+        )
+    }
+
+    /** The people the student may write to: class teachers, teachers and others. */
+    suspend fun fetchRecipients(session: UntisSession): List<UntisRecipient> =
+        RecipientParser.parse(restGet(session, "messages/recipients/static/persons", "mail-recipients"))
+
+    /**
+     * Sends a message to exactly one teacher, as the WebUntis web app does for a student: a
+     * multipart POST whose JSON part names the recipient by user id (`recipientUserIds`). Returns the
+     * number of recipients the server reports. Students may only write to a single teacher.
+     */
+    suspend fun sendMail(session: UntisSession, subject: String, content: String, recipientUserId: Long): Int {
+        require(recipientUserId > 0) { "The recipient is missing." }
+        if (subject.isBlank()) throw UntisParseException("The subject is empty.")
+        if (content.isBlank()) throw UntisParseException("The message is empty.")
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        val token = restToken(session, safeServer)
+        val request = JsonObject().apply {
+            addProperty("subject", subject.trim())
+            addProperty("content", content.trim())
+            addProperty("requestConfirmation", false)
+            add("recipientUserIds", JsonArray().apply { add(recipientUserId) })
+            add("oneDriveAttachments", JsonArray())
+            addProperty("forbidReply", false)
+        }
+        val answer = rpc.postJsonPart(
+            server = safeServer,
+            path = "WebUntis/api/rest/view/v2/messages",
+            token = token,
+            // Only the server's answer is logged, never the text of the message.
+            label = "mail-send",
+            partName = "request",
+            json = request,
+        )
+        return answer.asJsonObjectOrNull()?.intOrNull("numberOfRecipients") ?: 0
+    }
+
+    /** A short-lived token for the message REST API; `getAuthToken` hands it out for the mobile key. */
+    private suspend fun restToken(session: UntisSession, safeServer: String): String {
         if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
         val tokenResult = rpc.call(
             server = safeServer,
@@ -230,16 +277,9 @@ class UntisApi(
             // The token must never reach the debug log.
             recordRaw = false,
         )
-        val token = tokenResult.asJsonObjectOrNull()?.stringOrNull("token", "accessToken")
+        return tokenResult.asJsonObjectOrNull()?.stringOrNull("token", "accessToken")
             ?: tokenResult.takeIf { it.isJsonPrimitive }?.asString
             ?: throw UntisParseException("WebUntis returned no token.")
-        return rpc.getRest(
-            server = safeServer,
-            path = "WebUntis/api/rest/view/v1/$path",
-            query = emptyMap(),
-            token = token,
-            label = label,
-        )
     }
 
     /** The school's notices (Mitteilungen) that are shown on [date]. */

@@ -372,4 +372,17 @@
     <string name="messages_attachments">Attachments</string>
     <string name="messages_attachments_hint">Downloading is not possible here yet. Open the file in WebUntis.</string>
     <string name="messages_unknown_person">Unknown</string>
+    <string name="messages_new">New message</string>
+    <string name="messages_recipient">Recipient</string>
+    <string name="messages_recipient_none">Choose a teacher</string>
+    <string name="messages_class_teacher">Class teacher</string>
+    <string name="messages_teachers">Teachers</string>
+    <string name="messages_subject">Subject</string>
+    <string name="messages_text">Message</string>
+    <string name="messages_send">Send</string>
+    <string name="messages_sending">Sending …</string>
+    <string name="messages_confirm_title">Send message?</string>
+    <string name="messages_confirm_text">The message goes to %1$s. It cannot be taken back.</string>
+    <string name="messages_one_teacher_hint">Students can only write to one teacher at a time.</string>
+    <string name="messages_send_failed">The message may not have been sent. Check the Sent folder before you try again.</string>
 </resources>

@@ -372,4 +372,17 @@
     <string name="messages_attachments">Anhänge</string>
     <string name="messages_attachments_hint">Herunterladen geht hier noch nicht. Öffne die Datei in WebUntis.</string>
     <string name="messages_unknown_person">Unbekannt</string>
+    <string name="messages_new">Neue Nachricht</string>
+    <string name="messages_recipient">Empfänger</string>
+    <string name="messages_recipient_none">Wähle eine Lehrkraft</string>
+    <string name="messages_class_teacher">Klassenlehrkraft</string>
+    <string name="messages_teachers">Lehrkräfte</string>
+    <string name="messages_subject">Betreff</string>
+    <string name="messages_text">Nachricht</string>
+    <string name="messages_send">Senden</string>
+    <string name="messages_sending">Wird gesendet …</string>
+    <string name="messages_confirm_title">Nachricht senden?</string>
+    <string name="messages_confirm_text">Die Nachricht geht an %1$s. Das lässt sich nicht zurückholen.</string>
+    <string name="messages_one_teacher_hint">Schüler dürfen eine Nachricht nur an eine Lehrkraft schicken.</string>
+    <string name="messages_send_failed">Die Nachricht wurde nicht sicher gesendet. Schau im Ordner Gesendet nach, bevor du es nochmal versuchst.</string>
 </resources>

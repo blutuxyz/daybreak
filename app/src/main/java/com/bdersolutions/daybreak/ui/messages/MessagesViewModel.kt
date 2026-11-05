@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.untis.MailFolder
+import com.bdersolutions.daybreak.untis.RecipientGroup
 import com.bdersolutions.daybreak.untis.UntisMail
+import com.bdersolutions.daybreak.untis.UntisRecipient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,10 +30,27 @@ data class OpenMail(
     val error: Throwable? = null,
 )
 
+/** The new-message form. [recipient] is the one teacher the message goes to. */
+data class ComposeState(
+    val recipients: List<UntisRecipient> = emptyList(),
+    val loadingRecipients: Boolean = true,
+    val recipientsError: Throwable? = null,
+    val recipient: UntisRecipient? = null,
+    val subject: String = "",
+    val content: String = "",
+    val confirming: Boolean = false,
+    val sending: Boolean = false,
+    val error: Throwable? = null,
+) {
+    val canSend: Boolean
+        get() = recipient != null && subject.isNotBlank() && content.isNotBlank() && !sending
+}
+
 data class MessagesUiState(
     val folder: MailFolder = MailFolder.INBOX,
     val lists: Map<MailFolder, MailListState> = emptyMap(),
     val open: OpenMail? = null,
+    val compose: ComposeState? = null,
 ) {
     val current: MailListState get() = lists[folder] ?: MailListState()
 }
@@ -84,6 +103,70 @@ class MessagesViewModel(
 
     fun close() {
         _state.update { it.copy(open = null) }
+    }
+
+    fun openCompose() {
+        if (_state.value.compose != null) return
+        _state.update { it.copy(compose = ComposeState()) }
+        loadRecipients()
+    }
+
+    fun closeCompose() {
+        _state.update { it.copy(compose = null) }
+    }
+
+    fun loadRecipients() {
+        updateCompose { it.copy(loadingRecipients = true, recipientsError = null) }
+        viewModelScope.launch {
+            try {
+                val people = schoolData.recipients()
+                    .filter { it.group != RecipientGroup.OTHER }
+                updateCompose { it.copy(loadingRecipients = false, recipients = people) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                updateCompose { it.copy(loadingRecipients = false, recipientsError = error) }
+            }
+        }
+    }
+
+    fun pickRecipient(recipient: UntisRecipient) = updateCompose { it.copy(recipient = recipient, error = null) }
+
+    fun setSubject(value: String) = updateCompose { it.copy(subject = value, error = null) }
+
+    fun setContent(value: String) = updateCompose { it.copy(content = value, error = null) }
+
+    /** Asks to confirm before anything leaves the phone. */
+    fun askToSend() = updateCompose { if (it.canSend) it.copy(confirming = true) else it }
+
+    fun dismissConfirm() = updateCompose { it.copy(confirming = false) }
+
+    fun send() {
+        val form = _state.value.compose ?: return
+        val recipient = form.recipient ?: return
+        if (!form.canSend) return
+        updateCompose { it.copy(confirming = false, sending = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val count = schoolData.sendMail(form.subject, form.content, recipient.userId)
+                if (count != 1) {
+                    // The server must report exactly one recipient. Anything else is not what was meant.
+                    updateCompose { it.copy(sending = false, error = IllegalStateException("Recipients: $count")) }
+                    load(MailFolder.SENT)
+                    return@launch
+                }
+                _state.update { it.copy(compose = null, folder = MailFolder.SENT) }
+                load(MailFolder.SENT)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                updateCompose { it.copy(sending = false, error = error) }
+            }
+        }
+    }
+
+    private fun updateCompose(change: (ComposeState) -> ComposeState) {
+        _state.update { state -> state.compose?.let { state.copy(compose = change(it)) } ?: state }
     }
 
     /** Opening a message reads it, so the dot goes out of the list. */
