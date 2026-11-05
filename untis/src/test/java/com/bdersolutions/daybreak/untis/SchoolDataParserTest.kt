@@ -86,4 +86,25 @@ class SchoolDataParserTest {
         assertEquals("Krankheit", directory.absenceReasons[51L])
         assertNull(directory.absenceReasons[1L])
     }
+
+    @Test
+    fun readsHolidaysAndFlagsDateNames() {
+        val json = """
+            {"masterData":{"holidays":[
+              {"id":629,"name":"Weihnachtsferien","longName":"Weihnachtsferien","startDate":"2026-12-24","endDate":"2027-01-06"},
+              {"id":96,"name":"10.5.","longName":"10.5.2018","startDate":"2018-05-10","endDate":"2018-05-10"},
+              {"id":1,"name":"kaputt"}
+            ]}}
+        """.trimIndent()
+
+        val holidays = SchoolDataParser.directory(JsonParser.parseString(json)).holidays
+
+        assertEquals(2, holidays.size)
+        assertEquals(java.time.LocalDate.of(2018, 5, 10), holidays[0].start)
+        assertTrue(holidays[0].hasDateName)
+        assertEquals("Weihnachtsferien", holidays[1].displayName)
+        assertFalse(holidays[1].hasDateName)
+        assertEquals(java.time.LocalDate.of(2027, 1, 6), holidays[1].end)
+    }
+
 }

@@ -12,6 +12,8 @@ API) and does **not** require any API key or developer account.
 - Day and week views with horizontal swipe navigation, a live “now” highlight and
   clear cancellation, room-change and substitution badges.
 - Exams are framed in bright amber, and the part of a lesson you were absent for is greyed out.
+- Holidays show up in the timetable as a block you can open. Rooms, teachers and classes in a lesson are links to their own timetable.
+- Absences can be shown as school lessons of 50 minutes instead of hours and minutes.
 - Homework, exams and your school's notices on their own pages, and your WebUntis
   messages (Nachrichten): inbox, sent and drafts.
 - Offline-first cache, periodic WorkManager sync, change notifications and a

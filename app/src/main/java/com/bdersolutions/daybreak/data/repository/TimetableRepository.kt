@@ -168,6 +168,8 @@ class TimetableRepository(
                     )
                     workingCache = workingCache.copy(
                         subjectNames = workingCache.subjectNames + timetable.directory.subjectNamesById,
+                        // Every timetable answer carries the whole holiday list, so the newest one wins.
+                        holidays = timetable.directory.holidays.ifEmpty { workingCache.holidays },
                         weeks = workingCache.weeks + (
                             weekStart to CachedWeek(
                                 weekStart = weekStart,

@@ -108,6 +108,12 @@
     <string name="label_info">Information</string>
 
     <string name="settings_title">Mehr</string>
+    <string name="holiday_generic">Schulfrei</string>
+    <string name="holiday_duration">Dauer</string>
+    <plurals name="holiday_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tage</item>
+    </plurals>
     <string name="more_group_profile">Mein Profil</string>
     <string name="more_group_settings">Einstellungen</string>
     <string name="more_group_other">Weiteres</string>
@@ -309,6 +315,11 @@
     <string name="absences_reason_unknown">Ohne Angabe</string>
     <string name="absences_duration_hm">%1$d h %2$d min</string>
     <string name="absences_duration_m">%1$d min</string>
+    <string name="absences_duration_lessons">%1$s Std.</string>
+    <string name="settings_absence_unit">Fehlstunden anzeigen als</string>
+    <string name="settings_absence_unit_time">Zeit</string>
+    <string name="settings_absence_unit_lessons">Schulstunden</string>
+    <string name="settings_absence_unit_hint">Eine Schulstunde zählt 50 Minuten.</string>
     <string name="absences_add_category">Kategorie hinzufügen</string>
     <string name="absences_manage">Verwalten</string>
     <string name="absences_page_label">Seite %1$d von %2$d</string>
