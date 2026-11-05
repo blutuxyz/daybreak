@@ -356,10 +356,10 @@
     <string name="account_messages">Mitteilungen</string>
     <string name="account_messages_empty">Heute keine Mitteilungen</string>
     <string name="account_class_services">Klassendienste</string>
-    <string name="class_services_hint">WebUntis zeigt Klassendienste nur nach einer Anmeldung im Web. Dein Passwort wird nur für diese Abfrage verwendet und nicht gespeichert.</string>
+    <string name="class_services_hint">WebUntis zeigt Klassendienste nur nach einer Anmeldung im Web. Dein Passwort wird verschlüsselt auf diesem Gerät gespeichert, damit du es nur einmal eingeben musst.</string>
     <string name="class_services_password">Passwort</string>
     <string name="class_services_show">Anzeigen</string>
-    <string name="class_services_hide">Ausblenden</string>
+    <string name="class_services_forget">Gespeichertes Passwort entfernen</string>
     <string name="class_services_empty">Keine Klassendienste in diesem Zeitraum</string>
     <string name="class_services_wrong_password">Anmeldung fehlgeschlagen. Prüfe dein Passwort. Konten mit zweitem Faktor funktionieren hier nicht.</string>
 </resources>

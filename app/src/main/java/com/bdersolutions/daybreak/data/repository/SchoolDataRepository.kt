@@ -12,6 +12,7 @@ import com.bdersolutions.daybreak.untis.UntisHomework
 import com.bdersolutions.daybreak.untis.UntisMessage
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.untis.UntisSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,12 +57,51 @@ class SchoolDataRepository(
     suspend fun homework(startDate: LocalDate, endDate: LocalDate): List<UntisHomework> =
         api.fetchHomework(requireSession(), startDate, endDate)
 
-    /** Signs in with [password] for this one request. The password is not kept. */
-    suspend fun classServices(password: String, startDate: LocalDate, endDate: LocalDate): List<UntisClassService> =
-        api.fetchClassServices(requireSession(), password, startDate, endDate)
+    /** Whether the WebUntis password is stored, so web-only data loads without asking. */
+    val passwordSaved: StateFlow<Boolean> get() = sessionStore.passwordSaved
 
-    suspend fun messages(date: LocalDate): List<UntisMessage> =
-        api.fetchMessages(requireSession(), date)
+    fun forgetPassword() = sessionStore.forgetPassword()
+
+    /**
+     * Class services need a web sign-in. Uses [password] when given, and stores it once it worked,
+     * so it is only asked for once; otherwise uses the stored one. A password the server rejects
+     * is dropped, so the next attempt asks again.
+     */
+    suspend fun classServices(password: String?, startDate: LocalDate, endDate: LocalDate): List<UntisClassService> {
+        val supplied = password?.takeIf { it.isNotBlank() }
+        val used = supplied ?: sessionStore.storedPassword() ?: throw UntisAuthException("No password.")
+        try {
+            val services = api.fetchClassServices(requireSession(), used, startDate, endDate)
+            if (supplied != null) sessionStore.savePassword(supplied)
+            return services
+        } catch (error: UntisAuthException) {
+            if (supplied == null) sessionStore.forgetPassword()
+            throw error
+        }
+    }
+
+    /**
+     * The school's notices of [date]. With a stored password they come from the WebUntis start page
+     * as well as from the mobile API; without one only from the mobile API. If one source fails the
+     * other still shows.
+     */
+    suspend fun messages(date: LocalDate): List<UntisMessage> {
+        val session = requireSession()
+        val mobile = runCatching { api.fetchMessages(session, date) }
+            .onFailure { if (it is CancellationException) throw it }
+        val password = sessionStore.storedPassword()
+        val web = password?.let {
+            runCatching { api.fetchWebMessages(session, it, date) }
+                .onFailure { error -> if (error is CancellationException) throw error }
+        }
+        if (web?.exceptionOrNull() is UntisAuthException) sessionStore.forgetPassword()
+
+        val lists = listOfNotNull(mobile.getOrNull(), web?.getOrNull())
+        if (lists.isEmpty()) {
+            throw mobile.exceptionOrNull() ?: web?.exceptionOrNull() ?: UntisAuthException("Not signed in.")
+        }
+        return lists.flatten().distinctBy { it.subject to it.text }
+    }
 
     /** Exams in a range. They carry only a subject id, so the master data names them. */
     suspend fun exams(startDate: LocalDate, endDate: LocalDate): List<UntisExam> {

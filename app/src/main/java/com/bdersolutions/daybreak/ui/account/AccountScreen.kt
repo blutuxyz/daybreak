@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +57,15 @@ fun AccountScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val classServices by viewModel.classServices.collectAsStateWithLifecycle()
+    val passwordSaved by viewModel.passwordSaved.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Each time the page opens, read the notices again, and the class services when the password
+    // is stored. Without it the class services wait for the password to be typed.
+    LaunchedEffect(Unit) {
+        viewModel.load()
+        viewModel.loadClassServices(null)
+    }
 
     SettingsPageScaffold(
         title = stringResource(R.string.account_title),
@@ -119,32 +128,26 @@ fun AccountScreen(
 
         classServicesSection(
             state = classServices,
+            passwordSaved = passwordSaved,
             onSubmit = viewModel::loadClassServices,
-            onHide = viewModel::hideClassServices,
+            onForgetPassword = viewModel::forgetPassword,
         )
     }
 }
 
 private fun LazyListScope.classServicesSection(
     state: ClassServicesState,
+    passwordSaved: Boolean,
     onSubmit: (String) -> Unit,
-    onHide: () -> Unit,
+    onForgetPassword: () -> Unit,
 ) {
     item(key = "services-title") {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.account_class_services),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            if (state is ClassServicesState.Loaded) {
-                TextButton(onClick = onHide) { Text(stringResource(R.string.class_services_hide)) }
-            }
-        }
+        Text(
+            text = stringResource(R.string.account_class_services),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, top = 12.dp),
+        )
     }
     when (state) {
         ClassServicesState.Idle, is ClassServicesState.Failed -> item(key = "services-form") {
@@ -189,6 +192,13 @@ private fun LazyListScope.classServicesSection(
                         Text(service.text, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
+            }
+        }
+    }
+    if (passwordSaved) {
+        item(key = "forget-password") {
+            TextButton(onClick = onForgetPassword, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.class_services_forget))
             }
         }
     }

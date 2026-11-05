@@ -68,6 +68,9 @@ class LoginViewModel(
 
     private var pendingLogin: UntisLoginResult? = null
 
+    /** The password of a password login, held only until the login is saved, then stored encrypted. */
+    private var pendingPassword: String? = null
+
     fun onModeChange(mode: LoginMode) {
         _state.value = _state.value.copy(mode = mode, error = null, errorDetail = null)
     }
@@ -188,7 +191,8 @@ class LoginViewModel(
         val login = pendingLogin ?: return
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true)
-            val saved = withContext(Dispatchers.IO) { sessionStore.saveLogin(login, student) }
+            val saved = withContext(Dispatchers.IO) { sessionStore.saveLogin(login, student, pendingPassword) }
+            if (saved) pendingPassword = null
             _state.value = if (saved) {
                 clearSensitive(LoginUiState(language = _state.value.language))
             } else {
@@ -199,6 +203,7 @@ class LoginViewModel(
 
     fun cancelStudentSelection() {
         pendingLogin = null
+        pendingPassword = null
         _state.value = _state.value.copy(pendingStudents = null, loading = false)
     }
 
@@ -223,6 +228,7 @@ class LoginViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null, errorDetail = null)
             try {
+                pendingPassword = null
                 val result = api.loginWithSecret(server, school, username, secret)
                 handleLogin(result)
             } catch (error: Throwable) {
@@ -245,8 +251,10 @@ class LoginViewModel(
             _state.value = _state.value.copy(loading = true, error = null, errorDetail = null)
             try {
                 val result = api.loginWithPassword(server, school, username, password, secondFactor)
+                pendingPassword = password
                 handleLogin(result)
             } catch (error: Throwable) {
+                pendingPassword = null
                 handleError(error)
             } finally {
                 _state.value = _state.value.copy(loading = false)
@@ -262,8 +270,9 @@ class LoginViewModel(
 
             1 -> {
                 val student = result.children.first()
-                val saved = withContext(Dispatchers.IO) { sessionStore.saveLogin(result, student) }
+                val saved = withContext(Dispatchers.IO) { sessionStore.saveLogin(result, student, pendingPassword) }
                 if (saved) {
+                    pendingPassword = null
                     _state.value = clearSensitive(LoginUiState(language = _state.value.language))
                 } else {
                     _state.value = _state.value.copy(error = LoginFailure.STORAGE)

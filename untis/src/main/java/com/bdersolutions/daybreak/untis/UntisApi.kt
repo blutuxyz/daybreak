@@ -197,7 +197,7 @@ class UntisApi(
     /**
      * The class services (Klassendienste) of the student's class. WebUntis only serves them to a
      * web login, not to the mobile key, so this signs in with [password] for the length of one
-     * request and signs out again. The password is never stored or logged.
+     * request and signs out again. The password is never logged.
      */
     suspend fun fetchClassServices(
         session: UntisSession,
@@ -206,6 +206,48 @@ class UntisApi(
         endDate: LocalDate,
     ): List<UntisClassService> {
         require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        val body = withWebSession(session, password) { server, cookie ->
+            rpc.getRest(
+                server = server,
+                path = "WebUntis/api/classreg/classservices",
+                query = mapOf(
+                    "startDate" to utisDate(startDate).toString(),
+                    "endDate" to utisDate(endDate).toString(),
+                ),
+                cookie = cookie,
+                label = "classservices",
+            )
+        }
+        return ClassServiceParser.parse(body)
+    }
+
+    /**
+     * The notices shown on the WebUntis start page (Mitteilungen) on [date]. They come from the web
+     * news widget, so this needs the password, like [fetchClassServices].
+     */
+    suspend fun fetchWebMessages(session: UntisSession, password: String, date: LocalDate): List<UntisMessage> {
+        val body = withWebSession(session, password) { server, cookie ->
+            rpc.getRest(
+                server = server,
+                path = "WebUntis/api/public/news/newsWidgetData",
+                query = mapOf("date" to date.toString()),
+                cookie = cookie,
+                label = "newsWidgetData",
+            )
+        }
+        return MessageParser.parse(body)
+    }
+
+    /**
+     * Signs in on the web with [password], runs [block] with the session cookie and signs out again.
+     * A failed sign-in is an [UntisAuthException]. A session the REST API then refuses is not: it
+     * does not mean the password is wrong.
+     */
+    private suspend fun <T> withWebSession(
+        session: UntisSession,
+        password: String,
+        block: suspend (server: String, cookie: String) -> T,
+    ): T {
         if (password.isBlank()) throw UntisAuthException("The password is empty.")
         val safeServer = normalizeInputs(session.server, session.school, session.username)
 
@@ -229,17 +271,9 @@ class UntisApi(
         val schoolCookie = java.util.Base64.getEncoder().encodeToString(session.school.toByteArray())
         val cookie = "JSESSIONID=$sessionId; schoolname=\"_$schoolCookie\""
         try {
-            val body = rpc.getRest(
-                server = safeServer,
-                path = "WebUntis/api/classreg/classservices",
-                query = mapOf(
-                    "startDate" to utisDate(startDate).toString(),
-                    "endDate" to utisDate(endDate).toString(),
-                ),
-                cookie = cookie,
-                label = "classservices",
-            )
-            return ClassServiceParser.parse(body)
+            return block(safeServer, cookie)
+        } catch (error: UntisAuthException) {
+            throw UntisProtocolException("WebUntis did not accept the web session.")
         } finally {
             runCatching {
                 rpc.call(

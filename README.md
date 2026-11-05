@@ -70,7 +70,10 @@ Use **Andere Anmeldung → Manuell** if you already know:
 
 **Andere Anmeldung → Passwort** asks WebUntis once for the mobile access key using your
 username and password (plus a verification code if the school requires two-factor
-authentication). Daybreak stores only the derived key, never your password.
+authentication). Daybreak stores the derived key. It also keeps the password,
+encrypted with the Keystore, so class services and notices from the WebUntis web
+site can load without asking again. **Mein Konto → Klassendienste** can remove it,
+and signing out deletes it.
 
 ## Project layout
 

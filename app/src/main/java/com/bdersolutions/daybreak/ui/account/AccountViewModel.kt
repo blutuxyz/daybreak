@@ -40,10 +40,10 @@ class AccountViewModel(
     private val _classServices = MutableStateFlow<ClassServicesState>(ClassServicesState.Idle)
     val classServices: StateFlow<ClassServicesState> = _classServices.asStateFlow()
 
-    init {
-        load()
-    }
+    /** Whether the password is stored, so the class services load without asking. */
+    val passwordSaved: StateFlow<Boolean> = schoolData.passwordSaved
 
+    /** Loads the notices again. The page calls this each time it opens. */
     fun load() {
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
@@ -58,16 +58,19 @@ class AccountViewModel(
     }
 
     /**
-     * Signs in with [password] for one request and shows the services of this week and the next
-     * weeks. The password is passed straight on and not kept anywhere.
+     * Shows the class services of this week and the next weeks. A typed [password] is used and,
+     * once it worked, stored; with null the stored password is used.
      */
-    fun loadClassServices(password: String) {
+    fun loadClassServices(password: String?) {
         if (_classServices.value == ClassServicesState.Loading) return
+        if (password == null && !passwordSaved.value) return
         _classServices.value = ClassServicesState.Loading
         viewModelScope.launch {
             val monday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             _classServices.value = try {
                 ClassServicesState.Loaded(schoolData.classServices(password, monday, monday.plusDays(60)))
+                    // A typed password is stored now, so the web notices can load with it too.
+                    .also { if (password != null) load() }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -76,7 +79,9 @@ class AccountViewModel(
         }
     }
 
-    fun hideClassServices() {
+    /** Removes the stored password. The class services are asked for again next time. */
+    fun forgetPassword() {
+        schoolData.forgetPassword()
         _classServices.value = ClassServicesState.Idle
     }
 

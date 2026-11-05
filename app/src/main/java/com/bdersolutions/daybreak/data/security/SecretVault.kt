@@ -59,9 +59,24 @@ class SecretVault(context: Context) {
         return preferences.edit().putString(KEY_SECRET, encrypted).commit()
     }
 
+    /** The WebUntis password, kept so class services and notices can sign in on the web. */
+    @Synchronized
+    fun getStoredPassword(): String? = decrypt(preferences.getString(KEY_PASSWORD, null))
+
+    @Synchronized
+    fun storePassword(password: String): Boolean {
+        val encrypted = encrypt(password) ?: return false
+        return preferences.edit().putString(KEY_PASSWORD, encrypted).commit()
+    }
+
+    @Synchronized
+    fun clearPassword() {
+        preferences.edit().remove(KEY_PASSWORD).commit()
+    }
+
     @Synchronized
     fun clear() {
-        preferences.edit().remove(KEY_SECRET).commit()
+        preferences.edit().remove(KEY_SECRET).remove(KEY_PASSWORD).commit()
         runCatching {
             KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS)
         }
@@ -91,6 +106,7 @@ class SecretVault(context: Context) {
         const val KEY_ALIAS = "daybreak_webuntis_secret_v1"
         const val PREFS_NAME = "daybreak_secure"
         const val KEY_SECRET = "webuntis_secret"
+        const val KEY_PASSWORD = "webuntis_password"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_LENGTH_BYTES = 12
         const val TAG_LENGTH_BITS = 128

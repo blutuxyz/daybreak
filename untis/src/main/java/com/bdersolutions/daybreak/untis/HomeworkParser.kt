@@ -43,17 +43,20 @@ internal object HomeworkParser {
     }
 }
 
-/** Reads `getMessagesOfDay2017`: a `messages` list with a subject and a text. */
+/**
+ * Reads `getMessagesOfDay2017` (a `messages` list) and the web news widget (`messagesOfDay`, maybe
+ * inside `data`): each entry has a subject and a text. The web text may carry HTML.
+ */
 internal object MessageParser {
 
     fun parse(result: JsonElement): List<UntisMessage> {
-        val root = result.asJsonObjectOrNull()
+        val root = result.asJsonObjectOrNull()?.let { it.objectOrNull("data") ?: it }
         val items = (root?.arrayOrNull("messages", "messagesOfDay", "items") ?: result.asJsonArrayOrNull())
             ?: return emptyList()
         return items.mapNotNull { element ->
             val obj = element.asJsonObjectOrNull() ?: return@mapNotNull null
-            val subject = obj.stringOrNull("subject", "title", "header").orEmpty().trim()
-            val text = obj.stringOrNull("text", "body", "message", "content").orEmpty().trim()
+            val subject = plainText(obj.stringOrNull("subject", "title", "header").orEmpty())
+            val text = plainText(obj.stringOrNull("text", "body", "message", "content").orEmpty())
             if (subject.isBlank() && text.isBlank()) return@mapNotNull null
             UntisMessage(
                 id = obj.longOrNull("id", "messageId") ?: (subject + text).hashCode().toLong(),
@@ -63,3 +66,21 @@ internal object MessageParser {
         }
     }
 }
+
+private val HTML_LINE_BREAK = Regex("(?i)<\\s*(br|/p|/div|/li)\\s*/?>")
+private val HTML_TAG = Regex("<[^>]*>")
+
+/** [html] as plain text: line breaks kept, tags dropped, the common entities decoded. */
+internal fun plainText(html: String): String = html
+    .replace(HTML_LINE_BREAK, "\n")
+    .replace(HTML_TAG, "")
+    .replace("&nbsp;", " ")
+    .replace("&amp;", "&")
+    .replace("&lt;", "<")
+    .replace("&gt;", ">")
+    .replace("&quot;", "\"")
+    .replace("&#39;", "'")
+    .lines()
+    .joinToString("\n") { it.trim() }
+    .replace(Regex("\n{3,}"), "\n\n")
+    .trim()
