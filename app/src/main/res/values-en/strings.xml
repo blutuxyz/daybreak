@@ -3,7 +3,7 @@
     <string name="app_name">Daybreak</string>
 
     <string name="nav_timetable">Timetable</string>
-    <string name="nav_settings">Settings</string>
+    <string name="nav_settings">More</string>
 
     <string name="action_today">Today</string>
     <string name="action_refresh">Refresh</string>
@@ -107,7 +107,10 @@
     <string name="label_substitution">Substitution</string>
     <string name="label_info">Information</string>
 
-    <string name="settings_title">Settings</string>
+    <string name="settings_title">More</string>
+    <string name="more_group_profile">My profile</string>
+    <string name="more_group_settings">Settings</string>
+    <string name="more_group_other">Other</string>
     <string name="settings_language">Language</string>
     <string name="settings_sync">Synchronisation</string>
     <string name="settings_sync_enabled">Sync automatically</string>
@@ -347,4 +350,61 @@
     <string name="category_percent_basis">Missed %1$d of %2$d lessons</string>
     <string name="absences_lessons_missed">%1$d lessons missed</string>
     <string name="absences_lessons_count">%1$d lessons</string>
+
+    <!-- Upcoming homework and exams, account page -->
+    <string name="timetable_upcoming">Upcoming</string>
+    <string name="upcoming_title">Upcoming</string>
+    <string name="upcoming_homework">Homework</string>
+    <string name="upcoming_exams">Exams</string>
+    <string name="upcoming_homework_empty">No homework coming up</string>
+    <string name="upcoming_exams_empty">No exams coming up</string>
+    <string name="upcoming_today">Today</string>
+    <string name="upcoming_tomorrow">Tomorrow</string>
+    <string name="upcoming_done">Done</string>
+    <string name="upcoming_no_subject">No subject</string>
+    <string name="settings_account">My account</string>
+    <string name="settings_account_desc">Notices from your school</string>
+    <string name="account_title">My account</string>
+    <string name="account_school">School</string>
+    <string name="account_username">Username</string>
+    <string name="account_messages">Notices</string>
+    <string name="account_messages_empty">No notices today</string>
+    <string name="account_class_services">Class services</string>
+    <string name="account_class_services_hint">WebUntis only hands this list to a web sign-in. It opens in your browser, where you are signed in to WebUntis.</string>
+    <string name="account_class_services_open">Open in WebUntis</string>
+    <string name="account_class_services_no_browser">No browser found.</string>
+    <string name="settings_messages">Messages</string>
+    <string name="settings_messages_desc">Inbox, sent and drafts</string>
+    <string name="messages_title">Messages</string>
+    <string name="messages_inbox">Inbox</string>
+    <string name="messages_sent">Sent</string>
+    <string name="messages_drafts">Drafts</string>
+    <string name="messages_inbox_empty">No messages in your inbox</string>
+    <string name="messages_sent_empty">Nothing sent yet</string>
+    <string name="messages_drafts_empty">No drafts</string>
+    <string name="messages_no_subject">(No subject)</string>
+    <string name="messages_no_text">This message has no text.</string>
+    <string name="messages_from">From</string>
+    <string name="messages_to">To</string>
+    <string name="messages_unread">Unread</string>
+    <string name="messages_attachments">Attachments</string>
+    <string name="messages_attachments_hint">Tap to download and open the file.</string>
+    <string name="messages_attachment_unsupported">The app cannot load this attachment. Open it in WebUntis.</string>
+    <string name="messages_attachment_saved">Saved to Downloads: %1$s</string>
+    <string name="messages_attachment_no_app">No app found to open this file.</string>
+    <string name="messages_attachment_failed">The download failed: %1$s</string>
+    <string name="messages_unknown_person">Unknown</string>
+    <string name="messages_new">New message</string>
+    <string name="messages_recipient">Recipient</string>
+    <string name="messages_recipient_none">Choose a teacher</string>
+    <string name="messages_class_teacher">Class teacher</string>
+    <string name="messages_teachers">Teachers</string>
+    <string name="messages_subject">Subject</string>
+    <string name="messages_text">Message</string>
+    <string name="messages_send">Send</string>
+    <string name="messages_sending">Sending …</string>
+    <string name="messages_confirm_title">Send message?</string>
+    <string name="messages_confirm_text">The message goes to %1$s. It cannot be taken back.</string>
+    <string name="messages_one_teacher_hint">Students can only write to one teacher at a time.</string>
+    <string name="messages_send_failed">The message may not have been sent. Check the Sent folder before you try again.</string>
 </resources>

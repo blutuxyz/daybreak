@@ -47,6 +47,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -142,6 +144,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenDebug: () -> Unit,
     onOpenPage: (SettingsPage) -> Unit,
+    onOpenAccount: () -> Unit,
+    onOpenMessages: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -232,7 +236,27 @@ fun SettingsScreen(
                 )
             }
 
+            item { GroupLabel(stringResource(R.string.more_group_profile)) }
+            item {
+                SettingsGroup {
+                    NavigationRow(
+                        icon = Icons.Outlined.AccountCircle,
+                        title = stringResource(R.string.settings_account),
+                        subtitle = stringResource(R.string.settings_account_desc),
+                        onClick = onOpenAccount,
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.MailOutline,
+                        title = stringResource(R.string.settings_messages),
+                        subtitle = stringResource(R.string.settings_messages_desc),
+                        onClick = onOpenMessages,
+                    )
+                }
+            }
+
             // Every setting lives on its own screen; this list only leads there.
+            item { GroupLabel(stringResource(R.string.more_group_settings)) }
             item {
                 SettingsGroup {
                     NavigationRow(
@@ -262,11 +286,7 @@ fun SettingsScreen(
                         subtitle = languageLabel(currentLanguage),
                         onClick = { onOpenPage(SettingsPage.LANGUAGE) },
                     )
-                }
-            }
-
-            item {
-                SettingsGroup {
+                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.CloudSync,
                         title = stringResource(R.string.settings_sync),
@@ -283,6 +303,7 @@ fun SettingsScreen(
                 }
             }
 
+            item { GroupLabel(stringResource(R.string.more_group_other)) }
             item {
                 SettingsGroup {
                     // Hidden until unlocked from the theme option; see SettingsViewModel.
@@ -326,6 +347,17 @@ fun SettingsScreen(
         }
     }
 
+}
+
+/** The small heading above a group of rows on the More page. */
+@Composable
+private fun GroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+    )
 }
 
 /**

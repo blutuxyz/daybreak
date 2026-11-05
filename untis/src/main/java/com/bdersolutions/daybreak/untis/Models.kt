@@ -152,3 +152,74 @@ data class ProbeResult(
 fun interface RawResponseSink {
     fun onResponse(method: String, receivedAt: Long, body: String)
 }
+
+/** One homework entry (Hausaufgabe). [subject] is the short name of the lesson it belongs to. */
+data class UntisHomework(
+    val id: Long,
+    val subject: String,
+    val assigned: LocalDate?,
+    val due: LocalDate,
+    val text: String,
+    val remark: String = "",
+    val completed: Boolean = false,
+)
+
+/** A notice from the school's "messages of the day" (Mitteilungen). */
+data class UntisMessage(
+    val id: Long,
+    val subject: String,
+    val text: String,
+)
+
+/** The folders of the WebUntis message box (Nachrichten). */
+enum class MailFolder { INBOX, SENT, DRAFTS }
+
+/** A person on a message, named as WebUntis shows them (for teachers the short name). */
+data class UntisMailPerson(
+    val userId: Long,
+    val name: String,
+)
+
+/** Where a possible recipient is listed: the class teacher first, then the rest. */
+enum class RecipientGroup { CLASS_TEACHER, TEACHER, OTHER }
+
+/** Someone the student may write to. [userId] is what the message API wants. */
+data class UntisRecipient(
+    val userId: Long,
+    val name: String,
+    val group: RecipientGroup,
+    /** Subjects or classes WebUntis shows next to the name. */
+    val tags: List<String> = emptyList(),
+)
+
+/**
+ * Where an attached file can be fetched: a short-lived signed address on the storage server and
+ * the headers it needs. Both are secrets for as long as they live, so they are never logged.
+ */
+data class UntisDownloadLink(
+    val url: String,
+    val headers: Map<String, String>,
+)
+
+/** A file attached to a message. [id] is the storage id WebUntis gives it. */
+data class UntisAttachment(
+    val id: String,
+    val name: String,
+)
+
+/**
+ * One message of the message box. Lists only carry a [preview]; [content] is filled when a single
+ * message is loaded.
+ */
+data class UntisMail(
+    val id: Long,
+    val subject: String,
+    val preview: String = "",
+    val content: String = "",
+    val sender: UntisMailPerson? = null,
+    val recipients: List<UntisMailPerson> = emptyList(),
+    val sentAt: LocalDateTime? = null,
+    val read: Boolean = true,
+    val hasAttachments: Boolean = false,
+    val attachments: List<UntisAttachment> = emptyList(),
+)

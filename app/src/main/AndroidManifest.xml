@@ -8,6 +8,14 @@
     <!-- Lets the user allow Daybreak to install its own updates. See data/update/ApkInstaller. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Lets the app ask whether any installed app can open a downloaded attachment. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".DaybreakApplication"
         android:allowBackup="true"
@@ -54,6 +62,17 @@
         <receiver
             android:name=".data.update.InstallResultReceiver"
             android:exported="false" />
+
+        <!-- Hands a downloaded attachment to the app that opens it. Only the attachments cache is shared. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded message attachments, see data/attachments/AttachmentDownloader. -->
+    <cache-path name="attachments" path="attachments/" />
+</paths>

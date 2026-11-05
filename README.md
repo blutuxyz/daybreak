@@ -11,6 +11,9 @@ API) and does **not** require any API key or developer account.
   the week view.
 - Day and week views with horizontal swipe navigation, a live “now” highlight and
   clear cancellation, room-change and substitution badges.
+- Exams are framed in bright amber, and the part of a lesson you were absent for is greyed out.
+- Homework, exams and your school's notices on their own pages, and your WebUntis
+  messages (Nachrichten): inbox, sent and drafts.
 - Offline-first cache, periodic WorkManager sync, change notifications and a
   Glance home-screen widget that follows your wallpaper colours on Android 12+.
 - The WebUntis key is encrypted with a key that lives in the Android Keystore and

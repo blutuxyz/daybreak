@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive
 import kotlinx.coroutines.CancellationException
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
@@ -168,6 +169,160 @@ class UntisApi(
         return ExamParser.parse(result, subjectNames)
     }
 
+    /** The student's homework (Hausaufgaben) that is due in a date range. */
+    suspend fun fetchHomework(
+        session: UntisSession,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<UntisHomework> {
+        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("id", session.studentId)
+                addProperty("type", session.studentType.ifBlank { "STUDENT" }.uppercase())
+                addProperty("startDate", utisDate(startDate))
+                addProperty("endDate", utisDate(endDate))
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = try {
+            rpc.call(safeServer, session.school, "getHomeWork2017", params)
+        } catch (_: UntisNoDataException) {
+            return emptyList()
+        }
+        return HomeworkParser.parse(result)
+    }
+
+    /** The messages of one folder of the message box (Nachrichten), newest first. */
+    suspend fun fetchMailList(session: UntisSession, folder: MailFolder): List<UntisMail> {
+        val path = when (folder) {
+            MailFolder.INBOX -> "messages"
+            MailFolder.SENT -> "messages/sent"
+            MailFolder.DRAFTS -> "messages/drafts"
+        }
+        val body = restGet(session, path, "mail-${folder.name.lowercase()}")
+        return MailParser.parseList(folder, body)
+            .sortedByDescending { it.sentAt ?: LocalDateTime.MIN }
+    }
+
+    /** One message with its full text. */
+    suspend fun fetchMail(session: UntisSession, id: Long): UntisMail {
+        val body = restGet(session, "messages/$id", "mail-message")
+        return MailParser.parseMessage(body) ?: throw UntisParseException("The message could not be read.")
+    }
+
+    /**
+     * GET on the message REST API. It does not take the mobile key itself but a short-lived token
+     * that `getAuthToken` hands out for it, so no password is involved.
+     */
+    private suspend fun restGet(
+        session: UntisSession,
+        path: String,
+        label: String,
+        recordRaw: Boolean = true,
+    ): JsonElement {
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        val token = restToken(session, safeServer)
+        return rpc.getRest(
+            server = safeServer,
+            path = "WebUntis/api/rest/view/v1/$path",
+            query = emptyMap(),
+            token = token,
+            label = label,
+            recordRaw = recordRaw,
+        )
+    }
+
+    /**
+     * The signed address and headers for one attached file. [attachmentId] is the id of an entry of
+     * `storageAttachments`. The answer holds secrets, so it is not written to the debug log.
+     */
+    suspend fun fetchAttachmentLink(session: UntisSession, attachmentId: String): UntisDownloadLink {
+        if (attachmentId.isBlank() || attachmentId.any { it == '/' || it == '\\' || it == '?' || it == '#' }) {
+            throw UntisParseException("The attachment id is not valid.")
+        }
+        val body = restGet(session, "messages/$attachmentId/attachmentstorageurl", "mail-attachment-link", recordRaw = false)
+        return AttachmentLinkParser.parse(body) ?: throw UntisParseException("The attachment has no download address.")
+    }
+
+    /** Downloads the file behind [link] into [out]. Returns its size in bytes. */
+    suspend fun downloadAttachment(link: UntisDownloadLink, out: java.io.OutputStream, maxBytes: Long): Long =
+        rpc.downloadFile(link.url, link.headers, out, maxBytes)
+
+    /** The people the student may write to: class teachers, teachers and others. */
+    suspend fun fetchRecipients(session: UntisSession): List<UntisRecipient> =
+        RecipientParser.parse(restGet(session, "messages/recipients/static/persons", "mail-recipients"))
+
+    /**
+     * Sends a message to exactly one teacher, as the WebUntis web app does for a student: a
+     * multipart POST to `messages/users` whose JSON part names the recipient by user id
+     * (`recipientUserIds`). The plain `messages` endpoint wants a `recipientOption` instead. Returns the
+     * number of recipients the server reports. Students may only write to a single teacher.
+     */
+    suspend fun sendMail(session: UntisSession, subject: String, content: String, recipientUserId: Long): Int {
+        require(recipientUserId > 0) { "The recipient is missing." }
+        if (subject.isBlank()) throw UntisParseException("The subject is empty.")
+        if (content.isBlank()) throw UntisParseException("The message is empty.")
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        val token = restToken(session, safeServer)
+        val request = JsonObject().apply {
+            addProperty("subject", subject.trim())
+            addProperty("content", content.trim())
+            addProperty("requestConfirmation", false)
+            add("recipientUserIds", JsonArray().apply { add(recipientUserId) })
+            add("oneDriveAttachments", JsonArray())
+            addProperty("forbidReply", false)
+        }
+        val answer = rpc.postJsonPart(
+            server = safeServer,
+            path = "WebUntis/api/rest/view/v2/messages/users",
+            token = token,
+            // Only the server's answer is logged, never the text of the message.
+            label = "mail-send",
+            partName = "request",
+            json = request,
+        )
+        return answer.asJsonObjectOrNull()?.intOrNull("numberOfRecipients") ?: 0
+    }
+
+    /** A short-lived token for the message REST API; `getAuthToken` hands it out for the mobile key. */
+    private suspend fun restToken(session: UntisSession, safeServer: String): String {
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val tokenResult = rpc.call(
+            server = safeServer,
+            school = session.school,
+            method = "getAuthToken",
+            params = JsonArray().apply {
+                add(JsonObject().apply { add("auth", auth(session.username, session.secret)) })
+            },
+            // The token must never reach the debug log.
+            recordRaw = false,
+        )
+        return tokenResult.asJsonObjectOrNull()?.stringOrNull("token", "accessToken")
+            ?: tokenResult.takeIf { it.isJsonPrimitive }?.asString
+            ?: throw UntisParseException("WebUntis returned no token.")
+    }
+
+    /** The school's notices (Mitteilungen) that are shown on [date]. */
+    suspend fun fetchMessages(session: UntisSession, date: LocalDate): List<UntisMessage> {
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("date", utisDate(date))
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = try {
+            rpc.call(safeServer, session.school, "getMessagesOfDay2017", params)
+        } catch (_: UntisNoDataException) {
+            return emptyList()
+        }
+        return MessageParser.parse(result)
+    }
+
     private suspend fun requestTimetable(
         session: UntisSession,
         id: Long,
@@ -296,6 +451,25 @@ class UntisApi(
             describe = ::shapeOf,
         )
 
+        // Endpoints for the Upcoming and Account pages. Their shapes are read from the debug log.
+        val today = LocalDate.now()
+        fun rangeParams() = JsonObject().apply {
+            addProperty("id", session.studentId)
+            addProperty("type", type)
+            addProperty("startDate", utisDate(today.minusDays(7)))
+            addProperty("endDate", utisDate(today.plusDays(28)))
+            add("auth", auth(session.username, session.secret))
+        }
+        call("Homework", "getHomeWork2017", rangeParams(), ::shapeOf)
+        call(
+            label = "Messages of the day",
+            method = "getMessagesOfDay2017",
+            params = JsonObject().apply {
+                addProperty("date", utisDate(today))
+                add("auth", auth(session.username, session.secret))
+            },
+            describe = ::shapeOf,
+        )
         val classId = masterArray(studentResult, "klassen", "classes")
             ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
         val teacherId = masterArray(studentResult, "teachers")

@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -109,6 +110,176 @@ internal class JsonRpcClient(
                 throw UntisNoDataException("WebUntis returned no data.")
             }
             result
+        }
+    }
+
+    /**
+     * GET on the school's WebUntis REST API with a bearer [token] (from `getAuthToken`). The body goes
+     * to the debug log under [label]; the token never does.
+     */
+    suspend fun getRest(
+        server: String,
+        path: String,
+        query: Map<String, String>,
+        token: String,
+        label: String,
+        recordRaw: Boolean = true,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val url = UntisEndpoints.normalizeServer(server).toHttpUrl().newBuilder().apply {
+            addPathSegments(path.trim('/'))
+            query.forEach { (key, value) -> addQueryParameter(key, value) }
+        }.build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "UntisMobileAndroid")
+            .header("Authorization", "Bearer $token")
+            .get()
+            .build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the WebUntis server.", error)
+        }
+        response.use { received ->
+            val text = try {
+                received.body?.string().orEmpty()
+            } catch (error: IOException) {
+                throw UntisNetworkException("The server response could not be read.", error)
+            }
+            if (recordRaw) rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
+            if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
+            if (!received.isSuccessful) {
+                val message = runCatching {
+                    JsonParser.parseString(text).asJsonObject.stringOrNull("errorMessage")
+                }.getOrNull()
+                throw UntisProtocolException(message ?: "WebUntis returned HTTP ${received.code}.")
+            }
+            runCatching { JsonParser.parseString(text) }.getOrNull()
+                ?: throw UntisParseException("WebUntis returned an invalid response.")
+        }
+    }
+
+    /**
+     * POST of a multipart form with one JSON part, the way the WebUntis web app sends a message: the
+     * JSON travels as the part [partName]. Uses a bearer [token]. The answer goes to the debug log
+     * under [label]; the message text and the token never do.
+     */
+    suspend fun postJsonPart(
+        server: String,
+        path: String,
+        token: String,
+        label: String,
+        partName: String,
+        json: JsonElement,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val url = UntisEndpoints.normalizeServer(server).toHttpUrl().newBuilder()
+            .addPathSegments(path.trim('/'))
+            .build()
+        val form = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            // Bytes, not a String: a String body would add "; charset=utf-8" to the part type, and the
+            // web app sends the part as plain application/json.
+            .addFormDataPart(
+                partName,
+                "blob",
+                json.toString().toByteArray(Charsets.UTF_8).toRequestBody("application/json".toMediaType()),
+            )
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "UntisMobileAndroid")
+            .header("Authorization", "Bearer $token")
+            .post(form)
+            .build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the WebUntis server.", error)
+        }
+        response.use { received ->
+            val text = try {
+                received.body?.string().orEmpty()
+            } catch (error: IOException) {
+                throw UntisNetworkException("The server response could not be read.", error)
+            }
+            rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
+            if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
+            if (!received.isSuccessful) throw UntisProtocolException(describeFailure(received.code, text))
+            runCatching { JsonParser.parseString(text) }.getOrNull() ?: JsonObject()
+        }
+    }
+
+    /**
+     * What the server said about a refused request: its message, its error code and the names of
+     * the fields it did not accept. Never the request, so no message text ends up in an error.
+     */
+    private fun describeFailure(status: Int, body: String): String {
+        val root = runCatching { JsonParser.parseString(body).asJsonObject }.getOrNull()
+        val parts = buildList {
+            root?.stringOrNull("errorMessage")?.takeIf { it.isNotBlank() }?.let(::add)
+            root?.stringOrNull("errorCode")?.let { add("($it)") }
+            root?.arrayOrNull("validationErrors")?.mapNotNull { entry ->
+                val error = entry.asJsonObjectOrNull() ?: return@mapNotNull null
+                listOfNotNull(error.stringOrNull("path"), error.stringOrNull("errorMessage")).joinToString(": ")
+            }?.takeIf { it.isNotEmpty() }?.let { add(it.joinToString("; ")) }
+        }
+        return "HTTP $status" + if (parts.isEmpty()) "" else " " + parts.joinToString(" ")
+    }
+
+    /**
+     * Downloads a file from a signed storage address into [out] and returns its size. The address
+     * carries its own signature, so no WebUntis token is sent to the storage server. Only https is
+     * accepted. Only the status and size go to the debug log, never the address or the content.
+     */
+    suspend fun downloadFile(
+        url: String,
+        headers: Map<String, String>,
+        out: java.io.OutputStream,
+        maxBytes: Long,
+    ): Long = withContext(Dispatchers.IO) {
+        val target = runCatching { url.toHttpUrl() }.getOrNull()
+            ?: throw UntisParseException("The download address is not valid.")
+        if (target.scheme != "https") throw UntisProtocolException("The download address is not https.")
+        val request = Request.Builder()
+            .url(target)
+            .header("User-Agent", "UntisMobileAndroid")
+            .apply { headers.forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        // A large file can take longer than the 35 seconds that the normal calls get.
+        val downloader = client.newBuilder().callTimeout(0, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+        val response = try {
+            downloader.newCall(request).execute()
+        } catch (error: IOException) {
+            throw UntisNetworkException("Could not reach the file server.", error)
+        }
+        response.use { received ->
+            if (!received.isSuccessful) {
+                rawSink.onResponse("attachment-download", System.currentTimeMillis(), "HTTP ${received.code}")
+                throw UntisProtocolException("The file server returned HTTP ${received.code}.")
+            }
+            val body = received.body ?: throw UntisParseException("The file server sent no file.")
+            val declared = body.contentLength()
+            if (declared > maxBytes) throw UntisProtocolException("The file is too large.")
+            var total = 0L
+            try {
+                val buffer = ByteArray(16 * 1024)
+                body.byteStream().use { input ->
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > maxBytes) throw UntisProtocolException("The file is too large.")
+                        out.write(buffer, 0, read)
+                    }
+                }
+            } catch (error: IOException) {
+                throw UntisNetworkException("The download was interrupted.", error)
+            }
+            rawSink.onResponse("attachment-download", System.currentTimeMillis(), "HTTP ${received.code}, $total bytes")
+            total
         }
     }
 

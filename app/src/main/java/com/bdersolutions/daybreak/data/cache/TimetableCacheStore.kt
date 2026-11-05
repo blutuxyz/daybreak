@@ -3,6 +3,7 @@ package com.bdersolutions.daybreak.data.cache
 import android.content.Context
 import android.util.AtomicFile
 import com.bdersolutions.daybreak.untis.LessonStatus
+import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.google.gson.JsonArray
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 data class CachedWeek(
@@ -28,6 +30,8 @@ data class TimetableCache(
     val exams: List<UntisExam> = emptyList(),
     /** Subject short name by subject id, so exams can be matched to lessons by subject. */
     val subjectNames: Map<Long, String> = emptyMap(),
+    /** The student's absences for the cached weeks, so lessons can be greyed out while the student was away. */
+    val absences: List<UntisAbsence> = emptyList(),
 )
 
 /**
@@ -80,12 +84,37 @@ class TimetableCacheStore(context: Context) {
             add("exams", JsonArray().apply {
                 cache.exams.forEach { exam -> add(encodeExam(exam)) }
             })
+            add("absences", JsonArray().apply {
+                cache.absences.forEach { absence -> add(encodeAbsence(absence)) }
+            })
             add("subjectNames", JsonObject().apply {
                 cache.subjectNames.forEach { (id, name) -> addProperty(id.toString(), name) }
             })
         }
         return root.toString()
     }
+
+    private fun encodeAbsence(absence: UntisAbsence): JsonObject = JsonObject().apply {
+        addProperty("id", absence.id)
+        addProperty("start", absence.start.toString())
+        addProperty("end", absence.end.toString())
+        addProperty("excused", absence.excused)
+        absence.reasonId?.let { addProperty("reasonId", it) }
+        addProperty("reasonName", absence.reasonName)
+        addProperty("text", absence.text)
+    }
+
+    private fun decodeAbsence(obj: JsonObject): UntisAbsence? = runCatching {
+        UntisAbsence(
+            id = obj.get("id")?.asLong ?: 0L,
+            start = LocalDateTime.parse(obj.get("start").asString),
+            end = LocalDateTime.parse(obj.get("end").asString),
+            excused = obj.get("excused")?.asBoolean ?: false,
+            reasonId = obj.get("reasonId")?.takeIf { !it.isJsonNull }?.asLong,
+            reasonName = obj.get("reasonName")?.asString.orEmpty(),
+            text = obj.get("text")?.asString.orEmpty(),
+        )
+    }.getOrNull()
 
     private fun encodeExam(exam: UntisExam): JsonObject = JsonObject().apply {
         addProperty("id", exam.id)
@@ -159,7 +188,10 @@ class TimetableCacheStore(context: Context) {
             val id = key.toLongOrNull() ?: return@mapNotNull null
             runCatching { value.asString }.getOrNull()?.let { id to it }
         }?.toMap().orEmpty()
-        return TimetableCache(studentId, weeks, lastSyncAt, exams, subjectNames)
+        val absences = root.getAsJsonArray("absences")?.mapNotNull { element ->
+            runCatching { decodeAbsence(element.asJsonObject) }.getOrNull()
+        }.orEmpty()
+        return TimetableCache(studentId, weeks, lastSyncAt, exams, subjectNames, absences)
     }
 
     private fun decodeLesson(obj: JsonObject): UntisLesson? = runCatching {
@@ -194,9 +226,9 @@ class TimetableCacheStore(context: Context) {
         const val MAX_WEEKS = 8
 
         /**
-         * 2 added the exams list, 3 added the subject names exams are matched with. Older caches
-         * load fine and fill in the new data on the next sync.
+         * 2 added the exams list, 3 added the subject names exams are matched with, 4 added the
+         * absences. Older caches load fine and fill in the new data on the next sync.
          */
-        const val VERSION = 3
+        const val VERSION = 4
     }
 }

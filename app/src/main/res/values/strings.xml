@@ -3,7 +3,7 @@
     <string name="app_name">Daybreak</string>
 
     <string name="nav_timetable">Stundenplan</string>
-    <string name="nav_settings">Einstellungen</string>
+    <string name="nav_settings">Mehr</string>
 
     <string name="action_today">Heute</string>
     <string name="action_refresh">Aktualisieren</string>
@@ -107,7 +107,10 @@
     <string name="label_substitution">Vertretung</string>
     <string name="label_info">Information</string>
 
-    <string name="settings_title">Einstellungen</string>
+    <string name="settings_title">Mehr</string>
+    <string name="more_group_profile">Mein Profil</string>
+    <string name="more_group_settings">Einstellungen</string>
+    <string name="more_group_other">Weiteres</string>
     <string name="settings_language">Sprache</string>
     <string name="settings_sync">Synchronisierung</string>
     <string name="settings_sync_enabled">Automatisch synchronisieren</string>
@@ -347,4 +350,61 @@
     <string name="category_percent_basis">%1$d von %2$d Stunden gefehlt</string>
     <string name="absences_lessons_missed">%1$d Stunden verpasst</string>
     <string name="absences_lessons_count">%1$d Std.</string>
+
+    <!-- Upcoming homework and exams, account page -->
+    <string name="timetable_upcoming">Anstehend</string>
+    <string name="upcoming_title">Anstehend</string>
+    <string name="upcoming_homework">Hausaufgaben</string>
+    <string name="upcoming_exams">Prüfungen</string>
+    <string name="upcoming_homework_empty">Keine anstehenden Hausaufgaben</string>
+    <string name="upcoming_exams_empty">Keine anstehenden Prüfungen</string>
+    <string name="upcoming_today">Heute</string>
+    <string name="upcoming_tomorrow">Morgen</string>
+    <string name="upcoming_done">Erledigt</string>
+    <string name="upcoming_no_subject">Ohne Fach</string>
+    <string name="settings_account">Mein Konto</string>
+    <string name="settings_account_desc">Mitteilungen deiner Schule</string>
+    <string name="account_title">Mein Konto</string>
+    <string name="account_school">Schule</string>
+    <string name="account_username">Anmeldename</string>
+    <string name="account_messages">Mitteilungen</string>
+    <string name="account_messages_empty">Heute keine Mitteilungen</string>
+    <string name="account_class_services">Klassendienste</string>
+    <string name="account_class_services_hint">Die Liste gibt WebUntis nur an eine Web-Anmeldung heraus. Sie öffnet sich im Browser, wo du bei WebUntis angemeldet bist.</string>
+    <string name="account_class_services_open">In WebUntis öffnen</string>
+    <string name="account_class_services_no_browser">Kein Browser gefunden.</string>
+    <string name="settings_messages">Nachrichten</string>
+    <string name="settings_messages_desc">Eingang, Gesendet und Entwürfe</string>
+    <string name="messages_title">Nachrichten</string>
+    <string name="messages_inbox">Eingang</string>
+    <string name="messages_sent">Gesendet</string>
+    <string name="messages_drafts">Entwürfe</string>
+    <string name="messages_inbox_empty">Keine Nachrichten im Eingang</string>
+    <string name="messages_sent_empty">Noch nichts gesendet</string>
+    <string name="messages_drafts_empty">Keine Entwürfe</string>
+    <string name="messages_no_subject">(Kein Betreff)</string>
+    <string name="messages_no_text">Diese Nachricht hat keinen Text.</string>
+    <string name="messages_from">Von</string>
+    <string name="messages_to">An</string>
+    <string name="messages_unread">Ungelesen</string>
+    <string name="messages_attachments">Anhänge</string>
+    <string name="messages_attachments_hint">Tippen, um die Datei herunterzuladen und zu öffnen.</string>
+    <string name="messages_attachment_unsupported">Diesen Anhang kann die App nicht laden. Öffne ihn in WebUntis.</string>
+    <string name="messages_attachment_saved">In Downloads gespeichert: %1$s</string>
+    <string name="messages_attachment_no_app">Keine App zum Öffnen dieser Datei gefunden.</string>
+    <string name="messages_attachment_failed">Der Download hat nicht geklappt: %1$s</string>
+    <string name="messages_unknown_person">Unbekannt</string>
+    <string name="messages_new">Neue Nachricht</string>
+    <string name="messages_recipient">Empfänger</string>
+    <string name="messages_recipient_none">Wähle eine Lehrkraft</string>
+    <string name="messages_class_teacher">Klassenlehrkraft</string>
+    <string name="messages_teachers">Lehrkräfte</string>
+    <string name="messages_subject">Betreff</string>
+    <string name="messages_text">Nachricht</string>
+    <string name="messages_send">Senden</string>
+    <string name="messages_sending">Wird gesendet …</string>
+    <string name="messages_confirm_title">Nachricht senden?</string>
+    <string name="messages_confirm_text">Die Nachricht geht an %1$s. Das lässt sich nicht zurückholen.</string>
+    <string name="messages_one_teacher_hint">Schüler dürfen eine Nachricht nur an eine Lehrkraft schicken.</string>
+    <string name="messages_send_failed">Die Nachricht wurde nicht sicher gesendet. Schau im Ordner Gesendet nach, bevor du es nochmal versuchst.</string>
 </resources>
