@@ -2,4 +2,6 @@
 <paths>
     <!-- Downloaded message attachments, see data/attachments/AttachmentDownloader. -->
     <cache-path name="attachments" path="attachments/" />
+    <!-- Timetable pictures made by the share button, see ui/timetable/ShareTimetable. -->
+    <cache-path name="shared" path="shared/" />
 </paths>

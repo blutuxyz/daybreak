@@ -126,6 +126,8 @@ fun DaybreakApp(
     container: AppContainer,
     initialDate: LocalDate? = null,
     openUpdates: Boolean = false,
+    startMode: Int? = null,
+    openSearch: Boolean = false,
 ) {
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
@@ -140,7 +142,13 @@ fun DaybreakApp(
             // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
             Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
                 if (accepted) {
-                    DaybreakRoot(container = container, initialDate = initialDate, openUpdates = openUpdates)
+                    DaybreakRoot(
+                        container = container,
+                        initialDate = initialDate,
+                        openUpdates = openUpdates,
+                        startMode = startMode,
+                        openSearch = openSearch,
+                    )
                 } else {
                     TermsGateScreen(
                         isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
@@ -165,6 +173,8 @@ fun DaybreakRoot(
     container: AppContainer,
     initialDate: LocalDate? = null,
     openUpdates: Boolean = false,
+    startMode: Int? = null,
+    openSearch: Boolean = false,
 ) {
     val session by container.sessionStore.session.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
@@ -209,6 +219,8 @@ fun DaybreakRoot(
                 session = currentSession,
                 initialDate = initialDate,
                 openUpdates = openUpdates,
+                startMode = startMode,
+                openSearch = openSearch,
             )
         }
     }
@@ -221,6 +233,8 @@ private fun LoggedInContent(
     session: DaybreakSession,
     initialDate: LocalDate?,
     openUpdates: Boolean,
+    startMode: Int?,
+    openSearch: Boolean,
 ) {
     // Tapping the "update available" notification lands on the Updates screen.
     var selectedTab by rememberSaveable { mutableIntStateOf(if (openUpdates) 2 else 0) }
@@ -362,7 +376,9 @@ private fun LoggedInContent(
                     0 -> TimetableScreen(
                         viewModel = timetableViewModel,
                         initialDate = initialDate,
-                        initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
+                        initialMode = startMode
+                            ?: if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
+                        openSearchOnStart = openSearch,
                         onOpenUpcoming = { mainPage = MainPage.UPCOMING },
                     )
 

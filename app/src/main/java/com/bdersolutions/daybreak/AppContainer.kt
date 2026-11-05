@@ -16,6 +16,9 @@ import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.branding.AppNaming
+import com.bdersolutions.daybreak.data.reminders.ReminderNotificationManager
+import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
+import com.bdersolutions.daybreak.data.reminders.ReminderStore
 import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
 import com.bdersolutions.daybreak.data.support.SupportApi
 import com.bdersolutions.daybreak.data.support.SupportStore
@@ -77,6 +80,23 @@ class AppContainer(context: Context) {
     val updateNotificationManager = UpdateNotificationManager(appContext, settingsRepository)
     val updateScheduler = UpdateScheduler(appContext)
 
+    // Reminders: a summary before the first lesson and an evening note about exams and homework.
+    val reminderStore = ReminderStore(appContext)
+    val reminderNotifier = ReminderNotificationManager(
+        context = appContext,
+        settingsRepository = settingsRepository,
+        timetable = timetableRepository,
+        schoolData = schoolData,
+        store = reminderStore,
+    )
+    val reminderScheduler = ReminderScheduler(
+        context = appContext,
+        settingsRepository = settingsRepository,
+        timetable = timetableRepository,
+        sessionStore = sessionStore,
+        store = reminderStore,
+    )
+
     fun start() {
         // The name under the icon follows the supporter extra: back to "Daybreak" without a payment.
         val chosen = settingsRepository.current()
@@ -85,8 +105,10 @@ class AppContainer(context: Context) {
             AppNaming.effectiveIconStyle(supportStore.paid.value, chosen.appIconStyle),
         )
         lessonNotificationManager.ensureChannel()
+        reminderNotifier.ensureChannels()
         if (sessionStore.isLoggedIn()) {
             syncScheduler.schedule(settingsRepository.current())
+            reminderScheduler.schedule()
         }
         if (updateManager.isConfigured) {
             updateNotificationManager.ensureChannel()

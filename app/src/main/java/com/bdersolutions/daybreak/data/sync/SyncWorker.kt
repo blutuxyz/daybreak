@@ -16,6 +16,7 @@ class SyncWorker(
         val container = application.container
         if (!container.sessionStore.isLoggedIn()) {
             container.syncScheduler.cancelAll()
+            container.reminderScheduler.cancelAll()
             return Result.success()
         }
         val settings = container.settingsRepository.current()
@@ -36,6 +37,8 @@ class SyncWorker(
                 container.lessonNotificationManager.notifyChanges(changes)
             }
             runCatching { container.widgetUpdater.update() }
+            // New data can move the first lesson of a day, so the morning summary is planned again.
+            container.reminderScheduler.schedule()
             return Result.success()
         }
 

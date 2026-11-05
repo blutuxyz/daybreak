@@ -116,6 +116,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.bdersolutions.daybreak.data.schedule.NowAndNext
+import com.bdersolutions.daybreak.data.schedule.DayPhase
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.cache.TimetableCache
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
@@ -177,6 +183,7 @@ fun TimetableScreen(
     viewModel: TimetableViewModel,
     initialDate: LocalDate? = null,
     initialMode: Int = 0,
+    openSearchOnStart: Boolean = false,
     onOpenUpcoming: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -191,6 +198,10 @@ fun TimetableScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var mode by rememberSaveable { mutableIntStateOf(initialMode) }
+    var showSearch by rememberSaveable { mutableStateOf(openSearchOnStart) }
+    var showShareMenu by remember { mutableStateOf(false) }
+    val appSettings by viewModel.settings.collectAsStateWithLifecycle()
+    val appTitle = LocalAppTitle.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
 
@@ -249,6 +260,22 @@ fun TimetableScreen(
         is TimetableTarget.Element -> targetLabel(current)
     }
     val retryLabel = stringResource(R.string.action_retry)
+    // Shares what is on screen: the selected day, or the selected week.
+    val shareTimetable: (Boolean) -> Unit = { asImage ->
+        val allLessons = cache.weeks.values.flatMap { it.lessons }
+        val dates = if (mode == 0) {
+            listOf(selectedDate)
+        } else {
+            (0..6).map { selectedDate.plusDays(it.toLong()) }
+                .filter { date -> date.dayOfWeek.value <= 5 || allLessons.any { it.date == date && !it.isHoliday } }
+        }
+        val days = ShareTimetable.days(context, dates, allLessons)
+        if (asImage) {
+            ShareTimetable.shareImage(context, targetName, appTitle, days)
+        } else {
+            ShareTimetable.shareText(context, targetName, days)
+        }
+    }
     // The names in a lesson's details (class, teacher, room) lead to that timetable.
     val findElement: (ElementType, String) -> UntisElement? = { type, name ->
         directory?.let { master ->
@@ -310,6 +337,36 @@ fun TimetableScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showSearch = true }) {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = stringResource(R.string.timetable_search),
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { showShareMenu = true }) {
+                            Icon(
+                                Icons.Outlined.Share,
+                                contentDescription = stringResource(R.string.timetable_share),
+                            )
+                        }
+                        DropdownMenu(expanded = showShareMenu, onDismissRequest = { showShareMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.share_as_text)) },
+                                onClick = {
+                                    showShareMenu = false
+                                    shareTimetable(false)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.share_as_image)) },
+                                onClick = {
+                                    showShareMenu = false
+                                    shareTimetable(true)
+                                },
+                            )
+                        }
+                    }
                     IconButton(onClick = onOpenUpcoming) {
                         Icon(
                             Icons.Outlined.Checklist,
@@ -424,6 +481,7 @@ fun TimetableScreen(
                             now = now,
                             cache = cache,
                             status = status,
+                            showNowNext = appSettings.showNowNext,
                             onRetry = { viewModel.refresh(pageDate) },
                             findElement = findElement,
                             onOpenElement = openElement,
@@ -453,6 +511,23 @@ fun TimetableScreen(
                 }
             }
         }
+    }
+    if (showSearch) {
+        LessonSearchSheet(
+            cache = cache,
+            now = now,
+            onSelect = { date ->
+                showSearch = false
+                mode = 0
+                scope.launch {
+                    dayPager.scrollToPage(
+                        (DAY_START_OFFSET + ChronoUnit.DAYS.between(today, date).toInt())
+                            .coerceIn(0, DAY_PAGE_COUNT - 1),
+                    )
+                }
+            },
+            onDismiss = { showSearch = false },
+        )
     }
     if (showTargetPicker) {
         TargetPickerSheet(
@@ -524,6 +599,7 @@ private fun DayPage(
     now: LocalDateTime,
     cache: TimetableCache,
     status: TimetableSyncStatus,
+    showNowNext: Boolean,
     onRetry: () -> Unit,
     findElement: (ElementType, String) -> UntisElement?,
     onOpenElement: (UntisElement) -> Unit,
@@ -609,6 +685,15 @@ private fun DayPage(
                                     .verticalScroll(rememberScrollState())
                                     .padding(bottom = 112.dp),
                             ) {
+                                if (isToday && showNowNext) {
+                                    val nowNext = NowAndNext.compute(realLessons, now)
+                                    if (nowNext.phase != DayPhase.NO_LESSONS) {
+                                        NowNextCard(
+                                            status = nowNext,
+                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                                        )
+                                    }
+                                }
                                 DayTimeline(
                                     layout = layout,
                                     range = range,

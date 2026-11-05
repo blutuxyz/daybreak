@@ -69,6 +69,9 @@ class TimetableRepository(
         }
     }
 
+    /** Suspends until the cache file has been read, so a background job does not see an empty cache. */
+    suspend fun awaitLoaded() = cacheLoaded.await()
+
     fun weekStartFor(date: LocalDate): LocalDate =
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
