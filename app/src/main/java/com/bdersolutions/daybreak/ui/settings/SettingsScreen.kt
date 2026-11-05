@@ -133,6 +133,8 @@ import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material.icons.outlined.Favorite
+import com.bdersolutions.daybreak.ui.support.openSupportPage
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -156,6 +158,7 @@ fun SettingsScreen(
     val debugUnlocked by viewModel.debugUnlocked.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val currentLanguage = currentAppLanguage()
+    val context = LocalContext.current
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val updatesSummary = when (val update = updateState) {
         is UpdateState.Available -> stringResource(R.string.settings_updates_available, update.release.versionName)
@@ -342,6 +345,13 @@ fun SettingsScreen(
                         )
                         SettingsDivider()
                     }
+                    NavigationRow(
+                        icon = Icons.Outlined.Favorite,
+                        title = stringResource(R.string.settings_support),
+                        subtitle = stringResource(R.string.settings_support_desc),
+                        onClick = { openSupportPage(context) },
+                    )
+                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.PrivacyTip,
                         title = stringResource(R.string.settings_legal),

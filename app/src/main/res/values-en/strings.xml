@@ -523,4 +523,14 @@
     <string name="haptics_event_update_ready">Update ready</string>
     <string name="haptics_event_debug_tap">Debug unlock: tap</string>
     <string name="haptics_event_debug_unlock">Debug unlocked</string>
+
+    <!-- Support -->
+    <string name="settings_support">Support Daybreak</string>
+    <string name="settings_support_desc">Buy a coffee on Ko-fi</string>
+    <string name="support_title">Enjoying Daybreak?</string>
+    <string name="support_body">Daybreak is free and has no ads. If the app helps you, you can support its development with a coffee on Ko-fi. Every feature stays free without a donation.</string>
+    <string name="support_privacy">The link opens in your browser. The app sends none of your data.</string>
+    <string name="support_action">Support on Ko-fi</string>
+    <string name="support_later">Maybe later</string>
+    <string name="support_never">Do not ask again</string>
 </resources>

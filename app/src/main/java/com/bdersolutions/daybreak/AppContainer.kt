@@ -15,6 +15,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.data.update.UpdateApi
 import com.bdersolutions.daybreak.data.update.UpdateManager
@@ -36,6 +37,7 @@ class AppContainer(context: Context) {
         systemAllows = { VibratorHapticOutput.systemTouchFeedbackOn(appContext) },
     )
     val termsStore = TermsStore(appContext)
+    val supportStore = SupportStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(appContext, secretVault)
     val rawLogStore = RawLogStore(appContext)
