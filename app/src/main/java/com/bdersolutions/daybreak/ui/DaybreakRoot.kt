@@ -80,6 +80,10 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
+import com.bdersolutions.daybreak.ui.support.SupportSheet
+import com.bdersolutions.daybreak.ui.support.openSupportPage
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.CompositionLocalProvider
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -243,6 +247,21 @@ private fun LoggedInContent(
         if (!updates.isConfigured) return@LaunchedEffect
         whatsNew = updates.whatsNew()
         if (settings.autoCheckUpdates && updates.isCheckDue()) updates.check()
+    }
+
+    // A rare, friendly request to support Daybreak on Ko-fi (see SupportPromptPolicy). It waits a few
+    // seconds so it never covers the timetable on opening, and never appears with the update notes.
+    var showSupport by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(session.studentId) {
+        val today = LocalDate.now().toEpochDay()
+        val state = container.supportStore.recordOpen(today)
+        if (SupportPromptPolicy.shouldShow(state, today)) {
+            delay(5_000)
+            if (whatsNew == null) {
+                container.supportStore.markShown(today)
+                showSupport = true
+            }
+        }
     }
 
     LaunchedEffect(session.studentId) {
@@ -420,6 +439,22 @@ private fun LoggedInContent(
 
                 null -> Unit
             }
+        }
+
+        if (showSupport) {
+            SupportSheet(
+                onSupport = {
+                    // The person went to Ko-fi, so do not ask again.
+                    container.supportStore.optOut()
+                    showSupport = false
+                    openSupportPage(context)
+                },
+                onLater = { showSupport = false },
+                onNever = {
+                    container.supportStore.optOut()
+                    showSupport = false
+                },
+            )
         }
 
         whatsNew?.let { release ->
