@@ -339,7 +339,7 @@
     <string name="category_mode_percent">Percent</string>
     <string name="category_max_percent">Maximum missed share</string>
     <string name="category_percent_value">%1$d %%</string>
-    <string name="category_percent_support">Share of all lessons of this subject so far this school year.</string>
+    <string name="category_percent_support">Lesson limit</string>
     <string name="category_max_percent_summary">max. %1$d %%</string>
     <string name="category_row_percent_summary">%1$s · max. %2$d %%</string>
     <string name="category_percent_remaining">%1$s %% left until the limit</string>

@@ -339,7 +339,7 @@
     <string name="category_mode_percent">Prozent</string>
     <string name="category_max_percent">Maximale Fehlzeit</string>
     <string name="category_percent_value">%1$d %%</string>
-    <string name="category_percent_support">Anteil aller bisherigen Stunden dieses Fachs im Schuljahr.</string>
+    <string name="category_percent_support">Stundenlimit</string>
     <string name="category_max_percent_summary">max. %1$d %%</string>
     <string name="category_row_percent_summary">%1$s · max. %2$d %%</string>
     <string name="category_percent_remaining">Noch %1$s %% bis zum Limit</string>
