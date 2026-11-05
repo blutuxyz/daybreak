@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.settings.AbsenceUnit
 import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
@@ -87,6 +89,7 @@ enum class SettingsPage {
     LANGUAGE,
     SYNC,
     NOTIFICATIONS,
+    HAPTICS,
     UPDATES,
     ABOUT,
     LEGAL,
@@ -106,6 +109,7 @@ fun SettingsPageHost(
         SettingsPage.LANGUAGE -> LanguageScreen(viewModel, onBack)
         SettingsPage.SYNC -> SyncScreen(viewModel, onBack)
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
+        SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
         SettingsPage.LEGAL -> LegalScreen(onBack = onBack)
@@ -123,6 +127,7 @@ internal fun SettingsPageScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val haptics = LocalHaptics.current
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -132,7 +137,12 @@ internal fun SettingsPageScaffold(
             MediumFlexibleTopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = {
+                            haptics.perform(HapticEvent.BACK)
+                            onBack()
+                        },
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
@@ -211,6 +221,7 @@ fun AppearanceScreen(
     val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showAccentPicker = !dynamicAvailable || !settings.dynamicColor
     val dark = resolveDarkTheme(settings.themeMode)
+    val haptics = LocalHaptics.current
 
     SettingsPageScaffold(title = stringResource(R.string.settings_appearance), onBack = onBack) {
         item {
@@ -224,7 +235,16 @@ fun AppearanceScreen(
                         selected = settings.themeMode,
                         onSelect = { mode ->
                             // Ten taps on "System" reveal the debug log (see SettingsViewModel).
-                            if (mode == ThemeMode.SYSTEM) viewModel.onSystemThemeTapped()
+                            if (mode == ThemeMode.SYSTEM) {
+                                // From the third tap on, each tap is a little stronger; the tenth is a thud.
+                                val taps = viewModel.onSystemThemeTapped()
+                                if (taps >= 3) {
+                                    haptics.perform(
+                                        if (taps >= DEBUG_UNLOCK_TAPS) HapticEvent.DEBUG_UNLOCK else HapticEvent.DEBUG_TAP,
+                                        fraction = taps.toFloat() / DEBUG_UNLOCK_TAPS,
+                                    )
+                                }
+                            }
                             viewModel.setThemeMode(mode)
                         },
                     )
@@ -404,11 +424,13 @@ fun SyncScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = LocalHaptics.current
     val snackbarHostState = remember { SnackbarHostState() }
     val retryLabel = stringResource(R.string.action_retry)
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { error ->
+            haptics.perform(HapticEvent.ERROR)
             val result = snackbarHostState.showSnackbar(
                 message = error.toUserMessage(context),
                 actionLabel = retryLabel,
@@ -419,6 +441,7 @@ fun SyncScreen(
     }
     LaunchedEffect(viewModel) {
         viewModel.syncSucceeded.collect {
+            haptics.perform(HapticEvent.REFRESH_DONE)
             snackbarHostState.showSnackbar(context.getString(R.string.timetable_refreshed))
         }
     }

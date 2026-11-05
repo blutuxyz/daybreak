@@ -68,7 +68,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
+import com.bdersolutions.daybreak.ui.haptics.HapticSlider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -782,10 +782,11 @@ private fun CategoryForm(
                         style = MaterialTheme.typography.headlineMediumEmphasized,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Slider(
+                    HapticSlider(
                         value = percent.toFloat(),
                         onValueChange = { percent = it.roundToInt().coerceIn(1, 100) },
                         valueRange = 1f..100f,
+                        tickEvery = 5f,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(

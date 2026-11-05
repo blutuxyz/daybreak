@@ -24,10 +24,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.data.haptics.Haptics
+import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -44,7 +44,7 @@ class ReorderState<T : Any>(
     initial: List<T>,
     private val listState: LazyListState,
     private val scope: CoroutineScope,
-    private val haptics: HapticFeedback,
+    private val haptics: Haptics,
     private val settleSpec: FiniteAnimationSpec<Float>,
 ) {
     var keyOf: (T) -> Any = { it }
@@ -78,7 +78,7 @@ class ReorderState<T : Any>(
         draggingKey = key
         dragDistance = 0f
         releasing = false
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        haptics.perform(HapticEvent.REORDER_PICKUP)
     }
 
     fun drag(key: Any, dy: Float) {
@@ -107,7 +107,7 @@ class ReorderState<T : Any>(
         val neighbour = if (target > index) below!! else above!!
         order = order.toMutableList().apply { add(target, removeAt(index)) }
         dragDistance += if (target > index) -neighbour.size.toFloat() else neighbour.size.toFloat()
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptics.perform(HapticEvent.REORDER_SWAP)
     }
 
     fun finish() {
@@ -133,7 +133,7 @@ fun <T : Any> rememberReorderState(
     onCommit: (List<T>) -> Unit,
 ): ReorderState<T> {
     val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
+    val haptics = LocalHaptics.current
     val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val state = remember { ReorderState(items, listState, scope, haptics, settleSpec) }
     SideEffect {

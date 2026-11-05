@@ -1,6 +1,8 @@
 package com.bdersolutions.daybreak.data.settings
 
 import android.content.Context
+import com.bdersolutions.daybreak.data.haptics.HapticSettings
+import com.bdersolutions.daybreak.data.haptics.HapticSettingsCodec
 import com.bdersolutions.daybreak.ui.absences.AbsenceCategory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,6 +80,7 @@ data class AppSettings(
     val favoriteTargets: List<FavoriteTarget> = emptyList(),
     /** Look for new versions in the background and download them on Wi-Fi. */
     val autoCheckUpdates: Boolean = true,
+    val haptics: HapticSettings = HapticSettings(),
 )
 
 class SettingsRepository(context: Context) {
@@ -162,6 +165,10 @@ class SettingsRepository(context: Context) {
         updateFavoriteTargets { emptyList() }
     }
 
+    fun updateHaptics(transform: (HapticSettings) -> HapticSettings) {
+        update(_settings.value.copy(haptics = transform(_settings.value.haptics)))
+    }
+
     private fun update(value: AppSettings) {
         preferences.edit()
             .putString(KEY_LANGUAGE, value.language.tag)
@@ -180,6 +187,7 @@ class SettingsRepository(context: Context) {
             .putString(KEY_ABSENCE_CATEGORIES, gson.toJson(value.absenceCategories))
             .putString(KEY_FAVORITE_TARGETS, gson.toJson(value.favoriteTargets))
             .putBoolean(KEY_AUTO_CHECK_UPDATES, value.autoCheckUpdates)
+            .putString(KEY_HAPTICS, HapticSettingsCodec.encode(value.haptics))
             .apply()
         _settings.value = value
     }
@@ -205,6 +213,7 @@ class SettingsRepository(context: Context) {
         absenceCategories = decodeAbsenceCategories(preferences.getString(KEY_ABSENCE_CATEGORIES, null)),
         favoriteTargets = decodeFavoriteTargets(preferences.getString(KEY_FAVORITE_TARGETS, null)),
         autoCheckUpdates = preferences.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
+        haptics = HapticSettingsCodec.decode(preferences.getString(KEY_HAPTICS, null)),
     )
 
     private fun decodeFavoriteTargets(json: String?): List<FavoriteTarget> {
@@ -268,6 +277,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ABSENCE_CATEGORIES = "absence_categories"
         private const val KEY_FAVORITE_TARGETS = "favorite_targets"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
+        private const val KEY_HAPTICS = "haptics"
         private val gson = com.google.gson.Gson()
     }
 }

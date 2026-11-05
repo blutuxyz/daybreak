@@ -73,6 +73,10 @@ class MessagesViewModel(
     private val schoolData: SchoolDataRepository,
     private val downloader: AttachmentDownloader,
 ) : ViewModel() {
+    /** Emits once when a message has been sent and the server confirmed the single recipient. */
+    private val _sentEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val sentEvents: SharedFlow<Unit> = _sentEvents.asSharedFlow()
+
     private val _attachmentEvents = MutableSharedFlow<AttachmentEvent>(extraBufferCapacity = 4)
     val attachmentEvents: SharedFlow<AttachmentEvent> = _attachmentEvents.asSharedFlow()
 
@@ -191,6 +195,7 @@ class MessagesViewModel(
                     return@launch
                 }
                 _state.update { it.copy(compose = null, folder = MailFolder.SENT) }
+                _sentEvents.tryEmit(Unit)
                 load(MailFolder.SENT)
             } catch (error: CancellationException) {
                 throw error

@@ -7,6 +7,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.debug.RawLogStore
+import com.bdersolutions.daybreak.data.haptics.HapticCapabilities
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.data.haptics.HapticPreset
+import com.bdersolutions.daybreak.data.haptics.HapticSettings
+import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
 import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
@@ -46,7 +51,7 @@ import java.time.LocalDate
 import java.util.Locale
 
 /** Taps on the theme "System" option that reveal the debug log. */
-private const val DEBUG_UNLOCK_TAPS = 10
+const val DEBUG_UNLOCK_TAPS = 10
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
@@ -60,6 +65,7 @@ class SettingsViewModel(
     private val absenceLessonHistory: AbsenceLessonHistory,
     private val updateManager: UpdateManager,
     private val updateScheduler: UpdateScheduler,
+    private val haptics: Haptics,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
@@ -130,10 +136,31 @@ class SettingsViewModel(
     val debugUnlocked: StateFlow<Boolean> = _debugUnlocked.asStateFlow()
     private var systemThemeTaps = 0
 
-    fun onSystemThemeTapped() {
-        if (_debugUnlocked.value) return
+    /** Counts a tap and returns how many have been made, or 0 when the log is unlocked already. */
+    fun onSystemThemeTapped(): Int {
+        if (_debugUnlocked.value) return 0
         systemThemeTaps++
         if (systemThemeTaps >= DEBUG_UNLOCK_TAPS) _debugUnlocked.value = true
+        return systemThemeTaps
+    }
+
+    // ---- Haptics ----
+
+    val hapticCapabilities: HapticCapabilities get() = haptics.capabilities
+    fun systemTouchFeedbackOn(): Boolean = haptics.systemTouchFeedbackOn()
+
+    /** Changes the haptic settings. The preset name follows the result: it stays, or becomes Custom. */
+    fun editHaptics(transform: (HapticSettings) -> HapticSettings) {
+        settingsRepository.updateHaptics { transform(it).normalized() }
+    }
+
+    fun applyHapticPreset(preset: HapticPreset) {
+        settingsRepository.updateHaptics { it.withPreset(preset).normalized() }
+    }
+
+    /** Plays [event] as it would sound with [with], even when it is switched off, so sliders can be felt. */
+    fun previewHaptic(event: HapticEvent, with: HapticSettings = settingsRepository.current().haptics) {
+        haptics.preview(event, with)
     }
 
     fun setLanguage(language: AppLanguage) {
@@ -245,6 +272,7 @@ class SettingsViewModel(
                 absenceLessonHistory = container.absenceLessonHistory,
                 updateManager = container.updateManager,
                 updateScheduler = container.updateScheduler,
+                haptics = container.haptics,
             ) as T
         }
     }
