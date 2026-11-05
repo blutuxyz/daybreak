@@ -138,3 +138,18 @@ fun absenceTotals(absences: List<UntisAbsence>): AbsenceTotals {
     }
     return AbsenceTotals(total, excused)
 }
+
+/** The length of one school lesson in minutes, which is how the school counts missed time. */
+const val SCHOOL_LESSON_MINUTES = 50
+
+/**
+ * Missed [minutes] as school lessons of [SCHOOL_LESSON_MINUTES] minutes, with at most one decimal and
+ * the separator of [locale]: 105 minutes are "2,1" in German, 100 minutes are "2".
+ */
+fun formatSchoolLessons(minutes: Long, locale: java.util.Locale): String {
+    val format = java.text.NumberFormat.getNumberInstance(locale).apply {
+        maximumFractionDigits = 1
+        minimumFractionDigits = 0
+    }
+    return format.format(minutes.toDouble() / SCHOOL_LESSON_MINUTES)
+}

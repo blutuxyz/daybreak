@@ -28,6 +28,7 @@ import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.ui.components.LocalAbsenceUnit
 import com.bdersolutions.daybreak.ui.components.LocalLessonColors
 import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
 
@@ -270,6 +271,7 @@ fun DaybreakTheme(
     CompositionLocalProvider(
         LocalDensity provides scaledDensity,
         LocalSubjectColorMode provides settings.subjectColorMode,
+        LocalAbsenceUnit provides settings.absenceUnit,
         LocalLessonColors provides settings.lessonColors,
     ) {
         MaterialExpressiveTheme(

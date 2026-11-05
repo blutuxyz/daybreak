@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bdersolutions.daybreak.data.settings.AbsenceUnit
 import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 
@@ -32,6 +33,9 @@ data class SubjectTone(
 
 /** Which palette automatic lesson colours come from. Provided by DaybreakTheme. */
 val LocalSubjectColorMode = staticCompositionLocalOf { SubjectColorMode.ACCENT_HUES }
+
+/** How the absences page shows missed time. Set from the settings by the theme. */
+val LocalAbsenceUnit = staticCompositionLocalOf { AbsenceUnit.MINUTES }
 
 /** The user's lesson colour choices. Provided by DaybreakTheme. */
 val LocalLessonColors = staticCompositionLocalOf { LessonColorSettings() }

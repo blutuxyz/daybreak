@@ -70,6 +70,8 @@ class TimetableViewModel(
                     .values
                     .associateBy { it.weekStart },
                 lastSyncAt = own.lastSyncAt,
+                // Holidays are the same for the whole school, so every view shows them.
+                holidays = own.holidays,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.cache.value)

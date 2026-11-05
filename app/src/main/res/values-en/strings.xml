@@ -108,6 +108,12 @@
     <string name="label_info">Information</string>
 
     <string name="settings_title">More</string>
+    <string name="holiday_generic">No school</string>
+    <string name="holiday_duration">Length</string>
+    <plurals name="holiday_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
     <string name="more_group_profile">My profile</string>
     <string name="more_group_settings">Settings</string>
     <string name="more_group_other">Other</string>
@@ -309,6 +315,11 @@
     <string name="absences_reason_unknown">No reason given</string>
     <string name="absences_duration_hm">%1$d h %2$d min</string>
     <string name="absences_duration_m">%1$d min</string>
+    <string name="absences_duration_lessons">%1$s lessons</string>
+    <string name="settings_absence_unit">Show absences as</string>
+    <string name="settings_absence_unit_time">Time</string>
+    <string name="settings_absence_unit_lessons">School lessons</string>
+    <string name="settings_absence_unit_hint">One school lesson counts 50 minutes.</string>
     <string name="absences_add_category">Add category</string>
     <string name="absences_manage">Manage</string>
     <string name="absences_page_label">Page %1$d of %2$d</string>

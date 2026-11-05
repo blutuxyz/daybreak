@@ -14,6 +14,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.session.SessionStore
+import com.bdersolutions.daybreak.data.settings.AbsenceUnit
 import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
@@ -172,6 +173,10 @@ class SettingsViewModel(
 
     fun setMotionStyle(style: MotionStyle) {
         settingsRepository.setMotionStyle(style)
+    }
+
+    fun setAbsenceUnit(unit: AbsenceUnit) {
+        settingsRepository.setAbsenceUnit(unit)
     }
 
     fun setStartView(view: StartView) {
