@@ -236,6 +236,7 @@ fun SettingsScreen(
                 )
             }
 
+            item { GroupLabel(stringResource(R.string.more_group_profile)) }
             item {
                 SettingsGroup {
                     NavigationRow(
@@ -255,6 +256,7 @@ fun SettingsScreen(
             }
 
             // Every setting lives on its own screen; this list only leads there.
+            item { GroupLabel(stringResource(R.string.more_group_settings)) }
             item {
                 SettingsGroup {
                     NavigationRow(
@@ -284,11 +286,7 @@ fun SettingsScreen(
                         subtitle = languageLabel(currentLanguage),
                         onClick = { onOpenPage(SettingsPage.LANGUAGE) },
                     )
-                }
-            }
-
-            item {
-                SettingsGroup {
+                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.CloudSync,
                         title = stringResource(R.string.settings_sync),
@@ -305,6 +303,7 @@ fun SettingsScreen(
                 }
             }
 
+            item { GroupLabel(stringResource(R.string.more_group_other)) }
             item {
                 SettingsGroup {
                     // Hidden until unlocked from the theme option; see SettingsViewModel.
@@ -348,6 +347,17 @@ fun SettingsScreen(
         }
     }
 
+}
+
+/** The small heading above a group of rows on the More page. */
+@Composable
+private fun GroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+    )
 }
 
 /**

@@ -40,10 +40,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.EventBusy
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FlexibleBottomAppBar
@@ -415,8 +415,8 @@ private fun DaybreakBottomBar(
         )
         BottomBarItem(
             selected = selectedTab == 2,
-            icon = Icons.Outlined.Settings,
-            selectedIcon = Icons.Filled.Settings,
+            icon = Icons.Outlined.MoreHoriz,
+            selectedIcon = Icons.Filled.MoreHoriz,
             label = stringResource(R.string.nav_settings),
             onClick = { onSelect(2) },
             modifier = Modifier.weight(1f),

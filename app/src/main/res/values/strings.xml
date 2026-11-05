@@ -3,7 +3,7 @@
     <string name="app_name">Daybreak</string>
 
     <string name="nav_timetable">Stundenplan</string>
-    <string name="nav_settings">Einstellungen</string>
+    <string name="nav_settings">Mehr</string>
 
     <string name="action_today">Heute</string>
     <string name="action_refresh">Aktualisieren</string>
@@ -107,7 +107,10 @@
     <string name="label_substitution">Vertretung</string>
     <string name="label_info">Information</string>
 
-    <string name="settings_title">Einstellungen</string>
+    <string name="settings_title">Mehr</string>
+    <string name="more_group_profile">Mein Profil</string>
+    <string name="more_group_settings">Einstellungen</string>
+    <string name="more_group_other">Weiteres</string>
     <string name="settings_language">Sprache</string>
     <string name="settings_sync">Synchronisierung</string>
     <string name="settings_sync_enabled">Automatisch synchronisieren</string>
