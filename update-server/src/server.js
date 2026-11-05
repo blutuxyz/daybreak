@@ -212,6 +212,9 @@ export function buildServer({ config, releases, apks, support, logger = false, n
       amount,
       currency: typeof payment.currency === 'string' ? payment.currency.slice(0, 8) : undefined,
     });
+    // record() ignores a transaction id it has already seen (Ko-fi repeats deliveries). Report what is
+    // true now, not what was asked: the code is unlocked only if the ledger has it.
+    if (!(await support.isPaid(code))) return { ok: true, unlocked: false, reason: 'duplicate_transaction' };
     return { ok: true, unlocked: true };
   });
 

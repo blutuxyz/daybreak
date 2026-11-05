@@ -116,6 +116,26 @@ test('the same transaction delivered twice is recorded once', async () => {
   assert.equal(Object.keys(await support.entries).length, 1);
 });
 
+test('a transaction id that was already used for another code unlocks nothing and says so', async () => {
+  const { app } = await setup();
+  await app.inject(kofiRequest({}));
+
+  const response = await app.inject(kofiRequest({ message: 'DB-DWSP-6458' }));
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { ok: true, unlocked: false, reason: 'duplicate_transaction' });
+  assert.deepEqual((await status(app, 'DB-DWSP-6458')).json(), { paid: false });
+});
+
+test('the same payment delivered again still reports the code as unlocked', async () => {
+  const { app } = await setup();
+  await app.inject(kofiRequest({}));
+
+  const again = await app.inject(kofiRequest({}));
+
+  assert.equal(again.json().unlocked, true);
+});
+
 test('the ledger keeps no name, e-mail address or message, and survives a restart', async () => {
   const { app, config } = await setup();
   await app.inject(kofiRequest({}));
