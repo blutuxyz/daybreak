@@ -28,6 +28,24 @@ class AbsenceCategoryUsageTest {
     }
 
     @Test
+    fun heldLessonsGiveTheMissedPercentage() {
+        // Four WEPT lessons are held, one more is cancelled and one is another subject.
+        val lessons = (0 until 4).map { i -> lesson(id = i.toLong(), start = LocalTime.of(8, 0).plusMinutes(50L * i)) } +
+            lesson(id = 10, start = LocalTime.of(14, 0), status = LessonStatus.CANCELLED) +
+            lesson(id = 11, subject = "MA", start = LocalTime.of(15, 0))
+        val absence = absence(at(monday, 8, 0), at(monday, 8, 50))
+
+        val usage = countMissedLessons(listOf(absence), lessons, "WEPT")
+
+        assertEquals(4, usage.held)
+        assertEquals(1, usage.total)
+        assertEquals(25.0, usage.percent, 0.001)
+        // Without absences the lessons are still counted, and no lessons gives 0 %, not NaN.
+        assertEquals(4, countMissedLessons(emptyList(), lessons, "WEPT").held)
+        assertEquals(0.0, percentOf(0, 0), 0.0)
+    }
+
+    @Test
     fun otherSubjectsAreIgnored() {
         val lessons = listOf(lesson(id = 1, subject = "WEPT"), lesson(id = 2, subject = "MA"))
         val absence = absence(at(monday, 7, 0), at(monday, 18, 0))

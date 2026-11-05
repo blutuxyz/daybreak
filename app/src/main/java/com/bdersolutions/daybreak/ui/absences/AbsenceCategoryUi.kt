@@ -65,6 +65,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -87,6 +91,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -113,6 +118,9 @@ import com.bdersolutions.daybreak.ui.components.reorderHandle
 import com.bdersolutions.daybreak.untis.UntisAbsence
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Which category sheet is open on the Absences screen. */
 internal sealed interface CategorySheetRequest {
@@ -207,7 +215,7 @@ internal fun AbsenceCategorySheets(
     request: CategorySheetRequest?,
     onRequest: (CategorySheetRequest?) -> Unit,
     categories: CategoriesUiState,
-    onSave: (id: String?, name: String, subject: String, maxLessons: Int) -> Unit,
+    onSave: (id: String?, name: String, subject: String, maxLessons: Int, maxPercent: Int) -> Unit,
     onPrepareDelete: suspend (id: String) -> Unit,
     onDelete: (id: String) -> Unit,
     onReorder: (ids: List<String>) -> Unit,
@@ -275,15 +283,15 @@ internal fun AbsenceCategorySheets(
                             .toSet(),
                         showBack = fromManage,
                         onBack = { page = SheetPage.Manage },
-                        onSubmit = { name, subject, max ->
+                        onSubmit = { name, subject, max, percent ->
                             if (fromManage) {
-                                onSave(current.id, name, subject, max)
+                                onSave(current.id, name, subject, max, percent)
                                 page = SheetPage.Manage
                             } else {
                                 // Slide the sheet away first, then save, so closing is animated.
                                 scope.launch {
                                     sheetState.hide()
-                                    onSave(current.id, name, subject, max)
+                                    onSave(current.id, name, subject, max, percent)
                                     onRequest(null)
                                 }
                             }
@@ -352,22 +360,31 @@ private fun CategoryCard(
     partial: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val locale = LocalConfiguration.current.locales[0]
+    val percentMode = category.isPercent
     val used = usage?.total ?: 0
-    val max = category.maxLessons
-    val atLimit = usage != null && used >= max
+    val usedPercent = usage?.percent ?: 0.0
+    // Both modes reduce to "how much of the limit is used", in lessons or in percent.
+    val max = if (percentMode) category.maxPercent else category.maxLessons
+    val amount = if (percentMode) usedPercent else used.toDouble()
+    val atLimit = usage != null && amount >= max
     val accent = when {
         atLimit -> MaterialTheme.colorScheme.error
-        usage != null && used * 5 >= max * 4 -> MaterialTheme.colorScheme.tertiary
+        usage != null && amount * 5 >= max * 4 -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
     val progress by animateFloatAsState(
-        targetValue = if (usage == null) 0f else (used.toFloat() / max).coerceIn(0f, 1f),
+        targetValue = if (usage == null) 0f else (amount / max).toFloat().coerceIn(0f, 1f),
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "categoryProgress",
     )
     val status = when {
         missingSubject -> stringResource(R.string.category_missing_subject)
         usage == null -> stringResource(R.string.category_loading)
+        percentMode && amount - max >= 0.05 ->
+            stringResource(R.string.category_percent_over, formatPercent(amount - max, locale))
+        percentMode && amount >= max -> stringResource(R.string.category_limit_reached)
+        percentMode -> stringResource(R.string.category_percent_remaining, formatPercent(max - amount, locale))
         used > max -> stringResource(R.string.category_over, used - max)
         used == max -> stringResource(R.string.category_limit_reached)
         else -> stringResource(R.string.category_remaining, max - used)
@@ -394,12 +411,16 @@ private fun CategoryCard(
                     )
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = if (usage == null) dash else used.toString(),
+                            text = when {
+                                usage == null -> dash
+                                percentMode -> formatPercent(usedPercent, locale) + " %"
+                                else -> used.toString()
+                            },
                             style = MaterialTheme.typography.displaySmallEmphasized,
                             color = if (atLimit) accent else MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = " / $max",
+                            text = if (percentMode) " / $max %" else " / $max",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 5.dp),
@@ -439,6 +460,13 @@ private fun CategoryCard(
                 color = if (atLimit) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
             )
+            if (percentMode && usage != null && !missingSubject) {
+                Text(
+                    text = stringResource(R.string.category_percent_basis, used, usage.held),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -481,6 +509,13 @@ private fun CategoryCard(
         }
     }
 }
+
+/** "7.5" or "10": one decimal at most, in the app's language. */
+internal fun formatPercent(value: Double, locale: Locale): String =
+    NumberFormat.getNumberInstance(locale).apply {
+        maximumFractionDigits = 1
+        minimumFractionDigits = 0
+    }.format(value)
 
 /** The subject in its timetable colour, so it reads the same here as in the timetable. */
 @Composable
@@ -606,7 +641,7 @@ private fun SubjectTile(
 }
 
 /** Create or edit a category: a name, one of the student's subjects, and the lesson limit. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryForm(
     initial: AbsenceCategory?,
@@ -614,14 +649,21 @@ private fun CategoryForm(
     takenSubjects: Set<String>,
     showBack: Boolean,
     onBack: () -> Unit,
-    onSubmit: (name: String, subject: String, maxLessons: Int) -> Unit,
+    onSubmit: (name: String, subject: String, maxLessons: Int, maxPercent: Int) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val motion = MaterialTheme.motionScheme
     var saving by remember { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf(initial?.name.orEmpty()) }
     var subject by rememberSaveable { mutableStateOf(initial?.subject.orEmpty()) }
-    var maxText by rememberSaveable { mutableStateOf(initial?.maxLessons?.toString().orEmpty()) }
+    var maxText by rememberSaveable {
+        mutableStateOf(initial?.maxLessons?.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var percentMode by rememberSaveable { mutableStateOf(initial?.isPercent == true) }
+    var percent by rememberSaveable {
+        mutableIntStateOf(initial?.maxPercent?.takeIf { it > 0 }?.coerceIn(1, 50) ?: 10)
+    }
 
     // A category whose subject left the timetable keeps it visible in the list.
     val options = remember(subjects, initial) {
@@ -629,7 +671,8 @@ private fun CategoryForm(
         listOfNotNull(own) + subjects
     }
     val maxLessons = maxText.toIntOrNull()
-    val canSave = subject.isNotBlank() && maxLessons != null && maxLessons > 0
+    val canSave = subject.isNotBlank() &&
+        (percentMode || (maxLessons != null && maxLessons > 0))
     val anyTaken = options.any { it.lowercase() in takenSubjects }
 
     Column(
@@ -692,27 +735,88 @@ private fun CategoryForm(
         }
 
         Spacer(Modifier.height(20.dp))
-        SheetSectionLabel(stringResource(R.string.category_max))
-        OutlinedTextField(
-            value = maxText,
-            onValueChange = { value ->
-                if (value.length <= 3 && value.all { it.isDigit() }) maxText = value
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = CircleShape,
-            suffix = { Text(stringResource(R.string.category_max_suffix)) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    keyboard?.hide()
-                    focusManager.clearFocus()
-                },
-            ),
+        SheetSectionLabel(
+            stringResource(if (percentMode) R.string.category_max_percent else R.string.category_max),
         )
+        val modeLabel = stringResource(R.string.category_limit_mode)
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .semantics { contentDescription = modeLabel },
+        ) {
+            listOf(false, true).forEachIndexed { index, isPercent ->
+                SegmentedButton(
+                    selected = percentMode == isPercent,
+                    onClick = {
+                        if (percentMode != isPercent) {
+                            percentMode = isPercent
+                            keyboard?.hide()
+                            focusManager.clearFocus()
+                        }
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                ) {
+                    Text(
+                        stringResource(
+                            if (isPercent) R.string.category_mode_percent else R.string.category_mode_lessons,
+                        ),
+                    )
+                }
+            }
+        }
+        // The lesson count field and the percent slider swap places inside one animated slot.
+        AnimatedContent(
+            targetState = percentMode,
+            transitionSpec = {
+                fadeIn(motion.defaultEffectsSpec<Float>())
+                    .togetherWith(fadeOut(motion.fastEffectsSpec<Float>()))
+                    .using(SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec<IntSize>() })
+            },
+            label = "categoryLimitInput",
+        ) { isPercent ->
+            if (isPercent) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                    Text(
+                        text = stringResource(R.string.category_percent_value, percent),
+                        style = MaterialTheme.typography.headlineMediumEmphasized,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Slider(
+                        value = percent.toFloat(),
+                        onValueChange = { percent = it.roundToInt().coerceIn(1, 50) },
+                        valueRange = 1f..50f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = stringResource(R.string.category_percent_support),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                OutlinedTextField(
+                    value = maxText,
+                    onValueChange = { value ->
+                        if (value.length <= 3 && value.all { it.isDigit() }) maxText = value
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = CircleShape,
+                    suffix = { Text(stringResource(R.string.category_max_suffix)) },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            keyboard?.hide()
+                            focusManager.clearFocus()
+                        },
+                    ),
+                )
+            }
+        }
 
         Spacer(Modifier.height(20.dp))
         SheetSectionLabel(
@@ -738,10 +842,10 @@ private fun CategoryForm(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                val max = maxLessons ?: return@Button
+                val max = if (percentMode) 0 else maxLessons ?: return@Button
                 saving = true
                 keyboard?.hide()
-                onSubmit(name, subject, max)
+                onSubmit(name, subject, max, if (percentMode) percent else 0)
             },
             enabled = canSave && !saving,
             modifier = Modifier
@@ -1029,10 +1133,15 @@ private fun CategoryRowContent(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = if (category.name.equals(category.subject, ignoreCase = true)) {
-                    stringResource(R.string.category_max_summary, category.maxLessons)
-                } else {
-                    stringResource(R.string.category_row_summary, category.subject, category.maxLessons)
+                text = when {
+                    category.isPercent && category.name.equals(category.subject, ignoreCase = true) ->
+                        stringResource(R.string.category_max_percent_summary, category.maxPercent)
+                    category.isPercent ->
+                        stringResource(R.string.category_row_percent_summary, category.subject, category.maxPercent)
+                    category.name.equals(category.subject, ignoreCase = true) ->
+                        stringResource(R.string.category_max_summary, category.maxLessons)
+                    else ->
+                        stringResource(R.string.category_row_summary, category.subject, category.maxLessons)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

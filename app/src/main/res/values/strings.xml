@@ -334,6 +334,17 @@
     <string name="category_optional">Optional</string>
     <string name="category_name_support">Leer gelassen wird der Name des Fachs verwendet.</string>
     <string name="category_max_summary">max. %1$d Stunden</string>
+    <string name="category_limit_mode">Art des Limits</string>
+    <string name="category_mode_lessons">Stunden</string>
+    <string name="category_mode_percent">Prozent</string>
+    <string name="category_max_percent">Maximale Fehlzeit</string>
+    <string name="category_percent_value">%1$d %%</string>
+    <string name="category_percent_support">Anteil aller bisherigen Stunden dieses Fachs im Schuljahr.</string>
+    <string name="category_max_percent_summary">max. %1$d %%</string>
+    <string name="category_row_percent_summary">%1$s · max. %2$d %%</string>
+    <string name="category_percent_remaining">Noch %1$s %% bis zum Limit</string>
+    <string name="category_percent_over">%1$s %% über dem Limit</string>
+    <string name="category_percent_basis">%1$d von %2$d Stunden gefehlt</string>
     <string name="absences_lessons_missed">%1$d Stunden verpasst</string>
     <string name="absences_lessons_count">%1$d Std.</string>
 </resources>

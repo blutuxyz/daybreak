@@ -334,6 +334,17 @@
     <string name="category_optional">Optional</string>
     <string name="category_name_support">Left empty, the subject name is used.</string>
     <string name="category_max_summary">max. %1$d lessons</string>
+    <string name="category_limit_mode">Limit type</string>
+    <string name="category_mode_lessons">Lessons</string>
+    <string name="category_mode_percent">Percent</string>
+    <string name="category_max_percent">Maximum missed share</string>
+    <string name="category_percent_value">%1$d %%</string>
+    <string name="category_percent_support">Share of all lessons of this subject so far this school year.</string>
+    <string name="category_max_percent_summary">max. %1$d %%</string>
+    <string name="category_row_percent_summary">%1$s · max. %2$d %%</string>
+    <string name="category_percent_remaining">%1$s %% left until the limit</string>
+    <string name="category_percent_over">%1$s %% over the limit</string>
+    <string name="category_percent_basis">Missed %1$d of %2$d lessons</string>
     <string name="absences_lessons_missed">%1$d lessons missed</string>
     <string name="absences_lessons_count">%1$d lessons</string>
 </resources>

@@ -218,7 +218,8 @@ class SettingsRepository(context: Context) {
             // A null String that slipped past the type system throws here, which drops the entry.
             runCatching {
                 category.id.isNotEmpty() && category.subject.isNotBlank() &&
-                    category.name.length >= 0 && category.maxLessons > 0
+                    category.name.length >= 0 &&
+                    (category.maxLessons > 0 || category.maxPercent in 1..100)
             }.getOrDefault(false)
         }
     }

@@ -13,15 +13,30 @@ data class AbsenceCategory(
     val name: String,
     val subject: String,
     val maxLessons: Int,
-)
+    /**
+     * When above 0 the limit is this share of the subject's lessons held so far, and [maxLessons]
+     * is unused. Gson leaves it 0 for categories stored before percent limits existed.
+     */
+    val maxPercent: Int = 0,
+) {
+    val isPercent: Boolean get() = maxPercent > 0
+}
 
 /** How many lessons of a subject were missed, split by excuse status. */
 data class CategoryUsage(
     val excused: Int = 0,
     val unexcused: Int = 0,
+    /** Lessons of the subject held so far this school year (cancelled ones excluded). */
+    val held: Int = 0,
 ) {
     val total: Int get() = excused + unexcused
+
+    /** Missed share of the held lessons, 0 to 100. */
+    val percent: Double get() = percentOf(total, held)
 }
+
+fun percentOf(missed: Int, held: Int): Double =
+    if (held <= 0) 0.0 else missed * 100.0 / held
 
 /**
  * The categories in the order of [ids]. Ids that no category has are ignored, and categories that
@@ -61,20 +76,22 @@ fun countMissedLessons(
     lessons: Collection<UntisLesson>,
     subject: String,
 ): CategoryUsage {
-    if (absences.isEmpty() || subject.isBlank()) return CategoryUsage()
+    if (subject.isBlank()) return CategoryUsage()
     var excused = 0
     var unexcused = 0
+    var held = 0
     val seen = HashSet<Triple<Long, java.time.LocalDate, java.time.LocalTime>>()
     for (lesson in lessons) {
         if (lesson.isCancelled || !lesson.hasSubject(subject)) continue
         if (!seen.add(Triple(lesson.id, lesson.date, lesson.start))) continue
+        held++
         val begin = lesson.startsAt
         val finish = lesson.endsAt
         val overlapping = absences.filter { it.start < finish && it.end > begin }
         if (overlapping.isEmpty()) continue
         if (overlapping.any { it.excused }) excused++ else unexcused++
     }
-    return CategoryUsage(excused = excused, unexcused = unexcused)
+    return CategoryUsage(excused = excused, unexcused = unexcused, held = held)
 }
 
 /**
