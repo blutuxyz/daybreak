@@ -11,6 +11,9 @@ API) and does **not** require any API key or developer account.
   the week view.
 - Day and week views with horizontal swipe navigation, a live “now” highlight and
   clear cancellation, room-change and substitution badges.
+- Exams are framed in bright amber, and the part of a lesson you were absent for is greyed out.
+- Homework, exams and your school's notices on their own pages, and your WebUntis
+  messages (Nachrichten): inbox, sent and drafts.
 - Offline-first cache, periodic WorkManager sync, change notifications and a
   Glance home-screen widget that follows your wallpaper colours on Android 12+.
 - The WebUntis key is encrypted with a key that lives in the Android Keystore and
@@ -70,10 +73,7 @@ Use **Andere Anmeldung → Manuell** if you already know:
 
 **Andere Anmeldung → Passwort** asks WebUntis once for the mobile access key using your
 username and password (plus a verification code if the school requires two-factor
-authentication). Daybreak stores the derived key. It also keeps the password,
-encrypted with the Keystore, so class services and notices from the WebUntis web
-site can load without asking again. **Mein Konto → Klassendienste** can remove it,
-and signing out deletes it.
+authentication). Daybreak stores only the derived key, never your password.
 
 ## Project layout
 

@@ -41,24 +41,6 @@ class SessionStore(
     private val _session = MutableStateFlow(loadSession())
     val session: StateFlow<DaybreakSession?> = _session.asStateFlow()
 
-    private val _passwordSaved = MutableStateFlow(vault.getStoredPassword() != null)
-
-    /** Whether the WebUntis password is stored (encrypted), so web-only data can load without asking. */
-    val passwordSaved: StateFlow<Boolean> = _passwordSaved.asStateFlow()
-
-    fun storedPassword(): String? = vault.getStoredPassword()
-
-    fun savePassword(password: String): Boolean {
-        val stored = password.isNotBlank() && vault.storePassword(password)
-        if (stored) _passwordSaved.value = true
-        return stored
-    }
-
-    fun forgetPassword() {
-        vault.clearPassword()
-        _passwordSaved.value = false
-    }
-
     fun isLoggedIn(): Boolean = _session.value != null && vault.getStoredSecret() != null
 
     fun currentCredentials(): SessionCredentials? {
@@ -67,10 +49,8 @@ class SessionStore(
         return SessionCredentials(current, secret)
     }
 
-    /** [password] is only given by the password login. A QR login has none; it is asked for later. */
-    fun saveLogin(result: UntisLoginResult, student: UntisChild, password: String? = null): Boolean {
+    fun saveLogin(result: UntisLoginResult, student: UntisChild): Boolean {
         if (!vault.storeSecret(result.secret)) return false
-        if (password.isNullOrBlank()) forgetPassword() else savePassword(password)
         val session = DaybreakSession(
             server = result.server,
             school = result.school,
@@ -122,7 +102,6 @@ class SessionStore(
         synchronized(lock) {
             preferences.edit().clear().apply()
             vault.clear()
-            _passwordSaved.value = false
             _session.value = null
         }
     }

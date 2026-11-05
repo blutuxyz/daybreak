@@ -355,11 +355,20 @@
     <string name="account_username">Username</string>
     <string name="account_messages">Notices</string>
     <string name="account_messages_empty">No notices today</string>
-    <string name="account_class_services">Class services</string>
-    <string name="class_services_hint">WebUntis only shows class services after a web sign-in. Your password is stored encrypted on this device, so you only enter it once.</string>
-    <string name="class_services_password">Password</string>
-    <string name="class_services_show">Show</string>
-    <string name="class_services_forget">Remove saved password</string>
-    <string name="class_services_empty">No class services in this period</string>
-    <string name="class_services_wrong_password">Sign-in failed. Check your password. Accounts with a second factor do not work here.</string>
+    <string name="settings_messages">Messages</string>
+    <string name="settings_messages_desc">Inbox, sent and drafts</string>
+    <string name="messages_title">Messages</string>
+    <string name="messages_inbox">Inbox</string>
+    <string name="messages_sent">Sent</string>
+    <string name="messages_drafts">Drafts</string>
+    <string name="messages_inbox_empty">No messages in your inbox</string>
+    <string name="messages_sent_empty">Nothing sent yet</string>
+    <string name="messages_drafts_empty">No drafts</string>
+    <string name="messages_no_subject">(No subject)</string>
+    <string name="messages_no_text">This message has no text.</string>
+    <string name="messages_from">From</string>
+    <string name="messages_to">To</string>
+    <string name="messages_unread">Unread</string>
+    <string name="messages_attachments">Attachments are only in WebUntis</string>
+    <string name="messages_unknown_person">Unknown</string>
 </resources>

@@ -86,6 +86,8 @@ import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
 import com.bdersolutions.daybreak.ui.account.AccountScreen
 import com.bdersolutions.daybreak.ui.account.AccountViewModel
+import com.bdersolutions.daybreak.ui.messages.MessagesScreen
+import com.bdersolutions.daybreak.ui.messages.MessagesViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsPage
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingScreen
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingViewModel
@@ -303,6 +305,7 @@ private fun LoggedInContent(
                         onOpenDebug = { showDebug = true },
                         onOpenPage = { settingsPage = it },
                         onOpenAccount = { mainPage = MainPage.ACCOUNT },
+                        onOpenMessages = { mainPage = MainPage.MESSAGES },
                     )
                 }
             }
@@ -348,6 +351,14 @@ private fun LoggedInContent(
                     onBack = { mainPage = null },
                 )
 
+                MainPage.MESSAGES -> MessagesScreen(
+                    viewModel = viewModel(
+                        key = "messages_${session.studentId}",
+                        factory = MessagesViewModel.Factory(container),
+                    ),
+                    onBack = { mainPage = null },
+                )
+
                 null -> Unit
             }
         }
@@ -365,7 +376,7 @@ private fun LoggedInContent(
 }
 
 /** Pages that are not settings but open over the tabs the same way. */
-private enum class MainPage { UPCOMING, ACCOUNT }
+private enum class MainPage { UPCOMING, ACCOUNT, MESSAGES }
 
 /** Stock slide used by the settings sub-screens. Plain tweens, so there is no spring overshoot. */
 private val subScreenEnter = slideInHorizontally(

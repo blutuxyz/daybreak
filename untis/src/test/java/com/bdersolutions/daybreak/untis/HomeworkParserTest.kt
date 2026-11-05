@@ -56,16 +56,4 @@ class HomeworkParserTest {
         assertEquals("Schulfrei", message.subject)
         assertEquals("Am Freitag entfällt der Unterricht.", message.text)
     }
-
-    @Test
-    fun readsTheWebNewsWidgetAndStripsHtml() {
-        val json = JsonParser.parseString(
-            """{"messagesOfDay":[{"id":4,"subject":"Hinweis","text":"<p>Erste Zeile<br>Zweite&nbsp;Zeile</p>"}],"systemMessage":""}""",
-        )
-
-        val message = MessageParser.parse(json).single()
-
-        assertEquals("Hinweis", message.subject)
-        assertEquals("Erste Zeile\nZweite Zeile", message.text)
-    }
 }

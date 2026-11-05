@@ -148,6 +148,27 @@ fun examAccent(): Color {
     return if (isDark) Color(0xFFFFD54F) else Color(0xFFB38600)
 }
 
+/**
+ * The loud version of [examAccent]: a bright amber (or the user's exam colour) for the thick border
+ * and badge that make an exam block stand out on the timetable at a glance.
+ */
+@Composable
+fun examHighlight(): Color {
+    LocalLessonColors.current.examColor?.let { return Color(it.toInt()) }
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) Color(0xFFFFEB3B) else Color(0xFFFFAB00)
+}
+
+/**
+ * The veil over the part of a lesson the student was absent for. A neutral grey that mutes the
+ * subject colour and the text without hiding them.
+ */
+@Composable
+fun absentVeil(): Color {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) Color(0xFF3A3A3C).copy(alpha = 0.8f) else Color(0xFFC4C4C8).copy(alpha = 0.8f)
+}
+
 @Composable
 fun examContainer(): Color {
     LocalLessonColors.current.examColor?.let {

@@ -205,6 +205,16 @@ class TimetableRepository(
                     val kept = workingCache.exams.filterNot { it.date in from..to }
                     workingCache = workingCache.copy(exams = kept + exams)
                 }
+                // Absences work the same way: they only grey out the part of a lesson the student
+                // missed, so a failure here must not hide the timetable either.
+                runCatching {
+                    api.fetchAbsences(session = untisSession, startDate = from, endDate = to)
+                }.onSuccess { absences ->
+                    val kept = workingCache.absences.filterNot {
+                        it.start.toLocalDate() in from..to || it.end.toLocalDate() in from..to
+                    }
+                    workingCache = workingCache.copy(absences = kept + absences)
+                }
             }
 
             val now = System.currentTimeMillis()

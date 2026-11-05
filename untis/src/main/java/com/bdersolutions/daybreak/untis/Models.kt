@@ -170,3 +170,28 @@ data class UntisMessage(
     val subject: String,
     val text: String,
 )
+
+/** The folders of the WebUntis message box (Nachrichten). */
+enum class MailFolder { INBOX, SENT, DRAFTS }
+
+/** A person on a message, named as WebUntis shows them (for teachers the short name). */
+data class UntisMailPerson(
+    val userId: Long,
+    val name: String,
+)
+
+/**
+ * One message of the message box. Lists only carry a [preview]; [content] is filled when a single
+ * message is loaded.
+ */
+data class UntisMail(
+    val id: Long,
+    val subject: String,
+    val preview: String = "",
+    val content: String = "",
+    val sender: UntisMailPerson? = null,
+    val recipients: List<UntisMailPerson> = emptyList(),
+    val sentAt: LocalDateTime? = null,
+    val read: Boolean = true,
+    val hasAttachments: Boolean = false,
+)

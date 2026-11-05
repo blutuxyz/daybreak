@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive
 import kotlinx.coroutines.CancellationException
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
@@ -194,99 +195,51 @@ class UntisApi(
         return HomeworkParser.parse(result)
     }
 
-    /**
-     * The class services (Klassendienste) of the student's class. WebUntis only serves them to a
-     * web login, not to the mobile key, so this signs in with [password] for the length of one
-     * request and signs out again. The password is never logged.
-     */
-    suspend fun fetchClassServices(
-        session: UntisSession,
-        password: String,
-        startDate: LocalDate,
-        endDate: LocalDate,
-    ): List<UntisClassService> {
-        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
-        val body = withWebSession(session, password) { server, cookie ->
-            rpc.getRest(
-                server = server,
-                path = "WebUntis/api/classreg/classservices",
-                query = mapOf(
-                    "startDate" to utisDate(startDate).toString(),
-                    "endDate" to utisDate(endDate).toString(),
-                ),
-                cookie = cookie,
-                label = "classservices",
-            )
+    /** The messages of one folder of the message box (Nachrichten), newest first. */
+    suspend fun fetchMailList(session: UntisSession, folder: MailFolder): List<UntisMail> {
+        val path = when (folder) {
+            MailFolder.INBOX -> "messages"
+            MailFolder.SENT -> "messages/sent"
+            MailFolder.DRAFTS -> "messages/drafts"
         }
-        return ClassServiceParser.parse(body)
+        val body = restGet(session, path, "mail-${folder.name.lowercase()}")
+        return MailParser.parseList(folder, body)
+            .sortedByDescending { it.sentAt ?: LocalDateTime.MIN }
+    }
+
+    /** One message with its full text. */
+    suspend fun fetchMail(session: UntisSession, id: Long): UntisMail {
+        val body = restGet(session, "messages/$id", "mail-message")
+        return MailParser.parseMessage(body) ?: throw UntisParseException("The message could not be read.")
     }
 
     /**
-     * The notices shown on the WebUntis start page (Mitteilungen) on [date]. They come from the web
-     * news widget, so this needs the password, like [fetchClassServices].
+     * GET on the message REST API. It does not take the mobile key itself but a short-lived token
+     * that `getAuthToken` hands out for it, so no password is involved.
      */
-    suspend fun fetchWebMessages(session: UntisSession, password: String, date: LocalDate): List<UntisMessage> {
-        val body = withWebSession(session, password) { server, cookie ->
-            rpc.getRest(
-                server = server,
-                path = "WebUntis/api/public/news/newsWidgetData",
-                query = mapOf("date" to date.toString()),
-                cookie = cookie,
-                label = "newsWidgetData",
-            )
-        }
-        return MessageParser.parse(body)
-    }
-
-    /**
-     * Signs in on the web with [password], runs [block] with the session cookie and signs out again.
-     * A failed sign-in is an [UntisAuthException]. A session the REST API then refuses is not: it
-     * does not mean the password is wrong.
-     */
-    private suspend fun <T> withWebSession(
-        session: UntisSession,
-        password: String,
-        block: suspend (server: String, cookie: String) -> T,
-    ): T {
-        if (password.isBlank()) throw UntisAuthException("The password is empty.")
+    private suspend fun restGet(session: UntisSession, path: String, label: String): JsonElement {
         val safeServer = normalizeInputs(session.server, session.school, session.username)
-
-        val login = rpc.call(
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val tokenResult = rpc.call(
             server = safeServer,
             school = session.school,
-            method = "authenticate",
+            method = "getAuthToken",
             params = JsonArray().apply {
-                add(JsonObject().apply {
-                    addProperty("user", session.username)
-                    addProperty("password", password)
-                    addProperty("client", "Daybreak")
-                })
+                add(JsonObject().apply { add("auth", auth(session.username, session.secret)) })
             },
-            // The response holds the web session id.
+            // The token must never reach the debug log.
             recordRaw = false,
-            path = "WebUntis/jsonrpc.do",
         )
-        val sessionId = login.asJsonObjectOrNull()?.stringOrNull("sessionId")
-            ?: throw UntisAuthException("WebUntis did not start a session.")
-        val schoolCookie = java.util.Base64.getEncoder().encodeToString(session.school.toByteArray())
-        val cookie = "JSESSIONID=$sessionId; schoolname=\"_$schoolCookie\""
-        try {
-            return block(safeServer, cookie)
-        } catch (error: UntisAuthException) {
-            throw UntisProtocolException("WebUntis did not accept the web session.")
-        } finally {
-            runCatching {
-                rpc.call(
-                    server = safeServer,
-                    school = session.school,
-                    method = "logout",
-                    params = JsonArray(),
-                    recordRaw = false,
-                    path = "WebUntis/jsonrpc.do",
-                    cookie = cookie,
-                )
-            }
-        }
+        val token = tokenResult.asJsonObjectOrNull()?.stringOrNull("token", "accessToken")
+            ?: tokenResult.takeIf { it.isJsonPrimitive }?.asString
+            ?: throw UntisParseException("WebUntis returned no token.")
+        return rpc.getRest(
+            server = safeServer,
+            path = "WebUntis/api/rest/view/v1/$path",
+            query = emptyMap(),
+            token = token,
+            label = label,
+        )
     }
 
     /** The school's notices (Mitteilungen) that are shown on [date]. */

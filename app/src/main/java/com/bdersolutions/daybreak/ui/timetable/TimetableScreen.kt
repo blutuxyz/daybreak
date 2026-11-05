@@ -115,6 +115,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.data.repository.TimetableSyncStatus
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.untis.LessonStatus
+import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
@@ -125,7 +126,9 @@ import com.bdersolutions.daybreak.ui.components.onColorFor
 import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.SubjectTone
 import com.bdersolutions.daybreak.ui.components.substitutionAccent
+import com.bdersolutions.daybreak.ui.components.absentVeil
 import com.bdersolutions.daybreak.ui.components.examAccent
+import com.bdersolutions.daybreak.ui.components.examHighlight
 import com.bdersolutions.daybreak.ui.components.examContainer
 import com.bdersolutions.daybreak.ui.components.examContent
 import com.bdersolutions.daybreak.ui.components.rememberPressScale
@@ -134,6 +137,9 @@ import com.bdersolutions.daybreak.ui.components.warningAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
 import com.bdersolutions.daybreak.ui.toUserMessage
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -555,6 +561,7 @@ private fun DayPage(
                                     now = now,
                                     revealKey = weekStart,
                                     exams = cache.exams,
+                                    absences = cache.absences,
                                     onLessonClick = { selectedLesson = it },
                                 )
                             }
@@ -780,6 +787,7 @@ private fun DayTimeline(
     now: LocalDateTime,
     revealKey: Any?,
     exams: List<UntisExam>,
+    absences: List<UntisAbsence>,
     onLessonClick: (UntisLesson) -> Unit,
 ) {
     val pxPerMinute = 1.5.dp
@@ -845,6 +853,7 @@ private fun DayTimeline(
                         block = block,
                         current = current,
                         exam = examFor(block.lesson, exams),
+                        absent = remember(block, absences) { absentParts(block, absences) },
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(columnWidth - 4.dp)
@@ -996,7 +1005,7 @@ private fun rememberLessonLook(
     }
     val stripe = when {
         block.isCancelled -> cancelledAccent()
-        exam != null -> examAccent()
+        exam != null -> examHighlight()
         block.hasRoomChange || block.hasSubstitution -> substitutionAccent()
         else -> tone.accent
     }
@@ -1007,7 +1016,7 @@ private fun rememberLessonLook(
     val tint = if (dark) 0.2f else 0.14f
     val fill = when {
         fullCard -> lerp(surface, stripe, 0.24f)
-        exam != null -> lerp(surface, stripe, 0.25f)
+        exam != null -> lerp(surface, stripe, 0.4f)
         else -> lerp(surface, stripe, tint)
     }
     return LessonLook(
@@ -1024,6 +1033,7 @@ private fun DayLessonBlock(
     block: TimelineBlock,
     current: Boolean,
     exam: UntisExam?,
+    absent: List<ClosedFloatingPointRange<Float>>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1038,6 +1048,8 @@ private fun DayLessonBlock(
     val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
     val border = when {
+        // An exam gets a thick bright frame, so it is the first thing the eye finds.
+        exam != null -> BorderStroke(3.dp, examHighlight())
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         cancelled -> BorderStroke(1.5.dp, cancelledAccent())
         block.hasSubstitution -> BorderStroke(1.5.dp, substitutionAccent())
@@ -1063,7 +1075,7 @@ private fun DayLessonBlock(
         tonalElevation = if (current) 3.dp else 0.dp,
         interactionSource = interactionSource,
     ) {
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize().greyOutAbsent(absent, absentVeil())) {
             look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
@@ -1107,8 +1119,8 @@ private fun DayLessonBlock(
                         Spacer(Modifier.width(4.dp))
                         AccentBadge(
                             text = stringResource(R.string.exam_badge),
-                            containerColor = examAccent(),
-                            contentColor = onColorFor(examAccent()),
+                            containerColor = examHighlight(),
+                            contentColor = onColorFor(examHighlight()),
                         )
                     }
                     if (badge != null) {
@@ -1268,6 +1280,7 @@ private fun WeekPage(
                                                 pxPerMinute = pxPerMinute,
                                                 revealKey = weekStart,
                                                 exams = cache.exams,
+                                                absences = cache.absences,
                                                 onLessonClick = { selectedLesson = it },
                                                 modifier = Modifier.weight(1f),
                                             )
@@ -1432,6 +1445,7 @@ private fun WeekDayColumn(
     pxPerMinute: Dp,
     revealKey: Any?,
     exams: List<UntisExam>,
+    absences: List<UntisAbsence>,
     onLessonClick: (UntisLesson) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1477,6 +1491,7 @@ private fun WeekDayColumn(
                         block = block,
                         current = current,
                         exam = examFor(block.lesson, exams),
+                        absent = remember(block, absences) { absentParts(block, absences) },
                         onClick = { onLessonClick(block.lesson) },
                         modifier = Modifier
                             .width(maxOf(columnWidth - 2.dp, 14.dp))
@@ -1503,6 +1518,7 @@ private fun WeekLessonBlock(
     block: TimelineBlock,
     current: Boolean,
     exam: UntisExam?,
+    absent: List<ClosedFloatingPointRange<Float>>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1514,9 +1530,9 @@ private fun WeekLessonBlock(
     val look = rememberLessonLook(block, exam, tone, subject)
     val cancelled = block.isCancelled
     val border = when {
+        exam != null -> BorderStroke(2.5.dp, examHighlight())
         current -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         cancelled -> BorderStroke(1.dp, cancelledAccent())
-        exam != null -> BorderStroke(1.dp, examAccent())
         block.hasRoomChange || block.hasSubstitution -> BorderStroke(1.dp, substitutionAccent())
         else -> null
     }
@@ -1535,7 +1551,7 @@ private fun WeekLessonBlock(
         contentColor = look.content,
         border = border,
     ) {
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize().greyOutAbsent(absent, absentVeil())) {
             look.stripe?.let { stripe ->
                 Box(
                     modifier = Modifier
@@ -1750,7 +1766,7 @@ private data class FreeGap(
     val end: LocalTime,
 )
 
-private data class TimelineBlock(
+internal data class TimelineBlock(
     val lessons: List<UntisLesson>,
     val start: LocalTime,
     val end: LocalTime,
@@ -1901,6 +1917,45 @@ private fun minutesBetween(start: LocalTime, end: LocalTime): Int =
 
 private fun UntisLesson.isLongEvent(): Boolean =
     Duration.between(start, end).toMinutes() >= 180
+
+/**
+ * The parts of [block] in which the student was absent, as fractions of its length from the top.
+ * An absence from 7:55 to 8:05 over a lesson that starts at 7:55 gives the first tenth of a 100
+ * minute lesson, not the whole block. A cancelled lesson has nothing to grey out.
+ */
+internal fun absentParts(block: TimelineBlock, absences: List<UntisAbsence>): List<ClosedFloatingPointRange<Float>> {
+    if (absences.isEmpty() || block.isCancelled) return emptyList()
+    val date = block.lesson.date
+    val blockStart = date.atTime(block.start)
+    val blockEnd = date.atTime(block.end)
+    val total = Duration.between(blockStart, blockEnd).seconds.toFloat()
+    if (total <= 0f) return emptyList()
+    return absences.mapNotNull { absence ->
+        val from = maxOf(absence.start, blockStart)
+        val to = minOf(absence.end, blockEnd)
+        if (!from.isBefore(to)) return@mapNotNull null
+        val top = Duration.between(blockStart, from).seconds / total
+        val bottom = Duration.between(blockStart, to).seconds / total
+        top..bottom
+    }
+}
+
+/** Draws [color] over the given fractions of the height, above the content. */
+private fun Modifier.greyOutAbsent(parts: List<ClosedFloatingPointRange<Float>>, color: Color): Modifier =
+    if (parts.isEmpty()) {
+        this
+    } else {
+        drawWithContent {
+            drawContent()
+            parts.forEach { part ->
+                drawRect(
+                    color = color,
+                    topLeft = Offset(0f, size.height * part.start),
+                    size = Size(size.width, size.height * (part.endInclusive - part.start)),
+                )
+            }
+        }
+    }
 
 /**
  * The exam that belongs to a lesson. The server sends exams with a subject id, not a

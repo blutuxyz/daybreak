@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -144,6 +145,7 @@ fun SettingsScreen(
     onOpenDebug: () -> Unit,
     onOpenPage: (SettingsPage) -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenMessages: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -241,6 +243,13 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_account),
                         subtitle = stringResource(R.string.settings_account_desc),
                         onClick = onOpenAccount,
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.MailOutline,
+                        title = stringResource(R.string.settings_messages),
+                        subtitle = stringResource(R.string.settings_messages_desc),
+                        onClick = onOpenMessages,
                     )
                 }
             }
