@@ -168,6 +168,50 @@ class UntisApi(
         return ExamParser.parse(result, subjectNames)
     }
 
+    /** The student's homework (Hausaufgaben) that is due in a date range. */
+    suspend fun fetchHomework(
+        session: UntisSession,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<UntisHomework> {
+        require(!endDate.isBefore(startDate)) { "The end date is before the start date." }
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("id", session.studentId)
+                addProperty("type", session.studentType.ifBlank { "STUDENT" }.uppercase())
+                addProperty("startDate", utisDate(startDate))
+                addProperty("endDate", utisDate(endDate))
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = try {
+            rpc.call(safeServer, session.school, "getHomeWork2017", params)
+        } catch (_: UntisNoDataException) {
+            return emptyList()
+        }
+        return HomeworkParser.parse(result)
+    }
+
+    /** The school's notices (Mitteilungen) that are shown on [date]. */
+    suspend fun fetchMessages(session: UntisSession, date: LocalDate): List<UntisMessage> {
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val params = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("date", utisDate(date))
+                add("auth", auth(session.username, session.secret))
+            })
+        }
+        val result = try {
+            rpc.call(safeServer, session.school, "getMessagesOfDay2017", params)
+        } catch (_: UntisNoDataException) {
+            return emptyList()
+        }
+        return MessageParser.parse(result)
+    }
+
     private suspend fun requestTimetable(
         session: UntisSession,
         id: Long,
@@ -296,6 +340,25 @@ class UntisApi(
             describe = ::shapeOf,
         )
 
+        // Endpoints for the Upcoming and Account pages. Their shapes are read from the debug log.
+        val today = LocalDate.now()
+        fun rangeParams() = JsonObject().apply {
+            addProperty("id", session.studentId)
+            addProperty("type", type)
+            addProperty("startDate", utisDate(today.minusDays(7)))
+            addProperty("endDate", utisDate(today.plusDays(28)))
+            add("auth", auth(session.username, session.secret))
+        }
+        call("Homework", "getHomeWork2017", rangeParams(), ::shapeOf)
+        call(
+            label = "Messages of the day",
+            method = "getMessagesOfDay2017",
+            params = JsonObject().apply {
+                addProperty("date", utisDate(today))
+                add("auth", auth(session.username, session.secret))
+            },
+            describe = ::shapeOf,
+        )
         val classId = masterArray(studentResult, "klassen", "classes")
             ?.firstNotNullOfOrNull { it.asJsonObjectOrNull()?.longOrNull("id") }
         val teacherId = masterArray(studentResult, "teachers")

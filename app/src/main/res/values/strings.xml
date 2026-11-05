@@ -336,4 +336,23 @@
     <string name="category_max_summary">max. %1$d Stunden</string>
     <string name="absences_lessons_missed">%1$d Stunden verpasst</string>
     <string name="absences_lessons_count">%1$d Std.</string>
+
+    <!-- Upcoming homework and exams, account page -->
+    <string name="timetable_upcoming">Anstehend</string>
+    <string name="upcoming_title">Anstehend</string>
+    <string name="upcoming_homework">Hausaufgaben</string>
+    <string name="upcoming_exams">Prüfungen</string>
+    <string name="upcoming_homework_empty">Keine anstehenden Hausaufgaben</string>
+    <string name="upcoming_exams_empty">Keine anstehenden Prüfungen</string>
+    <string name="upcoming_today">Heute</string>
+    <string name="upcoming_tomorrow">Morgen</string>
+    <string name="upcoming_done">Erledigt</string>
+    <string name="upcoming_no_subject">Ohne Fach</string>
+    <string name="settings_account">Mein Konto</string>
+    <string name="settings_account_desc">Mitteilungen deiner Schule</string>
+    <string name="account_title">Mein Konto</string>
+    <string name="account_school">Schule</string>
+    <string name="account_username">Anmeldename</string>
+    <string name="account_messages">Mitteilungen</string>
+    <string name="account_messages_empty">Heute keine Mitteilungen</string>
 </resources>

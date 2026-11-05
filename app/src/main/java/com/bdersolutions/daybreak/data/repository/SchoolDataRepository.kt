@@ -6,6 +6,9 @@ import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.untis.UntisAuthException
 import com.bdersolutions.daybreak.untis.UntisDirectory
 import com.bdersolutions.daybreak.untis.UntisElement
+import com.bdersolutions.daybreak.untis.UntisExam
+import com.bdersolutions.daybreak.untis.UntisHomework
+import com.bdersolutions.daybreak.untis.UntisMessage
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.untis.UntisSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +51,18 @@ class SchoolDataRepository(
 
     suspend fun absences(startDate: LocalDate, endDate: LocalDate): List<UntisAbsence> =
         api.fetchAbsences(requireSession(), startDate, endDate)
+
+    suspend fun homework(startDate: LocalDate, endDate: LocalDate): List<UntisHomework> =
+        api.fetchHomework(requireSession(), startDate, endDate)
+
+    suspend fun messages(date: LocalDate): List<UntisMessage> =
+        api.fetchMessages(requireSession(), date)
+
+    /** Exams in a range. They carry only a subject id, so the master data names them. */
+    suspend fun exams(startDate: LocalDate, endDate: LocalDate): List<UntisExam> {
+        val names = loadDirectory().subjectNamesById
+        return api.fetchExams(requireSession(), startDate, endDate, names)
+    }
 
     suspend fun elementWeek(element: UntisElement, weekStart: LocalDate): List<UntisLesson> =
         api.fetchElementTimetable(

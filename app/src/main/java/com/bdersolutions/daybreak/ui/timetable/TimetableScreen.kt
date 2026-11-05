@@ -47,6 +47,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
@@ -156,6 +157,7 @@ fun TimetableScreen(
     viewModel: TimetableViewModel,
     initialDate: LocalDate? = null,
     initialMode: Int = 0,
+    onOpenUpcoming: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val cache by viewModel.displayCache.collectAsStateWithLifecycle()
@@ -267,6 +269,12 @@ fun TimetableScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onOpenUpcoming) {
+                        Icon(
+                            Icons.Outlined.Checklist,
+                            contentDescription = stringResource(R.string.timetable_upcoming),
+                        )
+                    }
                     IconButton(onClick = { showTargetPicker = true }) {
                         Icon(
                             Icons.Outlined.SwapHoriz,

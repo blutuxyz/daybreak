@@ -152,3 +152,21 @@ data class ProbeResult(
 fun interface RawResponseSink {
     fun onResponse(method: String, receivedAt: Long, body: String)
 }
+
+/** One homework entry (Hausaufgabe). [subject] is the short name of the lesson it belongs to. */
+data class UntisHomework(
+    val id: Long,
+    val subject: String,
+    val assigned: LocalDate?,
+    val due: LocalDate,
+    val text: String,
+    val remark: String = "",
+    val completed: Boolean = false,
+)
+
+/** A notice from the school's "messages of the day" (Mitteilungen). */
+data class UntisMessage(
+    val id: Long,
+    val subject: String,
+    val text: String,
+)

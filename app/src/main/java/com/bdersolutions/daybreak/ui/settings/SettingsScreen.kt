@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -142,6 +143,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenDebug: () -> Unit,
     onOpenPage: (SettingsPage) -> Unit,
+    onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -230,6 +232,17 @@ fun SettingsScreen(
                     school = session?.school.orEmpty(),
                     username = session?.username.orEmpty(),
                 )
+            }
+
+            item {
+                SettingsGroup {
+                    NavigationRow(
+                        icon = Icons.Outlined.AccountCircle,
+                        title = stringResource(R.string.settings_account),
+                        subtitle = stringResource(R.string.settings_account_desc),
+                        onClick = onOpenAccount,
+                    )
+                }
             }
 
             // Every setting lives on its own screen; this list only leads there.

@@ -336,4 +336,23 @@
     <string name="category_max_summary">max. %1$d lessons</string>
     <string name="absences_lessons_missed">%1$d lessons missed</string>
     <string name="absences_lessons_count">%1$d lessons</string>
+
+    <!-- Upcoming homework and exams, account page -->
+    <string name="timetable_upcoming">Upcoming</string>
+    <string name="upcoming_title">Upcoming</string>
+    <string name="upcoming_homework">Homework</string>
+    <string name="upcoming_exams">Exams</string>
+    <string name="upcoming_homework_empty">No homework coming up</string>
+    <string name="upcoming_exams_empty">No exams coming up</string>
+    <string name="upcoming_today">Today</string>
+    <string name="upcoming_tomorrow">Tomorrow</string>
+    <string name="upcoming_done">Done</string>
+    <string name="upcoming_no_subject">No subject</string>
+    <string name="settings_account">My account</string>
+    <string name="settings_account_desc">Notices from your school</string>
+    <string name="account_title">My account</string>
+    <string name="account_school">School</string>
+    <string name="account_username">Username</string>
+    <string name="account_messages">Notices</string>
+    <string name="account_messages_empty">No notices today</string>
 </resources>

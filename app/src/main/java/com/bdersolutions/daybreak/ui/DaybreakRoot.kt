@@ -84,7 +84,11 @@ import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
+import com.bdersolutions.daybreak.ui.account.AccountScreen
+import com.bdersolutions.daybreak.ui.account.AccountViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsPage
+import com.bdersolutions.daybreak.ui.upcoming.UpcomingScreen
+import com.bdersolutions.daybreak.ui.upcoming.UpcomingViewModel
 import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
 import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
@@ -177,6 +181,10 @@ private fun LoggedInContent(
     // Kept after closing, so the screen can still be drawn while it slides out.
     var shownPage by remember { mutableStateOf(settingsPage) }
     if (settingsPage != null) shownPage = settingsPage
+    // Pages that open from the timetable and the settings list, with the same slide.
+    var mainPage by rememberSaveable { mutableStateOf<MainPage?>(null) }
+    var shownMainPage by remember { mutableStateOf(mainPage) }
+    if (mainPage != null) shownMainPage = mainPage
     val context = LocalContext.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
@@ -234,6 +242,9 @@ private fun LoggedInContent(
     BackHandler(enabled = settingsPage != null) {
         settingsPage = null
     }
+    BackHandler(enabled = mainPage != null) {
+        mainPage = null
+    }
 
     val motion = MaterialTheme.motionScheme
     Box(modifier = Modifier.fillMaxSize()) {
@@ -276,6 +287,7 @@ private fun LoggedInContent(
                         viewModel = timetableViewModel,
                         initialDate = initialDate,
                         initialMode = if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
+                        onOpenUpcoming = { mainPage = MainPage.UPCOMING },
                     )
 
                     1 -> {
@@ -290,6 +302,7 @@ private fun LoggedInContent(
                         viewModel = settingsViewModel,
                         onOpenDebug = { showDebug = true },
                         onOpenPage = { settingsPage = it },
+                        onOpenAccount = { mainPage = MainPage.ACCOUNT },
                     )
                 }
             }
@@ -311,6 +324,34 @@ private fun LoggedInContent(
             }
         }
 
+        AnimatedVisibility(
+            visible = mainPage != null,
+            modifier = Modifier.fillMaxSize(),
+            enter = subScreenEnter,
+            exit = subScreenExit,
+        ) {
+            when (shownMainPage) {
+                MainPage.UPCOMING -> UpcomingScreen(
+                    viewModel = viewModel(
+                        key = "upcoming_${session.studentId}",
+                        factory = UpcomingViewModel.Factory(container),
+                    ),
+                    onBack = { mainPage = null },
+                )
+
+                MainPage.ACCOUNT -> AccountScreen(
+                    session = session,
+                    viewModel = viewModel(
+                        key = "account_${session.studentId}",
+                        factory = AccountViewModel.Factory(container),
+                    ),
+                    onBack = { mainPage = null },
+                )
+
+                null -> Unit
+            }
+        }
+
         whatsNew?.let { release ->
             WhatsNewSheet(
                 release = release,
@@ -322,6 +363,9 @@ private fun LoggedInContent(
         }
     }
 }
+
+/** Pages that are not settings but open over the tabs the same way. */
+private enum class MainPage { UPCOMING, ACCOUNT }
 
 /** Stock slide used by the settings sub-screens. Plain tweens, so there is no spring overshoot. */
 private val subScreenEnter = slideInHorizontally(
