@@ -438,10 +438,10 @@
     <string name="legal_privacy_body">• Daybreak has no account with the developer.\n• There is no advertising, no analytics or tracking, and no automatic crash reporting.\n• Your data goes only to your school’s WebUntis server and otherwise stays on your device.\n• The app never stores your password.</string>
 
     <string name="legal_stored_title">What is stored on your device</string>
-    <string name="legal_stored_body">• Sign-in data: the server, school and username of your school, and the Untis access key. The key is encrypted with a key from the Android Keystore. If you sign in with a password, the password is sent to WebUntis once to fetch the access key and is then discarded.\n• School data: the timetable, exams, absences and other details WebUntis returns for you are cached so the app also works without a network.\n• Settings, such as appearance, language and your own colours.\n• Debug log: the latest raw WebUntis responses, only for troubleshooting and only on your device. Passwords and keys are not in it.\n\nSigning out deletes the key, the session, the cache and the debug log. Uninstalling the app removes everything. The data is excluded from Android backups.</string>
+    <string name="legal_stored_body">• Sign-in data: the server, school and username of your school, and the Untis access key. The key is encrypted with a key from the Android Keystore. If you sign in with a password, the password is sent to WebUntis once to fetch the access key and is then discarded.\n• School data: the timetable, exams, absences and other details WebUntis returns for you are cached so the app also works without a network.\n• Settings, such as appearance, language and your own colours.\n• Support: a random unlock code for the support popup, and whether a payment for it was confirmed.\n• Debug log: the latest raw WebUntis responses, only for troubleshooting and only on your device. Passwords and keys are not in it.\n\nSigning out deletes the key, the session, the cache and the debug log. Uninstalling the app removes everything. The data is excluded from Android backups.</string>
 
     <string name="legal_sent_title">Where data is sent</string>
-    <string name="legal_sent_body">• Your school’s WebUntis server: for the timetable, absences, exams, homework, messages and notices, the app queries your school’s server over HTTPS. If you write a message to a teacher, its content goes to that server. The privacy policy of your school and of Untis applies to that data, not the developer’s.\n• Attachments: if you download the attachment of a message, the app fetches it from the storage address that WebUntis names for it.\n• Update server: if the update feature is active in your version, the app asks the developer’s update server for new versions and downloads updates from it. The server necessarily sees your IP address. No sign-in data or school data is sent.\n• Scanning a QR code: this is done by the Google Play services code scanner on your device. Daybreak does not store a camera image.\n\nThe developer runs no server that receives your school data and cannot see it.</string>
+    <string name="legal_sent_body">• Your school’s WebUntis server: for the timetable, absences, exams, homework, messages and notices, the app queries your school’s server over HTTPS. If you write a message to a teacher, its content goes to that server. The privacy policy of your school and of Untis applies to that data, not the developer’s.\n• Attachments: if you download the attachment of a message, the app fetches it from the storage address that WebUntis names for it.\n• Update server: if the update feature is active in your version, the app asks the developer’s update server for new versions and downloads updates from it. The server necessarily sees your IP address. No sign-in data or school data is sent.\n• Payment check: if you tap “Check payment” in the support popup, the app sends the random unlock code to the developer’s update server to learn whether a Ko-fi payment arrived for it. The server necessarily sees your IP address. The code is not linked to your school data. If you pay on Ko-fi, Ko-fi’s privacy policy applies there; from a payment the update server stores only the code, amount, currency, time and transaction number, not your name, e-mail address or message.\n• Scanning a QR code: this is done by the Google Play services code scanner on your device. Daybreak does not store a camera image.\n\nThe developer runs no server that receives your school data and cannot see it.</string>
 
     <string name="legal_rights_title">Your rights</string>
     <string name="legal_rights_body">The developer stores no personal data about you. You can delete the data on your device yourself at any time by signing out or uninstalling the app. For access to, correction of or deletion of the data in WebUntis, contact your school, which is responsible for it.\n\nProcessing on your device is based on the consent you give here. You can withdraw it by no longer using the app and uninstalling it.</string>
@@ -527,10 +527,30 @@
     <!-- Support -->
     <string name="settings_support">Support Daybreak</string>
     <string name="settings_support_desc">Buy a coffee on Ko-fi</string>
+    <string name="settings_support_button">Support me on Ko-fi</string>
+    <string name="settings_support_hide">Hide this button</string>
+    <string name="settings_support_hide_note">This button hides when you pay on Ko-fi.</string>
     <string name="support_title">Enjoying Daybreak?</string>
     <string name="support_body">Daybreak is free and has no ads. If the app helps you, you can support its development with a coffee on Ko-fi. Every feature stays free without a donation.</string>
     <string name="support_privacy">The link opens in your browser. The app sends none of your data.</string>
     <string name="support_action">Support on Ko-fi</string>
     <string name="support_later">Maybe later</string>
     <string name="support_never">Do not ask again</string>
+    <string name="support_hide">Hide this popup</string>
+    <string name="support_hide_title">Hide this popup</string>
+    <string name="support_hide_body">The popup goes away for good once you support Daybreak with a one-time coffee (or more) on Ko-fi. That is how Daybreak is funded; every feature stays free without a donation.</string>
+    <string name="support_hide_code_label">Your unlock code</string>
+    <string name="support_hide_copy">Copy</string>
+    <string name="support_hide_copied">Copied</string>
+    <string name="support_hide_steps">1. Copy the code. 2. Open Ko-fi, donate and paste the code into the message field. 3. Come back and tap “Check payment”.</string>
+    <string name="support_hide_open">Open Ko-fi</string>
+    <string name="support_hide_check">Check payment</string>
+    <string name="support_hide_checking">Checking…</string>
+    <string name="support_hide_not_found">No payment has arrived for this code yet. Did you write the code in the message? It can take a few minutes; then tap again.</string>
+    <string name="support_hide_offline">The server cannot be reached right now. Please try again later.</string>
+    <string name="support_hide_privacy">When checking, the app sends only this code to the Daybreak server, nothing else.</string>
+    <string name="support_hide_back">Back</string>
+    <string name="support_thanks_title">Thank you!</string>
+    <string name="support_thanks_body">Your payment arrived. The popup will not appear again. Thank you for supporting Daybreak.</string>
+    <string name="support_thanks_done">Done</string>
 </resources>

@@ -111,6 +111,26 @@ An update only installs over an app signed with the same key, with a higher `ver
 build is therefore replaced by a debug-signed APK, never by the release-signed one. Google Play Protect
 may also block a sideloaded update; the app then shows a card that says so.
 
+## Paid "Hide this popup" (Ko-fi)
+
+The support popup in the app can be hidden for good only by paying on Ko-fi. The server confirms the
+payment:
+
+1. The app shows a random unlock code (`DB-XXXX-XXXX`). The supporter pastes it into the message
+   field of their Ko-fi donation.
+2. Ko-fi calls `POST /v1/kofi` (a webhook). The server checks the verification token, finds the code
+   in the message and records it, but only if the amount is at least `SUPPORT_MIN_AMOUNT`.
+3. The app asks `GET /v1/support/status?code=...` and gets `{ "paid": true | false }`.
+
+Set it up: in Ko-fi go to Settings > API > Webhooks, set the webhook URL to
+`https://<your server>/v1/kofi`, copy the verification token into `KOFI_VERIFICATION_TOKEN`, and make
+sure `DATA_DIR` is on a persistent volume (the payments live in `support-payments.json` there; lose it
+and paid supporters have to be unlocked again). Without the token the webhook does not exist and the
+app's paid hide cannot succeed.
+
+Only the code, amount, currency, time and Ko-fi transaction id are stored. No name, e-mail address or
+message text. The status endpoint allows 30 requests per minute per address.
+
 ## Security
 
 - The app checks the SHA-256 of every download. Android itself refuses an update that is not signed

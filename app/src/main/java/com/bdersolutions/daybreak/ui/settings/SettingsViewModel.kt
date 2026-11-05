@@ -30,6 +30,9 @@ import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.data.settings.TextScale
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.data.support.PaymentCheck
+import com.bdersolutions.daybreak.data.support.SupportApi
+import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
 import com.bdersolutions.daybreak.data.update.UpdateManager
@@ -66,7 +69,28 @@ class SettingsViewModel(
     private val updateManager: UpdateManager,
     private val updateScheduler: UpdateScheduler,
     private val haptics: Haptics,
+    private val supportStore: SupportStore,
+    private val supportApi: SupportApi?,
 ) : ViewModel() {
+    // ---- Support (Ko-fi) ----
+
+    /** True once a Ko-fi payment was confirmed; the Ko-fi button on the More page hides then. */
+    val supportPaid: StateFlow<Boolean> = supportStore.paid
+
+    /** Paying to hide the button needs a server to confirm it; without one the link is not offered. */
+    val canHideSupportButton: Boolean get() = supportApi != null
+
+    /** This phone's unlock code, to be written into the Ko-fi message. */
+    fun supportUnlockCode(): String = supportStore.unlockCode()
+
+    /** Asks the server whether the unlock code was paid for. A confirmed payment is remembered. */
+    suspend fun checkSupportPayment(): PaymentCheck {
+        val api = supportApi ?: return PaymentCheck.UNAVAILABLE
+        val result = api.check(supportStore.unlockCode())
+        if (result == PaymentCheck.PAID) supportStore.markPaid()
+        return result
+    }
+
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
     val syncStatus: StateFlow<TimetableSyncStatus> = repository.status
@@ -273,6 +297,8 @@ class SettingsViewModel(
                 updateManager = container.updateManager,
                 updateScheduler = container.updateScheduler,
                 haptics = container.haptics,
+                supportStore = container.supportStore,
+                supportApi = container.supportApi,
             ) as T
         }
     }

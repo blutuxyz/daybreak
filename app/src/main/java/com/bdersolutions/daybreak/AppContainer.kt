@@ -15,6 +15,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.support.SupportApi
 import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.data.update.UpdateApi
@@ -38,6 +39,9 @@ class AppContainer(context: Context) {
     )
     val termsStore = TermsStore(appContext)
     val supportStore = SupportStore(appContext)
+
+    // Confirms a Ko-fi payment through the update server; null (no paid hide) without that address.
+    val supportApi: SupportApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { SupportApi(it) }
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(appContext, secretVault)
     val rawLogStore = RawLogStore(appContext)
