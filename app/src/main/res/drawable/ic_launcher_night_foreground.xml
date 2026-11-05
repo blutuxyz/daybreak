@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night logo: a crescent moon with three stars. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M51.63,32.06A22,22 0 1 0 70.13,62.88A18,18 0 1 1 51.63,32.06Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="30"
+                android:startY="32"
+                android:endX="66"
+                android:endY="76"
+                android:type="linear">
+                <item android:color="#FFFFF1B8" android:offset="0.0" />
+                <item android:color="#FFFFC857" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFF6D6"
+        android:pathData="M75,33L76.4,36.6L80,38L76.4,39.4L75,43L73.6,39.4L70,38L73.6,36.6Z" />
+    <path
+        android:fillColor="#FFFFF6D6"
+        android:pathData="M79,56.8L79.9,59.1L82.2,60L79.9,60.9L79,63.2L78.1,60.9L75.8,60L78.1,59.1Z" />
+    <path
+        android:fillColor="#FFFFF6D6"
+        android:pathData="M62,75.5L62.7,77.3L64.5,78L62.7,78.7L62,80.5L61.3,78.7L59.5,78L61.3,77.3Z" />
+</vector>

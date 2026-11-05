@@ -80,6 +80,7 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
 import com.bdersolutions.daybreak.data.session.DaybreakSession
+import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.support.PaymentCheck
 import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
 import com.bdersolutions.daybreak.ui.support.SupportSheet
@@ -109,6 +110,7 @@ import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
+import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
@@ -128,7 +130,12 @@ fun DaybreakApp(
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
     val termsAccepted = TermsAcceptance.covers(acceptedVersion)
-    CompositionLocalProvider(LocalHaptics provides container.haptics) {
+    val supportPaid by container.supportStore.paid.collectAsStateWithLifecycle()
+    val appTitle = AppNaming.resolve(supportPaid, settings.appNamePreset, settings.customAppName)
+    CompositionLocalProvider(
+        LocalHaptics provides container.haptics,
+        LocalAppTitle provides appTitle,
+    ) {
         DaybreakTheme(settings = settings) {
             // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
             Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->

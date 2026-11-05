@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bloom logo: four translucent circles whose overlaps mix new colours. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#E6E64980"
+        android:pathData="M39,41a15,15 0 1 0 30,0a15,15 0 1 0 -30,0z" />
+    <path
+        android:fillColor="#E6F59F00"
+        android:pathData="M52,54a15,15 0 1 0 30,0a15,15 0 1 0 -30,0z" />
+    <path
+        android:fillColor="#E67048E8"
+        android:pathData="M39,67a15,15 0 1 0 30,0a15,15 0 1 0 -30,0z" />
+    <path
+        android:fillColor="#E612B886"
+        android:pathData="M26,54a15,15 0 1 0 30,0a15,15 0 1 0 -30,0z" />
+    <path
+        android:fillColor="#F2FFFFFF"
+        android:pathData="M49,54a5,5 0 1 0 10,0a5,5 0 1 0 -10,0z" />
+</vector>

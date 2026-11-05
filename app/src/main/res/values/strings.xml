@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Daybreak</string>
+    <string name="launcher_name_daybreak" translatable="false">Daybreak</string>
+    <string name="launcher_name_stundenplan" translatable="false">Stundenplan</string>
+    <string name="launcher_name_schule" translatable="false">Schule</string>
+    <string name="launcher_name_plan" translatable="false">Plan</string>
+    <string name="launcher_name_kalender" translatable="false">Kalender</string>
+    <string name="launcher_name_timetable" translatable="false">Timetable</string>
 
     <string name="nav_timetable">Stundenplan</string>
     <string name="nav_settings">Mehr</string>
@@ -119,6 +125,32 @@
     <string name="more_group_profile">Mein Profil</string>
     <string name="more_group_settings">Einstellungen</string>
     <string name="more_group_other">Weiteres</string>
+    <string name="more_group_extras">Extras für Unterstützer</string>
+    <string name="badge_new">NEU</string>
+    <string name="settings_app_name">App-Name</string>
+    <string name="settings_extras_locked">Für Unterstützer freischaltbar</string>
+    <string name="settings_extras_locked_note">Dieses Extra wird freigeschaltet, sobald du auf Ko-fi zahlst.</string>
+    <string name="app_name_phone_title">Name auf dem Handy</string>
+    <string name="app_name_phone_hint">So heißt die App unter ihrem Symbol auf dem Startbildschirm. Es kann einen Moment dauern, bis dein Handy den neuen Namen zeigt. Beliebiger Text ist hier nicht möglich, Android erlaubt nur diese Namen.</string>
+    <string name="app_name_inapp_title">Name in der App</string>
+    <string name="app_name_restart">Änderungen werden übernommen …</string>
+    <string name="settings_app_icon">App-Symbol</string>
+    <string name="settings_app_icon_desc">Sechs Symbole zur Auswahl</string>
+    <string name="icon_style_standard">Standard</string>
+    <string name="icon_style_standard_desc">Das neue Logo: ein Sonnenaufgang über deinem Tag</string>
+    <string name="icon_style_classic">Classic</string>
+    <string name="icon_style_classic_desc">Das ursprüngliche Daybreak-Logo</string>
+    <string name="icon_style_grid">Raster</string>
+    <string name="icon_style_grid_desc">Bunte Kacheln wie in deinem Stundenplan</string>
+    <string name="icon_style_night">Nacht</string>
+    <string name="icon_style_night_desc">Mond und Sterne am dunklen Himmel</string>
+    <string name="icon_style_letter">Buchstabe</string>
+    <string name="icon_style_letter_desc">Ein kräftiges D im Neon-Verlauf</string>
+    <string name="icon_style_bloom">Blüte</string>
+    <string name="icon_style_bloom_desc">Weiche, überlappende Farbkreise</string>
+    <string name="app_icon_hint">Das Symbol ändert sich zusammen mit dem gewählten Namen auf dem Startbildschirm. Es kann einen Moment dauern, bis dein Handy es zeigt. In den Android-Einstellungen bleibt das Standard-Symbol.</string>
+    <string name="app_name_custom_label">Eigener Name</string>
+    <string name="app_name_inapp_hint">Erscheint als Titel im Stundenplan. Leer lassen, um den Namen von oben zu verwenden.</string>
     <string name="settings_language">Sprache</string>
     <string name="settings_sync">Synchronisierung</string>
     <string name="settings_sync_enabled">Automatisch synchronisieren</string>
@@ -531,14 +563,14 @@
     <string name="settings_support_hide">Diesen Button ausblenden</string>
     <string name="settings_support_hide_note">Dieser Button verschwindet, sobald du auf Ko-fi zahlst.</string>
     <string name="support_title">Gefällt dir Daybreak?</string>
-    <string name="support_body">Daybreak ist kostenlos und ohne Werbung. Wenn dir die App hilft, kannst du die Entwicklung mit einem Kaffee auf Ko-fi unterstützen. Alle Funktionen bleiben auch ohne Spende frei.</string>
+    <string name="support_body">Daybreak ist kostenlos und ohne Werbung. Alles, was du für deinen Stundenplan brauchst, bleibt kostenlos. Wenn dir die App hilft, kannst du die Entwicklung mit einem Kaffee auf Ko-fi unterstützen und ein paar Extras freischalten, zum Beispiel einen eigenen App-Namen.</string>
     <string name="support_privacy">Der Link öffnet sich im Browser. Die App sendet dabei keine Daten von dir.</string>
     <string name="support_action">Auf Ko-fi unterstützen</string>
     <string name="support_later">Vielleicht später</string>
     <string name="support_never">Nicht mehr fragen</string>
     <string name="support_hide">Dieses Popup ausblenden</string>
     <string name="support_hide_title">Popup ausblenden</string>
-    <string name="support_hide_body">Das Popup verschwindet für immer, sobald du Daybreak einmalig mit einem Kaffee (oder mehr) auf Ko-fi unterstützt. Daybreak finanziert sich so; alle Funktionen bleiben auch ohne Spende frei.</string>
+    <string name="support_hide_body">Das Popup verschwindet für immer und die Extras für Unterstützer werden freigeschaltet, sobald du Daybreak einmalig mit einem Kaffee (oder mehr) auf Ko-fi unterstützt. Alles, was du für deinen Stundenplan brauchst, bleibt auch ohne Spende kostenlos.</string>
     <string name="support_hide_code_label">Dein Freischalt-Code</string>
     <string name="support_hide_copy">Kopieren</string>
     <string name="support_hide_copied">Kopiert</string>

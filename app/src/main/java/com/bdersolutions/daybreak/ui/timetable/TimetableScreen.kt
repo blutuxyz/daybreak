@@ -132,6 +132,7 @@ import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.ui.components.AccentBadge
+import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.components.LocalLessonColors
 import com.bdersolutions.daybreak.ui.components.LocalSubjectColorMode
 import com.bdersolutions.daybreak.ui.components.cancelledAccent
@@ -297,7 +298,7 @@ fun TimetableScreen(
             LargeFlexibleTopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.app_name),
+                        text = LocalAppTitle.current,
                         maxLines = 1,
                     )
                 },

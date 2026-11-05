@@ -15,6 +15,8 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.branding.AppNaming
+import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
 import com.bdersolutions.daybreak.data.support.SupportApi
 import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
@@ -39,6 +41,7 @@ class AppContainer(context: Context) {
     )
     val termsStore = TermsStore(appContext)
     val supportStore = SupportStore(appContext)
+    val launcherNameSwitcher = LauncherNameSwitcher(appContext)
 
     // Confirms a Ko-fi payment through the update server; null (no paid hide) without that address.
     val supportApi: SupportApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { SupportApi(it) }
@@ -75,6 +78,12 @@ class AppContainer(context: Context) {
     val updateScheduler = UpdateScheduler(appContext)
 
     fun start() {
+        // The name under the icon follows the supporter extra: back to "Daybreak" without a payment.
+        val chosen = settingsRepository.current()
+        launcherNameSwitcher.apply(
+            AppNaming.effectivePreset(supportStore.paid.value, chosen.appNamePreset),
+            AppNaming.effectiveIconStyle(supportStore.paid.value, chosen.appIconStyle),
+        )
         lessonNotificationManager.ensureChannel()
         if (sessionStore.isLoggedIn()) {
             syncScheduler.schedule(settingsRepository.current())

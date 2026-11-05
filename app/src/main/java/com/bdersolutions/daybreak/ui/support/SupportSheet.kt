@@ -368,14 +368,16 @@ internal fun UnlockPanel(
 }
 
 /**
- * The sheet behind "Hide this button" on the More page. It repeats the Ko-fi button, says that the
- * button goes away once you pay, and holds the same unlock code and payment check as the popup.
+ * The sheet behind "Hide this button" and the locked supporter extras on the More page. It repeats the
+ * Ko-fi button, shows [note] (what paying does), and holds the same unlock code and payment check as
+ * the popup.
  * [onPaid] runs when the server confirmed the payment; the sheet then thanks the person and closes.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HideSupportButtonSheet(
     unlockCode: String,
+    note: String,
     onDismiss: () -> Unit,
     onCheckPayment: suspend () -> PaymentCheck,
 ) {
@@ -407,7 +409,7 @@ fun HideSupportButtonSheet(
                 KofiButton(onClick = { openSupportPage(context) })
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = stringResource(R.string.settings_support_hide_note),
+                    text = note,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),

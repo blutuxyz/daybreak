@@ -90,6 +90,8 @@ enum class SettingsPage {
     SYNC,
     NOTIFICATIONS,
     HAPTICS,
+    APP_NAME,
+    APP_ICON,
     UPDATES,
     ABOUT,
     LEGAL,
@@ -110,6 +112,8 @@ fun SettingsPageHost(
         SettingsPage.SYNC -> SyncScreen(viewModel, onBack)
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
         SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
+        SettingsPage.APP_NAME -> AppNameScreen(viewModel, onBack)
+        SettingsPage.APP_ICON -> AppIconScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
         SettingsPage.LEGAL -> LegalScreen(onBack = onBack)

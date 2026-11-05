@@ -136,6 +136,13 @@ import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.ui.draw.alpha
+import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.support.HideSupportButtonSheet
 import com.bdersolutions.daybreak.ui.support.KofiButton
 import com.bdersolutions.daybreak.ui.support.openSupportPage
@@ -172,7 +179,9 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var confirmingLogout by remember { mutableStateOf(false) }
     val supportPaid by viewModel.supportPaid.collectAsStateWithLifecycle()
-    var showHideSupport by rememberSaveable { mutableStateOf(false) }
+    // The note shown in the support sheet; null while the sheet is closed.
+    var supportSheetNote by rememberSaveable { mutableStateOf<Int?>(null) }
+    val appTitle = LocalAppTitle.current
     val listState = rememberLazyListState()
 
     // Back closes the confirmation first, and the card is scrolled into view when it opens.
@@ -261,7 +270,7 @@ fun SettingsScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         KofiButton(onClick = { openSupportPage(context) })
                         if (viewModel.canHideSupportButton) {
-                            TextButton(onClick = { showHideSupport = true }) {
+                            TextButton(onClick = { supportSheetNote = R.string.settings_support_hide_note }) {
                                 Text(
                                     text = stringResource(R.string.settings_support_hide),
                                     style = MaterialTheme.typography.labelLarge,
@@ -270,6 +279,21 @@ fun SettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Supporter extras: unlocked after a Ko-fi payment, shown locked before. Without a server
+            // to confirm payments (a build without an update address) they could never unlock, so they
+            // stay hidden there.
+            if (supportPaid || viewModel.canHideSupportButton) {
+                item {
+                    SupporterExtras(
+                        paid = supportPaid,
+                        appTitle = appTitle,
+                        onOpenAppName = { onOpenPage(SettingsPage.APP_NAME) },
+                        onOpenAppIcon = { onOpenPage(SettingsPage.APP_ICON) },
+                        onLocked = { supportSheetNote = R.string.settings_extras_locked_note },
+                    )
                 }
             }
 
@@ -405,11 +429,141 @@ fun SettingsScreen(
     }
 
     // Outside the list, so the thank-you stays up after the button above has gone.
-    if (showHideSupport) {
+    supportSheetNote?.let { noteRes ->
         HideSupportButtonSheet(
             unlockCode = remember { viewModel.supportUnlockCode() },
-            onDismiss = { showHideSupport = false },
+            note = stringResource(noteRes),
+            onDismiss = { supportSheetNote = null },
             onCheckPayment = { viewModel.checkSupportPayment() },
+        )
+    }
+}
+
+/**
+ * The supporter extras on the More page, drawn to stand out from the plain settings: a tinted card
+ * with a star heading. Paid, each row opens its page and carries a "New" badge. Unpaid, the rows are
+ * dimmed with a lock and open the support sheet instead, so nothing in them works.
+ */
+@Composable
+private fun SupporterExtras(
+    paid: Boolean,
+    appTitle: String,
+    onOpenAppName: () -> Unit,
+    onOpenAppIcon: () -> Unit,
+    onLocked: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Star,
+                contentDescription = null,
+                tint = scheme.tertiary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.size(6.dp))
+            Text(
+                text = stringResource(R.string.more_group_extras),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = scheme.tertiary,
+            )
+        }
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = scheme.tertiaryContainer.copy(alpha = 0.35f),
+            border = BorderStroke(1.dp, scheme.tertiary.copy(alpha = if (paid) 0.7f else 0.35f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
+                    SettingsRow(
+                        icon = Icons.Outlined.DriveFileRenameOutline,
+                        title = stringResource(R.string.settings_app_name),
+                        subtitle = if (paid) {
+                            appTitle
+                        } else {
+                            stringResource(R.string.settings_extras_locked)
+                        },
+                        subtitleMaxLines = 1,
+                        onClick = if (paid) onOpenAppName else onLocked,
+                        trailing = {
+                            if (paid) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    NewBadge()
+                                    Icon(
+                                        Icons.Outlined.ChevronRight,
+                                        contentDescription = null,
+                                        tint = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Lock,
+                                    contentDescription = stringResource(R.string.settings_extras_locked),
+                                    tint = scheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 66.dp, end = 16.dp),
+                    color = scheme.tertiary.copy(alpha = 0.25f),
+                )
+                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Apps,
+                        title = stringResource(R.string.settings_app_icon),
+                        subtitle = if (paid) {
+                            stringResource(R.string.settings_app_icon_desc)
+                        } else {
+                            stringResource(R.string.settings_extras_locked)
+                        },
+                        subtitleMaxLines = 1,
+                        onClick = if (paid) onOpenAppIcon else onLocked,
+                        trailing = {
+                            if (paid) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    NewBadge()
+                                    Icon(
+                                        Icons.Outlined.ChevronRight,
+                                        contentDescription = null,
+                                        tint = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Lock,
+                                    contentDescription = stringResource(R.string.settings_extras_locked),
+                                    tint = scheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A small "New" pill that marks a freshly unlocked extra. */
+@Composable
+private fun NewBadge() {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.tertiary,
+        contentColor = MaterialTheme.colorScheme.onTertiary,
+        modifier = Modifier.padding(end = 6.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.badge_new),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
