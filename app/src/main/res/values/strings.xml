@@ -75,6 +75,8 @@
         <item quantity="other">%1$d Stunden</item>
     </plurals>
     <string name="timetable_no_lessons">Keine Stunden</string>
+    <string name="timetable_overflow_title">Gleichzeitig</string>
+    <string name="timetable_overflow_description">%1$d weitere Stunden anzeigen</string>
     <string name="timetable_free">Frei</string>
     <string name="timetable_empty_today_title">Heute ist frei</string>
     <string name="timetable_empty_title">Keine Stunden</string>

@@ -75,6 +75,8 @@
         <item quantity="other">%1$d lessons</item>
     </plurals>
     <string name="timetable_no_lessons">No lessons</string>
+    <string name="timetable_overflow_title">At the same time</string>
+    <string name="timetable_overflow_description">Show %1$d more lessons</string>
     <string name="timetable_free">Free</string>
     <string name="timetable_empty_today_title">Nothing scheduled today</string>
     <string name="timetable_empty_title">No lessons</string>
