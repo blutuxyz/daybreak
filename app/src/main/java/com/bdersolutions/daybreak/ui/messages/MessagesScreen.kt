@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -383,6 +384,7 @@ private fun ComposeSheet(
                                         selected = form.recipient?.userId == person.userId,
                                         onClick = { onPick(person) },
                                         enabled = !form.sending,
+                                        shape = CircleShape,
                                         label = { Text(person.name) },
                                     )
                                 }
@@ -403,6 +405,7 @@ private fun ComposeSheet(
                 onValueChange = onSubject,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.messages_subject)) },
+                shape = CircleShape,
                 singleLine = true,
                 enabled = !form.sending,
             )
@@ -412,6 +415,8 @@ private fun ComposeSheet(
                 onValueChange = onContent,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.messages_text)) },
+                // A tall field cannot be a full pill, so it gets a large corner radius instead.
+                shape = RoundedCornerShape(28.dp),
                 minLines = 5,
                 enabled = !form.sending,
             )
