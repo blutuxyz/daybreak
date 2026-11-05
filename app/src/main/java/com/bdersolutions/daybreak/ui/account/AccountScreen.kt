@@ -1,5 +1,9 @@
 package com.bdersolutions.daybreak.ui.account
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,8 +12,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,6 +70,10 @@ fun AccountScreen(
             }
         }
 
+        item(key = "class-services") {
+            ClassServicesCard(url = classServicesUrl(session))
+        }
+
         item(key = "messages-title") {
             Text(
                 text = stringResource(R.string.account_messages),
@@ -97,6 +111,51 @@ fun AccountScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The class services (Klassendienste) page of the school's WebUntis. The list is only served to a
+ * web sign-in, not to the app's key, so the app opens the page in the browser. Null when the
+ * server is not an https address.
+ */
+private fun classServicesUrl(session: DaybreakSession): String? {
+    val server = session.server.trim().trimEnd('/')
+    val absolute = if (server.contains("://")) server else "https://$server"
+    return "$absolute/student-class-services".takeIf { it.startsWith("https://") }
+}
+
+@Composable
+private fun ClassServicesCard(url: String?) {
+    val context = LocalContext.current
+    ItemCard {
+        Text(
+            text = stringResource(R.string.account_class_services),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.account_class_services_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(context, R.string.account_class_services_no_browser, Toast.LENGTH_LONG).show()
+                }
+            },
+            enabled = url != null,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.account_class_services_open))
         }
     }
 }

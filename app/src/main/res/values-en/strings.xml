@@ -355,6 +355,10 @@
     <string name="account_username">Username</string>
     <string name="account_messages">Notices</string>
     <string name="account_messages_empty">No notices today</string>
+    <string name="account_class_services">Class services</string>
+    <string name="account_class_services_hint">WebUntis only hands this list to a web sign-in. It opens in your browser, where you are signed in to WebUntis.</string>
+    <string name="account_class_services_open">Open in WebUntis</string>
+    <string name="account_class_services_no_browser">No browser found.</string>
     <string name="settings_messages">Messages</string>
     <string name="settings_messages_desc">Inbox, sent and drafts</string>
     <string name="messages_title">Messages</string>

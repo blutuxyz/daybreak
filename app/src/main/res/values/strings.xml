@@ -355,6 +355,10 @@
     <string name="account_username">Anmeldename</string>
     <string name="account_messages">Mitteilungen</string>
     <string name="account_messages_empty">Heute keine Mitteilungen</string>
+    <string name="account_class_services">Klassendienste</string>
+    <string name="account_class_services_hint">Die Liste gibt WebUntis nur an eine Web-Anmeldung heraus. Sie öffnet sich im Browser, wo du bei WebUntis angemeldet bist.</string>
+    <string name="account_class_services_open">In WebUntis öffnen</string>
+    <string name="account_class_services_no_browser">Kein Browser gefunden.</string>
     <string name="settings_messages">Nachrichten</string>
     <string name="settings_messages_desc">Eingang, Gesendet und Entwürfe</string>
     <string name="messages_title">Nachrichten</string>
