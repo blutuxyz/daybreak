@@ -134,14 +134,23 @@ class AbsencesViewModel(
     }
 
     /** Creates a category, or changes the one with [id]. */
-    fun saveCategory(id: String?, name: String, subject: String, maxLessons: Int) {
-        if (subject.isBlank() || maxLessons <= 0) return
+    fun saveCategory(id: String?, name: String, subject: String, maxLessons: Int, maxPercent: Int) {
+        val percent = maxPercent.takeIf { it in 1..100 } ?: 0
+        if (subject.isBlank() || (percent == 0 && maxLessons <= 0)) return
+        // A percent limit leaves the lesson count unused, and the other way round.
+        val lessons = if (percent > 0) 0 else maxLessons
         val cleanName = name.trim().ifEmpty { subject.trim() }
         settingsRepository.updateAbsenceCategories { list ->
             if (id == null) {
-                list + AbsenceCategory(UUID.randomUUID().toString(), cleanName, subject.trim(), maxLessons)
+                list + AbsenceCategory(UUID.randomUUID().toString(), cleanName, subject.trim(), lessons, percent)
             } else {
-                list.map { if (it.id == id) it.copy(name = cleanName, subject = subject.trim(), maxLessons = maxLessons) else it }
+                list.map {
+                    if (it.id == id) {
+                        it.copy(name = cleanName, subject = subject.trim(), maxLessons = lessons, maxPercent = percent)
+                    } else {
+                        it
+                    }
+                }
             }
         }
         loadHistory(force = false)
