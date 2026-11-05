@@ -177,7 +177,13 @@ internal class JsonRpcClient(
             .build()
         val form = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart(partName, "blob", json.toString().toRequestBody("application/json".toMediaType()))
+            // Bytes, not a String: a String body would add "; charset=utf-8" to the part type, and the
+            // web app sends the part as plain application/json.
+            .addFormDataPart(
+                partName,
+                "blob",
+                json.toString().toByteArray(Charsets.UTF_8).toRequestBody("application/json".toMediaType()),
+            )
             .build()
         val request = Request.Builder()
             .url(url)
@@ -199,14 +205,26 @@ internal class JsonRpcClient(
             }
             rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
             if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
-            if (!received.isSuccessful) {
-                val message = runCatching {
-                    JsonParser.parseString(text).asJsonObject.stringOrNull("errorMessage")
-                }.getOrNull()
-                throw UntisProtocolException(message?.takeIf { it.isNotBlank() } ?: "WebUntis returned HTTP ${received.code}.")
-            }
+            if (!received.isSuccessful) throw UntisProtocolException(describeFailure(received.code, text))
             runCatching { JsonParser.parseString(text) }.getOrNull() ?: JsonObject()
         }
+    }
+
+    /**
+     * What the server said about a refused request: its message, its error code and the names of
+     * the fields it did not accept. Never the request, so no message text ends up in an error.
+     */
+    private fun describeFailure(status: Int, body: String): String {
+        val root = runCatching { JsonParser.parseString(body).asJsonObject }.getOrNull()
+        val parts = buildList {
+            root?.stringOrNull("errorMessage")?.takeIf { it.isNotBlank() }?.let(::add)
+            root?.stringOrNull("errorCode")?.let { add("($it)") }
+            root?.arrayOrNull("validationErrors")?.mapNotNull { entry ->
+                val error = entry.asJsonObjectOrNull() ?: return@mapNotNull null
+                listOfNotNull(error.stringOrNull("path"), error.stringOrNull("errorMessage")).joinToString(": ")
+            }?.takeIf { it.isNotEmpty() }?.let { add(it.joinToString("; ")) }
+        }
+        return "HTTP $status" + if (parts.isEmpty()) "" else " " + parts.joinToString(" ")
     }
 
     private fun parseError(body: String): Pair<Int?, String>? {
