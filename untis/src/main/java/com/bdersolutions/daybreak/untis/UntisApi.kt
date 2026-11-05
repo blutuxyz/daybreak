@@ -235,7 +235,8 @@ class UntisApi(
 
     /**
      * Sends a message to exactly one teacher, as the WebUntis web app does for a student: a
-     * multipart POST whose JSON part names the recipient by user id (`recipientUserIds`). Returns the
+     * multipart POST to `messages/users` whose JSON part names the recipient by user id
+     * (`recipientUserIds`). The plain `messages` endpoint wants a `recipientOption` instead. Returns the
      * number of recipients the server reports. Students may only write to a single teacher.
      */
     suspend fun sendMail(session: UntisSession, subject: String, content: String, recipientUserId: Long): Int {
@@ -254,7 +255,7 @@ class UntisApi(
         }
         val answer = rpc.postJsonPart(
             server = safeServer,
-            path = "WebUntis/api/rest/view/v2/messages",
+            path = "WebUntis/api/rest/view/v2/messages/users",
             token = token,
             // Only the server's answer is logged, never the text of the message.
             label = "mail-send",
