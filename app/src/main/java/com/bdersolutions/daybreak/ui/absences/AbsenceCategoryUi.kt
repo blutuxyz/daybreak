@@ -662,7 +662,7 @@ private fun CategoryForm(
     }
     var percentMode by rememberSaveable { mutableStateOf(initial?.isPercent == true) }
     var percent by rememberSaveable {
-        mutableIntStateOf(initial?.maxPercent?.takeIf { it > 0 }?.coerceIn(1, 50) ?: 10)
+        mutableIntStateOf(initial?.maxPercent?.takeIf { it > 0 }?.coerceIn(1, 100) ?: 10)
     }
 
     // A category whose subject left the timetable keeps it visible in the list.
@@ -784,8 +784,8 @@ private fun CategoryForm(
                     )
                     Slider(
                         value = percent.toFloat(),
-                        onValueChange = { percent = it.roundToInt().coerceIn(1, 50) },
-                        valueRange = 1f..50f,
+                        onValueChange = { percent = it.roundToInt().coerceIn(1, 100) },
+                        valueRange = 1f..100f,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
