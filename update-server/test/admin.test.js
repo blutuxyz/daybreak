@@ -166,3 +166,11 @@ test('the admin page shows the switches as checkboxes', async () => {
   assert.match(body, /name="updates">/);
   assert.match(body, /name="feature:reminders"/);
 });
+
+test('the minimum-version form warns that it only applies from version 1.4.1 on', async () => {
+  const app = await setup();
+
+  const page = (await app.inject({ method: 'GET', url: '/admin', headers: auth })).body;
+
+  assert.ok(page.includes('this only applies to apps from version 1.4.1 on'));
+});

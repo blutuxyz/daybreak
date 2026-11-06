@@ -6,6 +6,9 @@ import { FEATURES, LEVELS, readSwitches } from './announcements.js';
  * any browser and the content security policy can forbid everything.
  */
 
+/** The first app version that asks the server for the minimum version and shows its messages. */
+const GATE_SINCE = '1.4.1';
+
 const NOTICES = {
   saved: 'Saved. The app picks it up the next time it starts or comes back to the front.',
   bad_version: 'Enter a version such as 1.2.0, or leave the field empty for no minimum.',
@@ -96,6 +99,7 @@ ${notes ? `<p><strong>${escapeHtml(notes)}</strong></p>` : ''}
 
 <h2>Minimum app version</h2>
 <p>Apps older than this are stopped at the "update required" screen. Current: ${escapeHtml(formatMinVersion(state.minVersion))}.</p>
+<p><strong>Warning:</strong> this only applies to apps from version ${GATE_SINCE} on. Older apps never ask the server for the minimum version, so they keep working. They are offered newer releases through their update check, but they cannot be stopped.</p>
 <form method="post" action="/admin/min-version">
 <p><label>Version <input name="version" value="${escapeHtml(state.minVersion?.name ?? '')}" placeholder="1.2.0"></label>
 <button type="submit">Save minimum version</button></p>
