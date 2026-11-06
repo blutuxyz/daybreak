@@ -73,13 +73,21 @@ export class SupportLedger {
     return Boolean((await this.#load())[code]);
   }
 
+  /**
+   * Records a payment that was granted by hand on the admin page, for a code whose Ko-fi payment never
+   * arrived. The record says so (source "admin"). Returns false if the code is already paid.
+   */
+  grant({ code, at = new Date() }) {
+    return this.record({ code, transactionId: `admin-${at.getTime()}`, amount: 0, currency: 'manual', source: 'admin', at });
+  }
+
   /** Remembers a payment for [code]. Returns false if this transaction was already recorded. */
-  record({ code, transactionId, amount, currency, at = new Date() }) {
+  record({ code, transactionId, amount, currency, source, at = new Date() }) {
     const task = this.queue.then(async () => {
       const entries = await this.#load();
       const known = Object.values(entries).some((entry) => entry.transactionId === transactionId);
       if ((known && transactionId) || entries[code]) return false;
-      entries[code] = { transactionId, amount, currency, at: at.toISOString() };
+      entries[code] = { transactionId, amount, currency, at: at.toISOString(), ...(source ? { source } : {}) };
       await mkdir(dirname(this.file), { recursive: true });
       const temporary = `${this.file}.tmp`;
       await writeFile(temporary, JSON.stringify({ version: 1, payments: entries }), 'utf8');
