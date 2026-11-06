@@ -30,6 +30,17 @@ class UpdateApi(
         }
     }
 
+    /**
+     * The server's status answer as it came: the minimum app version and the messages. Read it with
+     * [com.bdersolutions.daybreak.data.notices.ServerStatusJson].
+     */
+    suspend fun statusBody(): String = withContext(Dispatchers.IO) {
+        get("/v1/status").use { response ->
+            if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
+
     /** The release history with changelogs, newest first. */
     suspend fun releases(limit: Int = 20): List<ReleaseInfo> = withContext(Dispatchers.IO) {
         get("/v1/releases?limit=$limit").use { response ->

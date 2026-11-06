@@ -8,6 +8,8 @@ import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.haptics.VibratorHapticOutput
 import com.bdersolutions.daybreak.data.legal.TermsStore
+import com.bdersolutions.daybreak.data.notices.ServerNoticeStore
+import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
 import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
@@ -72,11 +74,16 @@ class AppContainer(context: Context) {
 
     // Updates come from the update server (update-server/). Without a configured address the
     // feature is off and the Updates screen is hidden.
+    private val updateApi = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { UpdateApi(it) }
     val updateManager = UpdateManager(
         context = appContext,
-        api = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { UpdateApi(it) },
+        api = updateApi,
         store = UpdateStore(appContext),
     )
+
+    // The minimum app version and the messages (the same server). A too old app is stopped at the
+    // "update required" screen; messages are shown once in a pop-up.
+    val serverNotices = ServerNotices(api = updateApi, store = ServerNoticeStore(appContext))
     val updateNotificationManager = UpdateNotificationManager(appContext, settingsRepository)
     val updateScheduler = UpdateScheduler(appContext)
 
@@ -95,6 +102,7 @@ class AppContainer(context: Context) {
         timetable = timetableRepository,
         sessionStore = sessionStore,
         store = reminderStore,
+        serverNotices = serverNotices,
     )
 
     fun start() {
@@ -112,7 +120,8 @@ class AppContainer(context: Context) {
         }
         if (updateManager.isConfigured) {
             updateNotificationManager.ensureChannel()
-            updateScheduler.schedule(settingsRepository.current().autoCheckUpdates)
+            val settings = settingsRepository.current()
+            updateScheduler.schedule(settings.autoCheckUpdates, settings.updateCheckHours)
         }
     }
 }

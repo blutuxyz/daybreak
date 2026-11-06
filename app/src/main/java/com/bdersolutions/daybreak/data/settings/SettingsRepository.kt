@@ -84,6 +84,8 @@ data class AppSettings(
     val favoriteTargets: List<FavoriteTarget> = emptyList(),
     /** Look for new versions in the background and download them on Wi-Fi. */
     val autoCheckUpdates: Boolean = true,
+    /** How often the app looks for a new version in the background, in hours. */
+    val updateCheckHours: Int = 12,
     val haptics: HapticSettings = HapticSettings(),
     /** Supporter extra: the name under the app icon. Only used while a payment is confirmed. */
     val appNamePreset: AppNamePreset = AppNamePreset.DAYBREAK,
@@ -203,6 +205,11 @@ class SettingsRepository(context: Context) {
         update(_settings.value.copy(autoCheckUpdates = enabled))
     }
 
+    fun setUpdateCheckHours(hours: Int) {
+        val safe = if (hours in UPDATE_CHECK_HOURS) hours else 12
+        update(_settings.value.copy(updateCheckHours = safe))
+    }
+
     fun updateFavoriteTargets(transform: (List<FavoriteTarget>) -> List<FavoriteTarget>) {
         update(_settings.value.copy(favoriteTargets = transform(_settings.value.favoriteTargets)))
     }
@@ -234,6 +241,7 @@ class SettingsRepository(context: Context) {
             .putString(KEY_ABSENCE_CATEGORIES, gson.toJson(value.absenceCategories))
             .putString(KEY_FAVORITE_TARGETS, gson.toJson(value.favoriteTargets))
             .putBoolean(KEY_AUTO_CHECK_UPDATES, value.autoCheckUpdates)
+            .putInt(KEY_UPDATE_CHECK_HOURS, value.updateCheckHours)
             .putString(KEY_HAPTICS, HapticSettingsCodec.encode(value.haptics))
             .putString(KEY_APP_NAME_PRESET, value.appNamePreset.name)
             .putString(KEY_CUSTOM_APP_NAME, value.customAppName)
@@ -267,6 +275,7 @@ class SettingsRepository(context: Context) {
         absenceCategories = decodeAbsenceCategories(preferences.getString(KEY_ABSENCE_CATEGORIES, null)),
         favoriteTargets = decodeFavoriteTargets(preferences.getString(KEY_FAVORITE_TARGETS, null)),
         autoCheckUpdates = preferences.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
+        updateCheckHours = preferences.getInt(KEY_UPDATE_CHECK_HOURS, 12).takeIf { it in UPDATE_CHECK_HOURS } ?: 12,
         haptics = HapticSettingsCodec.decode(preferences.getString(KEY_HAPTICS, null)),
         appNamePreset = AppNamePreset.fromName(preferences.getString(KEY_APP_NAME_PRESET, null)),
         customAppName = AppNaming.sanitizeCustom(preferences.getString(KEY_CUSTOM_APP_NAME, null).orEmpty()),
@@ -322,6 +331,9 @@ class SettingsRepository(context: Context) {
 
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60, 120)
+
+        /** The choices for how often the app looks for updates, in hours. */
+        val UPDATE_CHECK_HOURS = listOf(6, 12, 24, 72)
         private const val PREFS_NAME = "daybreak_settings"
         private const val KEY_LANGUAGE = "language"
         private const val KEY_SYNC_ENABLED = "sync_enabled"
@@ -339,6 +351,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ABSENCE_CATEGORIES = "absence_categories"
         private const val KEY_FAVORITE_TARGETS = "favorite_targets"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
+        private const val KEY_UPDATE_CHECK_HOURS = "update_check_hours"
         private const val KEY_HAPTICS = "haptics"
         private const val KEY_APP_NAME_PRESET = "app_name_preset"
         private const val KEY_CUSTOM_APP_NAME = "custom_app_name"

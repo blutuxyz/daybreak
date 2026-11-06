@@ -56,6 +56,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,11 +75,18 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
+import com.bdersolutions.daybreak.data.notices.RemoteFeatures
+import com.bdersolutions.daybreak.data.notices.RemoteSwitches
+import com.bdersolutions.daybreak.data.notices.UpdateGate
+import com.bdersolutions.daybreak.ui.notices.ServerMessageDialog
+import com.bdersolutions.daybreak.ui.update.UpdateRequiredRoute
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.support.PaymentCheck
@@ -86,6 +94,7 @@ import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
 import com.bdersolutions.daybreak.ui.support.SupportSheet
 import com.bdersolutions.daybreak.ui.support.openSupportPage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.CompositionLocalProvider
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -117,6 +126,9 @@ import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import java.time.LocalDate
 import java.util.Locale
 
+/** What the app shows, in order: the terms first, then the update gate, then the app itself. */
+private enum class AppStage { TERMS, UPDATE_REQUIRED, APP }
+
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
  * dark mode and motion update live when the user changes them.
@@ -134,23 +146,40 @@ fun DaybreakApp(
     val termsAccepted = TermsAcceptance.covers(acceptedVersion)
     val supportPaid by container.supportStore.paid.collectAsStateWithLifecycle()
     val appTitle = AppNaming.resolve(supportPaid, settings.appNamePreset, settings.customAppName)
+    // The minimum version comes from the last answer of the update server, so it also holds offline.
+    val serverStatus by container.serverNotices.status.collectAsStateWithLifecycle()
+    // The developer's switches (see RemoteSwitches): each one can turn a part of the app off remotely.
+    val remote = serverStatus?.switches ?: RemoteSwitches()
+    val updateRequired = container.updateManager.isConfigured && UpdateGate.isRequired(
+        installedVersionCode = container.updateManager.currentVersionCode,
+        requiredVersionCode = serverStatus?.minVersionCode,
+        switches = remote,
+    )
+    val stage = when {
+        !termsAccepted -> AppStage.TERMS
+        updateRequired -> AppStage.UPDATE_REQUIRED
+        else -> AppStage.APP
+    }
+
+    // Like every other network call, the server is asked only after the terms are accepted, and again
+    // each time the app comes back to the front, so a new minimum version reaches a phone that is open.
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(termsAccepted) {
+        if (termsAccepted) container.serverNotices.refresh()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        if (termsAccepted) scope.launch { container.serverNotices.refresh() }
+    }
+
     CompositionLocalProvider(
         LocalHaptics provides container.haptics,
         LocalAppTitle provides appTitle,
     ) {
         DaybreakTheme(settings = settings) {
-            // Nothing of the app runs behind the gate: no login screen, no sync prompts, no update check.
-            Crossfade(targetState = termsAccepted, label = "termsGate") { accepted ->
-                if (accepted) {
-                    DaybreakRoot(
-                        container = container,
-                        initialDate = initialDate,
-                        openUpdates = openUpdates,
-                        startMode = startMode,
-                        openSearch = openSearch,
-                    )
-                } else {
-                    TermsGateScreen(
+            // Nothing of the app runs behind the gates: no login screen, no sync prompts, no update check.
+            Crossfade(targetState = stage, label = "appStage") { current ->
+                when (current) {
+                    AppStage.TERMS -> TermsGateScreen(
                         isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
                         onAccept = { container.termsStore.accept() },
                         onLanguageChange = { language ->
@@ -161,8 +190,22 @@ fun DaybreakApp(
                             )
                         },
                     )
+
+                    AppStage.UPDATE_REQUIRED -> UpdateRequiredRoute(
+                        manager = container.updateManager,
+                        requiredVersionName = serverStatus?.minVersionName ?: "",
+                    )
+
+                    AppStage.APP -> DaybreakRoot(
+                        container = container,
+                        initialDate = initialDate,
+                        openUpdates = openUpdates,
+                        startMode = startMode,
+                        openSearch = openSearch,
+                    )
                 }
             }
+            if (stage == AppStage.APP && remote.messages) ServerMessageDialog(notices = container.serverNotices)
         }
     }
 }
@@ -266,9 +309,9 @@ private fun LoggedInContent(
     var whatsNew by remember { mutableStateOf<ReleaseInfo?>(null) }
     LaunchedEffect(Unit) {
         val updates = container.updateManager
-        if (!updates.isConfigured) return@LaunchedEffect
+        if (!updates.isConfigured || !container.serverNotices.switches.updates) return@LaunchedEffect
         whatsNew = updates.whatsNew()
-        if (settings.autoCheckUpdates && updates.isCheckDue()) updates.check()
+        if (settings.autoCheckUpdates && updates.isCheckDue(settings.updateCheckHours)) updates.check()
     }
 
     // A rare, friendly request to support Daybreak on Ko-fi (see SupportPromptPolicy). It waits a few
@@ -277,7 +320,8 @@ private fun LoggedInContent(
     LaunchedEffect(session.studentId) {
         val today = LocalDate.now().toEpochDay()
         val state = container.supportStore.recordOpen(today)
-        if (SupportPromptPolicy.shouldShow(state, today)) {
+        val popupAllowed = container.serverNotices.featureOn(RemoteFeatures.SUPPORT_POPUP)
+        if (popupAllowed && SupportPromptPolicy.shouldShow(state, today)) {
             delay(5_000)
             if (whatsNew == null) {
                 container.supportStore.markShown(today)

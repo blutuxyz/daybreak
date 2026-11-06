@@ -92,7 +92,7 @@ fun MessagesScreen(
         onBack = onBack,
         modifier = modifier,
     ) {
-        item(key = "new") {
+        if (viewModel.sendEnabled) item(key = "new") {
             FilledTonalButton(
                 onClick = viewModel::openCompose,
                 modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 0.dp),

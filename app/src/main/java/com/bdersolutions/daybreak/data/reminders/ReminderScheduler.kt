@@ -8,6 +8,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.bdersolutions.daybreak.DaybreakApplication
+import com.bdersolutions.daybreak.data.notices.RemoteFeatures
+import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
@@ -33,6 +35,7 @@ class ReminderScheduler(
     private val timetable: TimetableRepository,
     private val sessionStore: SessionStore,
     private val store: ReminderStore,
+    private val serverNotices: ServerNotices,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -56,7 +59,9 @@ class ReminderScheduler(
     private suspend fun planNow() {
         val workManager = WorkManager.getInstance(context)
         val settings = settingsRepository.current()
-        if (!sessionStore.isLoggedIn() || !settings.notificationsEnabled) {
+        // The developer can switch the reminders off remotely; then nothing is planned.
+        val allowed = serverNotices.featureOn(RemoteFeatures.REMINDERS)
+        if (!allowed || !sessionStore.isLoggedIn() || !settings.notificationsEnabled) {
             cancelAll()
             return
         }
@@ -123,7 +128,9 @@ class MorningSummaryWorker(appContext: Context, params: WorkerParameters) : Coro
         if (!container.sessionStore.isLoggedIn()) return Result.success()
         val date = inputData.getLong(ReminderScheduler.KEY_DATE, Long.MIN_VALUE)
             .takeIf { it != Long.MIN_VALUE }?.let { LocalDate.ofEpochDay(it) } ?: LocalDate.now()
-        runCatching { container.reminderNotifier.sendMorningSummary(date) }
+        if (container.serverNotices.featureOn(RemoteFeatures.REMINDERS)) {
+            runCatching { container.reminderNotifier.sendMorningSummary(date) }
+        }
         container.reminderScheduler.schedule()
         return Result.success()
     }
@@ -134,7 +141,9 @@ class EveningReminderWorker(appContext: Context, params: WorkerParameters) : Cor
     override suspend fun doWork(): Result {
         val container = (applicationContext as? DaybreakApplication)?.container ?: return Result.success()
         if (!container.sessionStore.isLoggedIn()) return Result.success()
-        runCatching { container.reminderNotifier.sendEveningReminder(LocalDate.now()) }
+        if (container.serverNotices.featureOn(RemoteFeatures.REMINDERS)) {
+            runCatching { container.reminderNotifier.sendEveningReminder(LocalDate.now()) }
+        }
         container.reminderScheduler.schedule()
         return Result.success()
     }

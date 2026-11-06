@@ -62,7 +62,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
+import com.bdersolutions.daybreak.ui.components.SelectionRow
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.update.UpdateFailure
@@ -131,6 +133,40 @@ fun UpdatesScreen(
                 )
             }
         }
+        item(key = "interval") {
+            AnimatedVisibility(
+                visible = settings.autoCheckUpdates,
+                enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                    fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) +
+                    fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+            ) {
+                SettingsGroup {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.updates_interval_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = stringResource(R.string.updates_interval_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        SettingsRepository.UPDATE_CHECK_HOURS.forEach { hours ->
+                            SelectionRow(
+                                label = stringResource(R.string.updates_interval_hours, hours),
+                                supporting = null,
+                                selected = settings.updateCheckHours == hours,
+                                onClick = { viewModel.setUpdateCheckHours(hours) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
         item(key = "changelog-label") {
             SectionLabel(stringResource(R.string.updates_changelog))
         }
@@ -170,7 +206,7 @@ private fun UpdateState.kind(): StatusKind = when (this) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun UpdateStatusCard(
+internal fun UpdateStatusCard(
     state: UpdateState,
     currentVersion: String,
     lastCheckedAt: Long,

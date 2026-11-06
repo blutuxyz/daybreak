@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bdersolutions.daybreak.AppContainer
+import com.bdersolutions.daybreak.data.notices.RemoteFeatures
+import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.attachments.SavedAttachment
@@ -72,7 +74,11 @@ data class MessagesUiState(
 class MessagesViewModel(
     private val schoolData: SchoolDataRepository,
     private val downloader: AttachmentDownloader,
+    private val serverNotices: ServerNotices,
 ) : ViewModel() {
+    /** False while the developer has writing messages switched off (see RemoteFeatures). */
+    val sendEnabled: Boolean get() = serverNotices.featureOn(RemoteFeatures.MESSAGES_SEND)
+
     /** Emits once when a message has been sent and the server confirmed the single recipient. */
     private val _sentEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val sentEvents: SharedFlow<Unit> = _sentEvents.asSharedFlow()
@@ -145,7 +151,7 @@ class MessagesViewModel(
     }
 
     fun openCompose() {
-        if (_state.value.compose != null) return
+        if (!sendEnabled || _state.value.compose != null) return
         _state.update { it.copy(compose = ComposeState()) }
         loadRecipients()
     }
@@ -181,6 +187,7 @@ class MessagesViewModel(
     fun dismissConfirm() = updateCompose { it.copy(confirming = false) }
 
     fun send() {
+        if (!sendEnabled) return
         val form = _state.value.compose ?: return
         val recipient = form.recipient ?: return
         if (!form.canSend) return
@@ -224,7 +231,7 @@ class MessagesViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(MessagesViewModel::class.java))
-            return MessagesViewModel(container.schoolData, container.attachmentDownloader) as T
+            return MessagesViewModel(container.schoolData, container.attachmentDownloader, container.serverNotices) as T
         }
     }
 }
