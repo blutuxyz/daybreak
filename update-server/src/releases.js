@@ -109,7 +109,7 @@ export function mapReleases(body, config) {
         (candidate) => candidate.state === 'uploaded' && pattern.test(candidate.name),
       );
       const apk = find(config.apkPattern);
-      const msi = find(config.msiPattern);
+      const setup = find(config.setupPattern);
       return {
         tag: release.tag_name,
         versionName: version.versionName,
@@ -118,7 +118,7 @@ export function mapReleases(body, config) {
         changelog: (release.body ?? '').replace(/\r\n/g, '\n').trim(),
         asset: toAsset(apk),
         apk: Boolean(apk),
-        msi: toAsset(msi),
+        setup: toAsset(setup),
       };
     })
     .filter(Boolean)

@@ -3,20 +3,20 @@ import { test } from 'node:test';
 import { ReleaseFileCache } from '../src/release-files.js';
 import { ReleaseService } from '../src/releases.js';
 import { buildServer } from '../src/server.js';
-import { apkBytes, fakeFetch, githubRelease, jsonResponse, msiBytes, msiSha256, releaseWithMsi, testConfig } from './helpers.js';
+import { apkBytes, fakeFetch, githubRelease, jsonResponse, setupBytes, setupSha256, releaseWithSetup, testConfig } from './helpers.js';
 
 async function setup({ releasesBody } = {}) {
   const config = await testConfig();
   const fetchImpl = fakeFetch({
     'https://api.github.com/repos/': () =>
-      jsonResponse(releasesBody ?? [releaseWithMsi('v1.1.0'), githubRelease('v1.0.0')]),
-    'https://github.com/': (url) => (url.endsWith('.msi') ? new Response(msiBytes) : new Response(apkBytes)),
+      jsonResponse(releasesBody ?? [releaseWithSetup('v1.1.0'), githubRelease('v1.0.0')]),
+    'https://github.com/': (url) => (url.endsWith('.exe') ? new Response(setupBytes) : new Response(apkBytes)),
   });
   const { app } = buildServer({
     config,
     releases: new ReleaseService({ config, fetchImpl }),
     apks: new ReleaseFileCache({ config, fetchImpl, kind: 'apk' }),
-    msis: new ReleaseFileCache({ config, fetchImpl, kind: 'msi' }),
+    setups: new ReleaseFileCache({ config, fetchImpl, kind: 'setup' }),
   });
   return { app };
 }
@@ -35,7 +35,7 @@ test('/desktop offers the Windows installer with its version, size and checksum'
   assert.ok(page.includes('href="/desktop/download"'), 'the download button links to the direct download');
   assert.ok(page.includes('Download for Windows'));
   assert.ok(page.includes('1.1.0'), 'the version is shown');
-  assert.ok(page.includes(msiSha256), 'the installer checksum is shown');
+  assert.ok(page.includes(setupSha256), 'the installer checksum is shown');
   assert.ok(page.includes('aria-current="page"') && page.includes('href="/desktop"'));
 });
 
@@ -54,7 +54,7 @@ test('/desktop/download redirects to the newest installer', async () => {
   const response = await app.inject({ method: 'GET', url: '/desktop/download', headers });
 
   assert.equal(response.statusCode, 302);
-  assert.equal(response.headers.location, '/v1/msi/v1.1.0');
+  assert.equal(response.headers.location, '/v1/setup/v1.1.0');
 });
 
 test('following /desktop/download gives the installer itself', async () => {
@@ -64,7 +64,7 @@ test('following /desktop/download gives the installer itself', async () => {
   const file = await app.inject({ method: 'GET', url: redirect.headers.location, headers });
 
   assert.equal(file.statusCode, 200);
-  assert.deepEqual(file.rawPayload, msiBytes);
+  assert.deepEqual(file.rawPayload, setupBytes);
 });
 
 test('the Android page is still the start page and links to the Windows page', async () => {

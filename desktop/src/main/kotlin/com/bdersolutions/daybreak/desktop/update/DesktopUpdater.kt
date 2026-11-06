@@ -30,7 +30,7 @@ data class LatestRelease(
     val versionName: String,
     val versionCode: Int,
     val changelog: String,
-    val msi: WindowsBuild,
+    val installer: WindowsBuild,
 )
 
 sealed interface UpdateState {
@@ -70,8 +70,10 @@ data class BuildInfo(val versionName: String, val updateApiUrl: String) {
 }
 
 /**
- * Checks the update server for a newer Windows build, downloads its MSI and checks the SHA-256
- * before anything runs. The installer is started with msiexec; the app then closes itself.
+ * Checks the update server for a newer Windows build, downloads its setup program (an Inno Setup
+ * .exe, see desktop/packaging/windows) and checks the SHA-256 before anything runs. The setup is
+ * started silently (it shows only its small progress window), closes the running Daybreak, installs
+ * in place and starts the new version; the app closes itself right after starting it.
  * The Android app has the same flow for APKs.
  */
 class DesktopUpdater(
@@ -118,9 +120,9 @@ class DesktopUpdater(
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Downloads the MSI of [release] and checks it against the published SHA-256. */
+    /** Downloads the setup program of [release] and checks it against the published SHA-256. */
     suspend fun download(release: LatestRelease) {
-        _state.value = UpdateState.Downloading(release, 0, release.msi.size ?: 0)
+        _state.value = UpdateState.Downloading(release, 0, release.installer.size ?: 0)
         try {
             val file = withContext(Dispatchers.IO) { downloadVerified(release) }
             _state.value = UpdateState.ReadyToInstall(release, file)
@@ -131,9 +133,13 @@ class DesktopUpdater(
         }
     }
 
-    /** Starts the MSI with the Windows installer. The caller closes the app afterwards. */
+    /**
+     * Starts the setup program. `/SILENT` skips every question and shows only the progress window,
+     * `/SUPPRESSMSGBOXES` and `/NORESTART` keep it from stopping on a dialog or asking for a reboot.
+     * The setup closes this app itself if it still runs, so the caller may exit straight afterwards.
+     */
     fun install(file: File) {
-        ProcessBuilder("msiexec.exe", "/i", file.absolutePath).start()
+        ProcessBuilder(file.absolutePath, *SILENT_SETUP_ARGUMENTS).start()
     }
 
     private suspend fun fetchLatest(): LatestRelease = withContext(Dispatchers.IO) {
@@ -148,13 +154,13 @@ class DesktopUpdater(
     }
 
     private fun downloadVerified(release: LatestRelease): File {
-        requireHttps(release.msi.url)
-        val expected = release.msi.sha256 ?: throw IllegalStateException("The update server gave no checksum; nothing was installed.")
-        val fileName = "Daybreak-${release.versionName.ifBlank { release.tag }}.msi"
+        requireHttps(release.installer.url)
+        val expected = release.installer.sha256 ?: throw IllegalStateException("The update server gave no checksum; nothing was installed.")
+        val fileName = "Daybreak-${release.versionName.ifBlank { release.tag }}-setup.exe"
         val target = File(directory, fileName)
         val part = File(directory, "$fileName.part")
         val response = client.send(
-            HttpRequest.newBuilder(URI.create(release.msi.url)).GET().build(),
+            HttpRequest.newBuilder(URI.create(release.installer.url)).GET().build(),
             HttpResponse.BodyHandlers.ofInputStream(),
         )
         if (response.statusCode() != 200) {
@@ -172,12 +178,12 @@ class DesktopUpdater(
                     output.write(buffer, 0, read)
                     digest.update(buffer, 0, read)
                     total += read
-                    _state.value = UpdateState.Downloading(release, total, release.msi.size ?: 0)
+                    _state.value = UpdateState.Downloading(release, total, release.installer.size ?: 0)
                 }
             }
         }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        val size = release.msi.size
+        val size = release.installer.size
         if (size != null && size != total) {
             part.delete()
             throw IllegalStateException("The download has the wrong size; nothing was installed.")
@@ -198,6 +204,9 @@ class DesktopUpdater(
         get(name)?.takeUnless { it.isJsonNull }?.asString
 }
 
+/** What the in-app update passes to the setup program (Inno Setup switches). */
+internal val SILENT_SETUP_ARGUMENTS = arrayOf("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
+
 /**
  * Reads the answer of the update server's /v1/latest. Kept apart from the network, so the contract
  * can be tested: the JSON in, the release out. Throws when a field the update needs is missing, so
@@ -206,7 +215,7 @@ class DesktopUpdater(
 internal fun parseLatest(body: String): LatestRelease {
     val json = JsonParser.parseString(body).asJsonObject
     val windows = json.get("windows")?.takeUnless { it.isJsonNull }?.asJsonObject
-    val msi = windows?.get("msi")?.takeUnless { it.isJsonNull }?.asJsonObject
+    val installer = windows?.get("installer")?.takeUnless { it.isJsonNull }?.asJsonObject
         ?: throw IllegalStateException("The newest release has no Windows build yet.")
     return LatestRelease(
         tag = json.optionalString("tag") ?: throw IllegalStateException("The update server sent no version."),
@@ -214,11 +223,11 @@ internal fun parseLatest(body: String): LatestRelease {
         versionCode = json.get("versionCode")?.takeUnless { it.isJsonNull }?.asInt
             ?: throw IllegalStateException("The update server sent no version code."),
         changelog = json.optionalString("changelog").orEmpty(),
-        msi = WindowsBuild(
-            url = msi.optionalString("url") ?: throw IllegalStateException("The Windows build has no address."),
-            name = msi.optionalString("name").orEmpty(),
-            size = msi.get("size")?.takeUnless { it.isJsonNull }?.asLong,
-            sha256 = msi.optionalString("sha256")?.lowercase(),
+        installer = WindowsBuild(
+            url = installer.optionalString("url") ?: throw IllegalStateException("The Windows build has no address."),
+            name = installer.optionalString("name").orEmpty(),
+            size = installer.get("size")?.takeUnless { it.isJsonNull }?.asLong,
+            sha256 = installer.optionalString("sha256")?.lowercase(),
         ),
     )
 }

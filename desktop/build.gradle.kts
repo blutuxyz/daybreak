@@ -56,6 +56,8 @@ compose.desktop {
         }.get().metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
+            // The MSI is the old installer, no longer released. The one people get is :desktop:windowsInstaller
+            // (Inno Setup, see below); jpackage still builds the app image that it packs.
             targetFormats(TargetFormat.Msi)
             packageName = "Daybreak"
             packageVersion = daybreakVersionName
@@ -99,4 +101,61 @@ tasks.register<Zip>("portableZip") {
     into("Daybreak")
     archiveFileName.set("Daybreak-$daybreakVersionName-windows-portable.zip")
     destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+}
+
+// One-click installer: Inno Setup packs the app image (createDistributable) into
+// Daybreak-<version>-setup.exe, which installs per user without pages or administrator rights, see
+// packaging/windows/daybreak.iss. This replaces the MSI wizard of jpackage as the thing that is
+// released. The compiler (ISCC.exe) comes from the INNO_SETUP_COMPILER environment variable or
+// -Pdaybreak.innoCompiler, else the PATH, else the usual folders. GitHub's windows-latest runners have
+// Inno Setup 6 installed; locally: winget install JRSoftware.InnoSetup
+fun findInnoCompiler(): String? {
+    val configured = ((findProperty("daybreak.innoCompiler") as String?) ?: System.getenv("INNO_SETUP_COMPILER"))
+        ?.takeIf { it.isNotBlank() }
+    if (configured != null) return configured
+    val folders = listOfNotNull(
+        System.getenv("PATH")?.split(File.pathSeparatorChar).orEmpty(),
+        listOfNotNull(
+            System.getenv("LOCALAPPDATA")?.let { "$it/Programs/Inno Setup 6" },
+            System.getenv("ProgramFiles(x86)")?.let { "$it/Inno Setup 6" },
+            System.getenv("ProgramFiles")?.let { "$it/Inno Setup 6" },
+        ),
+    ).flatten()
+    return folders.map { File(it, "ISCC.exe") }.firstOrNull { it.isFile }?.absolutePath
+}
+
+tasks.register("windowsInstaller") {
+    group = "distribution"
+    description = "Builds the one-click Windows installer (Daybreak-<version>-setup.exe) with Inno Setup."
+    dependsOn("createDistributable")
+    // Plain values only, so the configuration cache can store the task.
+    val version = daybreakVersionName
+    val compiler = findInnoCompiler()
+    val script = file("packaging/windows/daybreak.iss")
+    val appImage = layout.buildDirectory.dir("compose/binaries/main/app/Daybreak").get().asFile
+    val outputDir = layout.buildDirectory.dir("installer").get().asFile
+    inputs.dir(appImage)
+    inputs.dir(script.parentFile)
+    inputs.property("version", version)
+    outputs.dir(outputDir)
+    doLast {
+        if (compiler == null) {
+            throw GradleException(
+                "Inno Setup 6 (ISCC.exe) was not found. Install it with 'winget install JRSoftware.InnoSetup' " +
+                    "or set INNO_SETUP_COMPILER to the path of ISCC.exe.",
+            )
+        }
+        outputDir.mkdirs()
+        outputDir.listFiles { f -> f.name.endsWith("-setup.exe") }?.forEach { it.delete() }
+        val exitCode = ProcessBuilder(
+            compiler,
+            "/Qp",
+            "/DAppVersion=$version",
+            "/DSourceDir=${appImage.absolutePath}",
+            "/DOutputDir=${outputDir.absolutePath}",
+            script.absolutePath,
+        ).inheritIO().start().waitFor()
+        check(exitCode == 0) { "Inno Setup failed with exit code $exitCode." }
+        check(File(outputDir, "Daybreak-$version-setup.exe").isFile) { "Inno Setup did not produce the installer." }
+    }
 }

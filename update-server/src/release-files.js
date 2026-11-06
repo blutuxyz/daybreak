@@ -10,12 +10,12 @@ const USER_AGENT = 'daybreak-update-server';
 /**
  * The files the server keeps for each release, by kind:
  *   apk  the Android app (its folder is still called apks/, so existing downloads are kept)
- *   msi  the Windows installer of the desktop app
+ *   setup  the Windows setup program (.exe) of the desktop app
  * [field] is the release property that holds the GitHub asset of that kind (see releases.js).
  */
 export const FILE_KINDS = {
   apk: { dir: 'apks', extension: '.apk', field: 'asset' },
-  msi: { dir: 'msis', extension: '.msi', field: 'msi' },
+  setup: { dir: 'setups', extension: '.exe', field: 'setup' },
 };
 
 /**

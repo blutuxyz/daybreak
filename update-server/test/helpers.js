@@ -51,20 +51,20 @@ export function jsonResponse(body, { status = 200, etag } = {}) {
   });
 }
 
-export const msiBytes = Buffer.from('MSI-installer-bytes-for-the-windows-desktop-app-'.repeat(40));
-export const msiSha256 = createHash('sha256').update(msiBytes).digest('hex');
+export const setupBytes = Buffer.from('Setup-installer-bytes-for-the-windows-desktop-app-'.repeat(40));
+export const setupSha256 = createHash('sha256').update(setupBytes).digest('hex');
 
 /** A release with the APK and the Windows installer, as the two release workflows attach them. */
-export function releaseWithMsi(tag, { msiDigest = `sha256:${msiSha256}` } = {}) {
+export function releaseWithSetup(tag, { setupDigest = `sha256:${setupSha256}` } = {}) {
   const release = githubRelease(tag);
   const version = tag.replace(/^v/, '');
   release.assets.push({
-    name: `Daybreak-${version}.msi`,
+    name: `Daybreak-${version}-setup.exe`,
     state: 'uploaded',
-    size: msiBytes.length,
-    digest: msiDigest,
-    browser_download_url: `https://github.com/example/daybreak/releases/download/${tag}/Daybreak-${version}.msi`,
-    url: `https://api.github.com/repos/example/daybreak/releases/assets/msi-${tag}`,
+    size: setupBytes.length,
+    digest: setupDigest,
+    browser_download_url: `https://github.com/example/daybreak/releases/download/${tag}/Daybreak-${version}-setup.exe`,
+    url: `https://api.github.com/repos/example/daybreak/releases/assets/setup-${tag}`,
   });
   return release;
 }

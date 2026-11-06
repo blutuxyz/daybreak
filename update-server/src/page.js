@@ -32,9 +32,9 @@ const TEXT = {
     desktopTagline: 'Your WebUntis timetable, absences and exams on your computer.',
     desktopDownload: 'Download for Windows',
     desktopInstall: [
-      'Download the installer (.msi) and open it.',
+      'Download the installer (Daybreak-…-setup.exe) and open it.',
       'Windows may warn that the publisher is unknown, because this installer is not signed yet. Choose More info, then Run anyway. This is needed only for the first install.',
-      'Follow the setup. Daybreak is added to the Start menu.',
+      'That is all: there are no pages to click through. Daybreak installs for your user (no administrator needed), is added to the Start menu and opens when it is done. Run the installer again to update; an older MSI version is removed for you.',
       'Later versions are offered inside the app. It checks for them by itself, downloads them in the background and asks before it installs.',
     ],
     noDesktopRelease: 'There is no Windows version yet.',
@@ -66,9 +66,9 @@ const TEXT = {
     desktopTagline: 'Dein WebUntis-Stundenplan, deine Fehlzeiten und Prüfungen auf dem Computer.',
     desktopDownload: 'Für Windows herunterladen',
     desktopInstall: [
-      'Lade den Installer (.msi) herunter und öffne ihn.',
+      'Lade den Installer (Daybreak-…-setup.exe) herunter und öffne ihn.',
       'Windows warnt womöglich, dass der Herausgeber unbekannt ist, weil der Installer noch nicht signiert ist. Wähle Weitere Informationen und dann Trotzdem ausführen. Das ist nur bei der ersten Installation nötig.',
-      'Folge der Installation. Daybreak wird im Startmenü eingetragen.',
+      'Mehr ist nicht nötig: Es gibt keine Seiten zum Durchklicken. Daybreak wird für deinen Benutzer installiert (ohne Administratorrechte), im Startmenü eingetragen und öffnet sich am Ende. Zum Aktualisieren führst du den Installer einfach noch einmal aus; eine ältere MSI-Version wird dabei entfernt.',
       'Neuere Versionen werden in der App angeboten. Sie sucht selbst danach, lädt sie im Hintergrund herunter und fragt, bevor sie installiert.',
     ],
     noDesktopRelease: 'Es gibt noch keine Windows-Version.',
@@ -277,7 +277,7 @@ ${history ? `<div class="card"><h2>${escapeHtml(t.older)}</h2>\n${history}</div>
 /**
  * The Windows page. It offers the installer of the newest release that has one.
  *
- * @param latest  the newest release with an installer, as /v1/latest describes it (its `windows.msi`
+ * @param latest  the newest release with an installer, as /v1/latest describes it (its `windows.installer`
  *                holds the installer's size and checksum), or undefined
  * @param older   earlier releases with an installer, newest first
  * @param status  'ok' | 'empty' | 'unavailable'
@@ -290,12 +290,12 @@ export function renderDesktopPage({ app, lang = 'en', latest, older = [], status
     return shell({ app, lang, heading, current: 'windows', body: `<div class="card empty">${escapeHtml(message)}</div>` });
   }
 
-  const file = latest.windows?.msi;
+  const file = latest.windows?.installer;
   const { facts, checksum } = fileFacts(lang, latest, file);
   const notes = latest.changelog?.trim()
     ? renderChangelog(latest.changelog)
     : `<p>${escapeHtml(t.noNotes)}</p>`;
-  const history = olderReleases(lang, older, (release) => `/v1/msi/${release.tag}`);
+  const history = olderReleases(lang, older, (release) => `/v1/setup/${release.tag}`);
 
   const body = `
 <div class="card">

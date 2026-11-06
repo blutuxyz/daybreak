@@ -19,7 +19,7 @@ import { isSafeTag } from './version.js';
  *   GET  /v1/latest         the newest release: version, changelog, APK link, size and SHA-256
  *   GET  /v1/releases       the release history with changelogs (?limit=, default 20)
  *   GET  /v1/apk/:tag       the APK of a release; supports Range for resuming a download
- *   GET  /v1/msi/:tag       the Windows installer of a release, the same way (desktop app)
+ *   GET  /v1/setup/:tag       the Windows installer of a release, the same way (desktop app)
  *   POST /v1/refresh        asks GitHub right now (needs REFRESH_TOKEN); CI calls it after a release
  *   POST /v1/kofi           Ko-fi's webhook: a payment whose message holds an unlock code (needs
  *                           KOFI_VERIFICATION_TOKEN)
@@ -31,7 +31,7 @@ export function buildServer({
   config,
   releases,
   apks,
-  msis = new ReleaseFileCache({ config, kind: 'msi' }),
+  setups = new ReleaseFileCache({ config, kind: 'setup' }),
   support,
   announcements,
   logger = false,
@@ -70,7 +70,7 @@ export function buildServer({
             sha256: meta?.sha256 ?? digestHex,
           }
         : null,
-      windows: release.msi ? await describeMsi(release, request, { ensure }) : null,
+      windows: release.setup ? await describeSetup(release, request, { ensure }) : null,
     };
   };
 
@@ -78,20 +78,20 @@ export function buildServer({
    * The Windows installer of a release: where to get it and its checksum. A failure to get the
    * installer leaves it out (null), so the Android app's answer is never affected by it.
    */
-  const describeMsi = async (release, request, { ensure }) => {
+  const describeSetup = async (release, request, { ensure }) => {
     let meta;
     try {
-      meta = ensure ? await msis.ensure(release) : await msis.meta(release.tag);
+      meta = ensure ? await setups.ensure(release) : await setups.meta(release.tag);
     } catch (error) {
       request.log.error(error);
       return null;
     }
-    const digestHex = release.msi.digest?.startsWith('sha256:') ? release.msi.digest.slice(7).toLowerCase() : null;
+    const digestHex = release.setup.digest?.startsWith('sha256:') ? release.setup.digest.slice(7).toLowerCase() : null;
     return {
-      msi: {
-        url: `${baseUrl(request)}/v1/msi/${release.tag}`,
-        name: release.msi.name,
-        size: meta?.size ?? release.msi.size,
+      installer: {
+        url: `${baseUrl(request)}/v1/setup/${release.tag}`,
+        name: release.setup.name,
+        size: meta?.size ?? release.setup.size,
         sha256: meta?.sha256 ?? digestHex,
       },
     };
@@ -101,9 +101,9 @@ export function buildServer({
   const warm = async () => {
     const latest = await releases.latest();
     if (latest) await apks.ensure(latest);
-    const newestMsi = (await releases.list()).find((release) => release.msi);
-    if (newestMsi) {
-      await msis.ensure(newestMsi).catch((error) => app.log.warn({ err: error }, 'warming the installer cache failed'));
+    const newestSetup = (await releases.list()).find((release) => release.setup);
+    if (newestSetup) {
+      await setups.ensure(newestSetup).catch((error) => app.log.warn({ err: error }, 'warming the installer cache failed'));
     }
     return latest;
   };
@@ -155,7 +155,7 @@ export function buildServer({
     pageHeaders(reply);
     let list;
     try {
-      list = (await releases.list()).filter((release) => release.msi);
+      list = (await releases.list()).filter((release) => release.setup);
     } catch (error) {
       request.log.error(error);
       return reply.code(502).send(renderDesktopPage({ app: config.appName, lang, status: 'unavailable' }));
@@ -173,13 +173,13 @@ export function buildServer({
   app.get('/desktop/download', async (request, reply) => {
     let latest;
     try {
-      latest = (await releases.list()).find((release) => release.msi);
+      latest = (await releases.list()).find((release) => release.setup);
     } catch (error) {
       request.log.error(error);
       return reply.code(502).send({ error: 'upstream_unavailable' });
     }
     if (!latest) return reply.code(404).send({ error: 'no_release' });
-    return reply.header('Cache-Control', 'no-cache').redirect(`/v1/msi/${latest.tag}`, 302);
+    return reply.header('Cache-Control', 'no-cache').redirect(`/v1/setup/${latest.tag}`, 302);
   });
 
   app.get('/download', async (request, reply) => {
@@ -280,11 +280,11 @@ export function buildServer({
     errorCode: 'apk_unavailable',
   }));
 
-  app.get('/v1/msi/:tag', serveReleaseFile({
-    cache: msis,
-    field: 'msi',
-    contentType: 'application/x-msi',
-    errorCode: 'msi_unavailable',
+  app.get('/v1/setup/:tag', serveReleaseFile({
+    cache: setups,
+    field: 'setup',
+    contentType: 'application/vnd.microsoft.portable-executable',
+    errorCode: 'setup_unavailable',
   }));
 
   app.post('/v1/refresh', async (request, reply) => {

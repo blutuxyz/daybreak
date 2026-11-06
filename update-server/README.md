@@ -13,15 +13,15 @@ GitHub release  ──►  update-server (Coolify)  ──►  Daybreak app
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /v1/latest` | The newest release: `tag`, `versionName`, `versionCode`, `publishedAt`, `changelog` (the release notes, Markdown), `apk` (`url`, `size`, `sha256`) and `windows.msi` (`url`, `name`, `size`, `sha256`) when the release has a Windows installer. `404` while there is no release with an APK. |
+| `GET /v1/latest` | The newest release: `tag`, `versionName`, `versionCode`, `publishedAt`, `changelog` (the release notes, Markdown), `apk` (`url`, `size`, `sha256`) and `windows.installer` (`url`, `name`, `size`, `sha256`) when the release has a Windows setup program (`Daybreak-1.2.3-setup.exe`). `404` while there is no release with an APK. |
 | `GET /v1/releases?limit=20` | The release history with every changelog. |
 | `GET /v1/apk/:tag` | The APK. Supports `Range`, so an interrupted download resumes. |
 | `POST /v1/refresh` | Asks GitHub right now. Needs `Authorization: Bearer <REFRESH_TOKEN>`. Off when `REFRESH_TOKEN` is not set. |
 | `GET /` | A download page for people who do not have the app yet: a download button, install steps, the latest release notes, and earlier versions. It is German or English, depending on the browser. Share this address. |
 | `GET /download` | Redirects to the newest APK, so one stable link always works. |
 | `GET /desktop` | The download page for the Windows app: the installer, install steps, release notes and earlier versions. German or English. Share this address for Windows users. |
-| `GET /desktop/download` | Redirects to the newest Windows installer (`.msi`), so one stable link always works. |
-| `GET /v1/msi/:tag` | The Windows installer of a release, with `Range` support. Served only for releases that have an installer. |
+| `GET /desktop/download` | Redirects to the newest Windows setup program (`.exe`), so one stable link always works. |
+| `GET /v1/setup/:tag` | The Windows setup program of a release, with `Range` support. Served only for releases that have an installer. |
 | `GET /health` | `{ "ok": true }`, for Coolify's health check. |
 | `GET /v1/status` | The minimum app version and the messages for the app (see below). No secret, no account. |
 | `GET /admin` | The admin page to set the minimum version and messages. Needs `ADMIN_TOKEN`; without it the page does not exist. |
