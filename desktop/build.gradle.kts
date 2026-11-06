@@ -49,6 +49,11 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.bdersolutions.daybreak.desktop.MainKt"
+        // Compose runs jlink and jpackage with this JDK. Without it the packaging used the JDK 25 that
+        // Gradle downloads for itself, and jlink failed in CI.
+        javaHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }.get().metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi)
