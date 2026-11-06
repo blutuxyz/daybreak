@@ -54,6 +54,9 @@ compose.desktop {
 
             windows {
                 menuGroup = "Daybreak"
+                // The .exe, the shortcuts and the installer use this icon. Without it jpackage falls
+                // back to the default Java/Kotlin icon.
+                iconFile.set(project.file("packaging/daybreak.ico"))
                 shortcut = true
                 dirChooser = true
                 // Fixed for this product, so a newer MSI upgrades an older install.
