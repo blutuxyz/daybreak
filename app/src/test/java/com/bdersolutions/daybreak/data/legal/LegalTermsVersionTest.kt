@@ -61,6 +61,7 @@ class LegalTermsVersionTest {
         val HASH_BY_VERSION = mapOf(
             1 to "a2d2a15004c743e8ef9878e9a112add0852d0020a654a5044a9819a93b357aeb",
             2 to "1e0729fc5cad65d241b457a6cd22cd3399a03785b8692ddba75bc00ab49e78e8",
+            3 to "048cd236c09ffcd5c706dbb78842fd5e6589c6bcb924d996ef3fcc779687f0cc",
         )
     }
 }

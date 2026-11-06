@@ -170,7 +170,7 @@ private fun UpdateState.kind(): StatusKind = when (this) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun UpdateStatusCard(
+internal fun UpdateStatusCard(
     state: UpdateState,
     currentVersion: String,
     lastCheckedAt: Long,

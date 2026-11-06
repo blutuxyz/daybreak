@@ -20,6 +20,8 @@ GitHub release  ──►  update-server (Coolify)  ──►  Daybreak app
 | `GET /` | A download page for people who do not have the app yet: a download button, install steps, the latest release notes, and earlier versions. It is German or English, depending on the browser. Share this address. |
 | `GET /download` | Redirects to the newest APK, so one stable link always works. |
 | `GET /health` | `{ "ok": true }`, for Coolify's health check. |
+| `GET /v1/status` | The minimum app version and the messages for the app (see below). No secret, no account. |
+| `GET /admin` | The admin page to set the minimum version and messages. Needs `ADMIN_TOKEN`; without it the page does not exist. |
 
 The server asks GitHub at most every `CACHE_TTL_SECONDS` (5 minutes), uses the ETag so an unchanged
 list costs no rate limit, and keeps serving the last list if GitHub is down. It downloads a new APK
@@ -31,6 +33,30 @@ The release **tag** is the version: `v1.2.3` → `versionName 1.2.3`, `versionCo
 (`major * 10000 + minor * 100 + patch`). Minor and patch must stay below 100. The release workflow and
 this server use the same formula, so the number the server reports is the number inside the APK.
 Drafts, prereleases and tags that are not `vX.Y.Z` are ignored.
+
+## Minimum version and messages
+
+The same server can tell every app two things. Both are set on the admin page, `https://updates.example.com/admin`
+(a plain page without styling or scripts; sign in with `ADMIN_TOKEN` as the password, any user name).
+
+- **Minimum version.** Apps older than this stop at an "Update required" screen. They can only update from
+  there or close. Enter it as `1.2.0` (or leave it empty for no minimum). Use it for security fixes or when a
+  WebUntis change breaks old versions. **Set only a version that is already published as a release**: a higher
+  minimum blocks everyone until that release exists and its APK is on the server. Apps keep the last answer, so the minimum also holds offline.
+  **Debug builds have versionCode 1**: once a minimum is set they stop too, unless built with
+  `-Pdaybreak.versionCode=…`.
+- **Messages.** Short texts in German and/or English, with a level (`info`, `warning`, `critical`) and an
+  optional end time (`2026-11-07T18:00:00Z`, with the offset). The app shows each message once as a pop-up
+  when it opens, and remembers the "OK". There is no editing: a new text is a new message, which is shown
+  again on every phone. "Hide" keeps a message without deleting it.
+
+The app reads `GET /v1/status`, which returns `{ minVersionName, minVersionCode, messages: [...] }` with only
+the messages that are switched on and not over yet. It sends nothing except the request itself.
+
+Without `ADMIN_TOKEN` the admin page and its POST routes are not there. Writes are refused when the browser
+sends an `Origin` from another site, and the admin page allows 60 requests per minute per address. Store the
+token like the other secrets. The state is kept in `DATA_DIR` as `announcements.json`, so mount `DATA_DIR` on a
+persistent volume, as for the payments (see below).
 
 ## Deploy on Coolify
 
@@ -50,6 +76,7 @@ Drafts, prereleases and tags that are not `vX.Y.Z` are ignored.
    | `REFRESH_TOKEN` | recommended | A long random secret. Lets the release workflow announce a release at once. |
    | `GITHUB_TOKEN` | only if the repository is private | A token that can read the repository's releases |
    | `PUBLIC_URL` | rarely | Only if links come out wrong behind your proxy |
+   | `ADMIN_TOKEN` | for the admin page | A long random password for `/admin` (minimum version and messages) |
 
 7. Deploy. Check `https://updates.example.com/health`, then `https://updates.example.com/v1/latest`
    (`404 no_release` is correct until the first release exists).

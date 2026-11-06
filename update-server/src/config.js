@@ -36,5 +36,10 @@ export function loadConfig(env = process.env) {
     kofiToken: env.KOFI_VERIFICATION_TOKEN || undefined,
     /** The smallest payment that unlocks "Hide this popup", in whatever currency Ko-fi reports. */
     supportMinAmount: Number(env.SUPPORT_MIN_AMOUNT ?? 1),
+    /**
+     * Optional. The password for the admin page (/admin): minimum app version and messages for the app.
+     * Without it the admin page does not exist. Any user name works with it; use a long random value.
+     */
+    adminToken: env.ADMIN_TOKEN || undefined,
   };
 }

@@ -1,6 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
+import { AnnouncementStore, MESSAGE_ID_PATTERN } from './announcements.js';
+import { renderAdmin } from './admin.js';
 import { pickLanguage, renderPage } from './page.js';
 import { RateLimiter, extractCode, normalizeCode, parseKofiBody, sameSecret } from './support.js';
 import { isSafeTag } from './version.js';
@@ -18,9 +20,21 @@ import { isSafeTag } from './version.js';
  *   POST /v1/kofi           Ko-fi's webhook: a payment whose message holds an unlock code (needs
  *                           KOFI_VERIFICATION_TOKEN)
  *   GET  /v1/support/status ?code=DB-XXXX-XXXX  { paid } whether that unlock code was paid for
+ *   GET  /v1/status         the minimum app version and the messages for the app (announcements.js)
+ *   GET  /admin             the admin page, behind ADMIN_TOKEN: minimum version and messages
  */
-export function buildServer({ config, releases, apks, support, logger = false, now = () => Date.now() }) {
+export function buildServer({
+  config,
+  releases,
+  apks,
+  support,
+  announcements,
+  logger = false,
+  now = () => Date.now(),
+}) {
   const app = Fastify({ logger, trustProxy: true });
+  const notices = announcements ?? new AnnouncementStore({ config });
+  const adminLimiter = new RateLimiter({ limit: 60, windowMs: 60_000, now });
 
   // Ko-fi posts a form ("data=<json>"). Reading it needs no extra package.
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 65_536 }, (_, body, done) => {
@@ -227,7 +241,95 @@ export function buildServer({ config, releases, apks, support, logger = false, n
     return { paid: await support.isPaid(code) };
   });
 
+  app.get('/v1/status', async (request, reply) => {
+    reply.header('Cache-Control', 'no-cache');
+    try {
+      return await notices.status(now());
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: 'unavailable' });
+    }
+  });
+
+  // The admin page. Without ADMIN_TOKEN none of these routes answer, so nobody can find them.
+  // Signing in is HTTP Basic: the password is the token, the user name is ignored.
+  const guardAdmin = (request, reply, { write = false } = {}) => {
+    if (!config.adminToken) {
+      reply.code(404).send({ error: 'not_found' });
+      return false;
+    }
+    if (!adminLimiter.allow(request.ip)) {
+      reply.code(429).send({ error: 'too_many_requests' });
+      return false;
+    }
+    if (!sameSecret(basicPassword(request.headers.authorization), config.adminToken)) {
+      reply
+        .code(401)
+        .header('WWW-Authenticate', 'Basic realm="Daybreak admin", charset="UTF-8"')
+        .type('text/plain; charset=utf-8')
+        .send('Sign in with the admin password.');
+      return false;
+    }
+    // A form posted from another site would carry the browser's saved password too: refuse it.
+    if (write && request.headers.origin !== undefined && request.headers.origin !== baseUrl(request)) {
+      reply.code(403).send({ error: 'forbidden' });
+      return false;
+    }
+    return true;
+  };
+  const adminHeaders = (reply) =>
+    reply
+      .header('Cache-Control', 'no-store')
+      .header('Content-Security-Policy', "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+      .header('X-Content-Type-Options', 'nosniff');
+  const backToAdmin = (reply, notice) => reply.code(303).header('Location', `/admin?notice=${notice}`).send();
+
+  app.get('/admin', async (request, reply) => {
+    if (!guardAdmin(request, reply)) return reply;
+    const state = await notices.snapshot();
+    const notice = typeof request.query.notice === 'string' ? request.query.notice : undefined;
+    adminHeaders(reply).type('text/html; charset=utf-8');
+    return reply.send(renderAdmin({ app: config.appName, state, notice, now: now() }));
+  });
+
+  app.post('/admin/min-version', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const result = await notices.setMinVersion(request.body?.version);
+    return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  app.post('/admin/messages', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const result = await notices.addMessage(request.body ?? {}, { now: now() });
+    return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  app.post('/admin/messages/:id/toggle', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const result = MESSAGE_ID_PATTERN.test(request.params.id)
+      ? await notices.toggleMessage(request.params.id)
+      : { error: 'not_found' };
+    return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  app.post('/admin/messages/:id/delete', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const result = MESSAGE_ID_PATTERN.test(request.params.id)
+      ? await notices.removeMessage(request.params.id)
+      : { error: 'not_found' };
+    return backToAdmin(reply, result.error ?? 'saved');
+  });
+
   return { app, warm };
+}
+
+/** The password from a "Basic" Authorization header, or undefined. */
+function basicPassword(header) {
+  const match = /^Basic\s+(.+)$/i.exec(String(header ?? ''));
+  if (!match) return undefined;
+  const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+  const colon = decoded.indexOf(':');
+  return colon === -1 ? undefined : decoded.slice(colon + 1);
 }
 
 /** Reads a single "bytes=start-end" range. Returns undefined for none, 'invalid' for a bad one. */
