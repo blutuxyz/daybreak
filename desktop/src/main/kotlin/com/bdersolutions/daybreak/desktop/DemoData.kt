@@ -18,6 +18,24 @@ import java.time.LocalTime
  * so the real settings and the real login are never touched.
  */
 object DemoData {
+    /**
+     * DAYBREAK_DEMO_UPDATE=1 shows the "Update ready" dialog as if a newer release was downloaded. The
+     * release notes come from the file named by DAYBREAK_DEMO_CHANGELOG (Markdown, like a GitHub release).
+     */
+    private fun simulateUpdateIfRequested(container: DesktopContainer) {
+        if (System.getenv("DAYBREAK_DEMO_UPDATE") != "1") return
+        val changelog = System.getenv("DAYBREAK_DEMO_CHANGELOG")?.let { runCatching { java.io.File(it).readText() }.getOrNull() }
+            ?: "## What's new\n- A pretend release for looking at the update dialog."
+        val release = com.bdersolutions.daybreak.desktop.update.LatestRelease(
+            tag = "v9.9.9",
+            versionName = "9.9.9",
+            versionCode = 90909,
+            changelog = changelog,
+            installer = com.bdersolutions.daybreak.desktop.update.WindowsBuild("https://demo.invalid/setup.exe", "Daybreak-9.9.9-setup.exe", null, null),
+        )
+        container.updater.simulateReady(release, java.io.File("demo-setup.exe"))
+    }
+
     fun seedIfRequested(container: DesktopContainer) {
         if (System.getenv("DAYBREAK_DEMO") != "1") return
         val child = UntisChild(id = 1, firstName = "Max", lastName = "Mustermann", type = "STUDENT")
@@ -34,6 +52,7 @@ object DemoData {
             ),
             child,
         )
+        simulateUpdateIfRequested(container)
         val monday = LocalDate.now().with(DayOfWeek.MONDAY)
         val lessons = mutableListOf<UntisLesson>()
         var id = 1L

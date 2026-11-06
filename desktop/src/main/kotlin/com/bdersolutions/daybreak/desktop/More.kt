@@ -666,7 +666,7 @@ private fun UpdateControls(
                 style = MaterialTheme.typography.titleSmall,
             )
             if (state.release.changelog.isNotBlank()) {
-                Text(state.release.changelog.take(600), style = MaterialTheme.typography.bodySmall)
+                ChangelogView(state.release.changelog, maxHeight = 260.dp)
             }
             Button(onClick = { scope.launch { updater.download(state.release) } }) { Text(tr("Herunterladen", "Download")) }
         }

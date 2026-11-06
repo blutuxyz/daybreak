@@ -288,6 +288,8 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
                 onForward = { nav.forward() },
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
+                // An update on its way (download, ready) shows as a strip above the page.
+                UpdateBanner(container, updateState)
                 // Pages open over the tabs with a slide, and slide back when closed, as on Android. A
                 // change of tab fades through, moving a little in the direction of the new tab.
                 AnimatedContent(

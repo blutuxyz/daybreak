@@ -87,6 +87,18 @@ class DesktopUpdater(
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
+    /** Set by [simulateReady]: real checks and downloads then leave the pretend state alone. */
+    private var simulated = false
+
+    /**
+     * Pretends that [release] is downloaded and checked, so the "Update ready" dialog can be looked at
+     * without a real release. Only the demo mode (DAYBREAK_DEMO_UPDATE) calls it.
+     */
+    fun simulateReady(release: LatestRelease, file: File) {
+        simulated = true
+        _state.value = UpdateState.ReadyToInstall(release, file)
+    }
+
     /**
      * Asks the server for the newest release and says whether it is newer than this build. With
      * [autoDownload] a newer build is downloaded and checked at once, in the background, so it is
@@ -97,7 +109,7 @@ class DesktopUpdater(
             _state.value = UpdateState.Failed("Updates are not configured in this build.")
             return
         }
-        if (_state.value is UpdateState.Downloading) return
+        if (simulated || _state.value is UpdateState.Downloading) return
         _state.value = UpdateState.Checking
         try {
             val release = fetchLatest()
