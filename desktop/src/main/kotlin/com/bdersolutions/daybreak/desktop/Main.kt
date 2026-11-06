@@ -8,6 +8,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.res.loadImageBitmap
+import androidx.compose.ui.res.useResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,6 +65,8 @@ fun main() {
         Window(
             onCloseRequest = ::exitApplication,
             title = "Daybreak",
+            // The taskbar and title bar icon. Without it the window shows the Java cup.
+            icon = BitmapPainter(useResource("daybreak-icon.png", ::loadImageBitmap)),
             state = rememberWindowState(width = 1100.dp, height = 760.dp),
         ) {
             DesktopRoot(container, onQuit = ::exitApplication)

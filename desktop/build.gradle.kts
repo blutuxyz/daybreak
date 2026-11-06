@@ -15,6 +15,11 @@ val daybreakVersionName = (findProperty("daybreak.versionName") as String?)
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+    // Build and package with JDK 17, the version the workflows install and the app targets. The
+    // bundled runtime is made from this JDK, so it matches the Java used everywhere else.
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
 kotlin {
@@ -44,6 +49,11 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.bdersolutions.daybreak.desktop.MainKt"
+        // Compose runs jlink and jpackage with this JDK. Without it the packaging used the JDK 25 that
+        // Gradle downloads for itself, and jlink failed in CI.
+        javaHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }.get().metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi)
@@ -51,9 +61,15 @@ compose.desktop {
             packageVersion = daybreakVersionName
             description = "Daybreak timetable for WebUntis"
             vendor = "BDER Solutions"
+            // Bundle every standard module instead of the reduced set jlink picks. A reduced runtime
+            // is the suspected cause of "Failed to launch JVM" on Windows; not confirmed yet.
+            includeAllModules = true
 
             windows {
                 menuGroup = "Daybreak"
+                // The .exe, the shortcuts and the installer use this icon. Without it jpackage falls
+                // back to the default Java/Kotlin icon.
+                iconFile.set(project.file("packaging/daybreak.ico"))
                 shortcut = true
                 dirChooser = true
                 // Fixed for this product, so a newer MSI upgrades an older install.

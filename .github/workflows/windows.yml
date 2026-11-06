@@ -50,3 +50,13 @@ jobs:
           name: daybreak-windows-test
           path: out/*
           if-no-files-found: error
+
+      # When the build fails, keep the Compose and Gradle logs (for example the jlink error log).
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: daybreak-windows-logs
+          path: |
+            desktop/build/compose/logs
+            desktop/build/reports
+          if-no-files-found: ignore
