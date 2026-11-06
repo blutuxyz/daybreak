@@ -1,0 +1,110 @@
+name: Release Windows app
+
+# Runs when you publish a release on GitHub, next to the Android release (release.yml). The release's
+# tag (v1.2.3) gives the same version as the Android app, so both builds of a release agree. The MSI
+# installer and the portable ZIP are attached to the release, and the update server (update-server/)
+# offers the installer to the desktop app, which downloads it, checks its SHA-256 and installs it.
+#
+# It can also be started by hand (Actions > Release Windows app > Run workflow) for a release that
+# already exists. The build then goes to that release, which saves recreating it.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag of an existing release, for example v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same rules as the Android release: the tag must look like v1.2.3, and minor and patch stay
+      # below 100 because the version code is major*10000 + minor*100 + patch.
+      - name: Read the version from the tag
+        id: version
+        run: |
+          if [[ ! "$TAG" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
+            echo "The tag '$TAG' must look like v1.2.3" >&2
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
+          if [ "$minor" -gt 99 ] || [ "$patch" -gt 99 ]; then
+            echo "Minor and patch must stay below 100: the version code is major*10000 + minor*100 + patch" >&2
+            exit 1
+          fi
+          echo "name=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run the unit tests
+        run: ./gradlew :untis:test :desktop:test --no-daemon
+
+      # The update address is the same one the Android release uses. Without it the desktop app
+      # would not look for updates at all.
+      # jpackage builds the MSI with the WiX Toolset; Compose downloads WiX on first use.
+      - name: Build the MSI installer and the portable ZIP
+        env:
+          UPDATE_API_URL: ${{ vars.UPDATE_API_URL }}
+        run: |
+          ./gradlew :desktop:packageMsi :desktop:portableZip --no-daemon \
+            -Pdaybreak.versionName="${{ steps.version.outputs.name }}" \
+            -Pdaybreak.updateApiUrl="$UPDATE_API_URL"
+
+      # The installer is named Daybreak-<version>.msi; the update server finds it by that name.
+      - name: Collect and check the artifacts
+        run: |
+          mkdir -p out
+          msi="desktop/build/compose/binaries/main/msi/Daybreak-${{ steps.version.outputs.name }}.msi"
+          if [ ! -f "$msi" ]; then
+            echo "The installer was not built as $msi:" >&2
+            ls -la desktop/build/compose/binaries/main/msi >&2 || true
+            exit 1
+          fi
+          cp "$msi" out/
+          cp desktop/build/distributions/*.zip out/
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daybreak-windows-${{ steps.version.outputs.name }}
+          path: out/*
+          if-no-files-found: error
+
+      - name: Attach the builds to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" out/* --clobber --repo "${{ github.repository }}"
+
+      # Optional: tells the update server about the release at once. Without it the server notices
+      # within a few minutes by itself.
+      - name: Tell the update server
+        env:
+          UPDATE_SERVER_URL: ${{ vars.UPDATE_API_URL }}
+          REFRESH_TOKEN: ${{ secrets.UPDATE_SERVER_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$UPDATE_SERVER_URL" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "Skipping: UPDATE_API_URL or UPDATE_SERVER_REFRESH_TOKEN is not set."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 120 -X POST \
+            -H "Authorization: Bearer $REFRESH_TOKEN" \
+            "${UPDATE_SERVER_URL%/}/v1/refresh" || echo "The update server could not be reached; it will catch up by itself."

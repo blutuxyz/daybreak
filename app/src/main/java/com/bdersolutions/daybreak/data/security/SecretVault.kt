@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.bdersolutions.daybreak.platform.SecretStore
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -15,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * generated and kept inside the Android Keystore. The ciphertext lives in private
  * SharedPreferences; the key material never leaves the Keystore.
  */
-class SecretVault(context: Context) {
+class SecretVault(context: Context) : SecretStore {
     private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     @Synchronized
@@ -51,16 +52,16 @@ class SecretVault(context: Context) {
     }
 
     @Synchronized
-    fun getStoredSecret(): String? = decrypt(preferences.getString(KEY_SECRET, null))
+    override fun getStoredSecret(): String? = decrypt(preferences.getString(KEY_SECRET, null))
 
     @Synchronized
-    fun storeSecret(secret: String): Boolean {
+    override fun storeSecret(secret: String): Boolean {
         val encrypted = encrypt(secret) ?: return false
         return preferences.edit().putString(KEY_SECRET, encrypted).commit()
     }
 
     @Synchronized
-    fun clear() {
+    override fun clear() {
         preferences.edit().remove(KEY_SECRET).commit()
         runCatching {
             KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS)

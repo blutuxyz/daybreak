@@ -9,8 +9,9 @@ Windows with Git Bash, Gradle wrapper: `./gradlew.bat` (PowerShell: `.\gradlew.b
 - Build debug APK: `./gradlew.bat assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`
 - Install on the running emulator/device: `./gradlew.bat :app:installDebug`
 - All unit tests: `./gradlew.bat testDebugUnitTest`
-- Unit tests of one module: `./gradlew.bat :untis:testDebugUnitTest` or `:app:testDebugUnitTest`
-- Single test class: `./gradlew.bat :untis:testDebugUnitTest --tests "com.bdersolutions.daybreak.untis.TotpTest"`
+- Unit tests of one module: `./gradlew.bat :untis:test` or `:app:testDebugUnitTest`
+- Single test class: `./gradlew.bat :untis:test --tests "com.bdersolutions.daybreak.untis.TotpTest"`
+- Windows desktop app (`:desktop`, Compose Multiplatform): `./gradlew.bat :desktop:run` to start it, `:desktop:packageMsi` for the installer (`desktop/build/compose/binaries/main/msi`), `:desktop:portableZip` for the ZIP (`desktop/build/distributions`). The GitHub workflow `.github/workflows/windows.yml` builds both on `feat/windows-port`.
 - Single method: append `.methodName` to the `--tests` class name (same pattern).
 - Lint: `./gradlew.bat :app:lintDebug` currently **fails** with 22 errors and 67 warnings (report: `app/build/reports/lint-results-debug.html`). Do not pass `--offline` to lint: the lint tool artifact is not cached and the build breaks.
 - Other Gradle runs work with `--offline` once dependencies are cached.

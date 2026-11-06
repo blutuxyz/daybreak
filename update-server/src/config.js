@@ -27,6 +27,11 @@ export function loadConfig(env = process.env) {
     publicUrl: env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/+$/, '') : undefined,
     /** Which release asset is the APK. */
     apkPattern: new RegExp(env.APK_ASSET_PATTERN ?? '\\.apk$', 'i'),
+    /**
+     * Which release asset is the Windows installer. The desktop workflow names it Daybreak-1.2.3.msi
+     * (jpackage uses the packageName and the version); a release without one is served without it.
+     */
+    msiPattern: new RegExp(env.MSI_ASSET_PATTERN ?? '^Daybreak-\\d+\\.\\d+\\.\\d+\\.msi$', 'i'),
     /** How many APK versions to keep on disk. */
     keepApks: Number(env.KEEP_APKS ?? 3),
     /**

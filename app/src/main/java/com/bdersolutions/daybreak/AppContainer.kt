@@ -30,13 +30,21 @@ import com.bdersolutions.daybreak.data.update.UpdateManager
 import com.bdersolutions.daybreak.data.update.UpdateNotificationManager
 import com.bdersolutions.daybreak.data.update.UpdateScheduler
 import com.bdersolutions.daybreak.data.update.UpdateStore
+import com.bdersolutions.daybreak.platform.AtomicTextFile
+import com.bdersolutions.daybreak.platform.SharedPreferencesStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.widget.WidgetUpdater
+import java.io.File
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
-    val settingsRepository = SettingsRepository(appContext)
+    private fun preferences(name: String) =
+        SharedPreferencesStore(appContext.getSharedPreferences(name, Context.MODE_PRIVATE))
+
+    private fun privateFile(name: String) = AtomicTextFile(File(appContext.filesDir, name))
+
+    val settingsRepository = SettingsRepository(preferences(SettingsRepository.PREFS_NAME))
 
     // One haptics engine for the whole app. It reads the settings on every call, so edits apply at once.
     val haptics = Haptics(
@@ -51,10 +59,10 @@ class AppContainer(context: Context) {
     // Confirms a Ko-fi payment through the update server; null (no paid hide) without that address.
     val supportApi: SupportApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { SupportApi(it) }
     val secretVault = SecretVault(appContext)
-    val sessionStore = SessionStore(appContext, secretVault)
+    val sessionStore = SessionStore(preferences(SessionStore.PREFS_NAME), secretVault)
     val rawLogStore = RawLogStore(appContext)
     val untisApi = UntisApi(rawLogStore)
-    val timetableCacheStore = TimetableCacheStore(appContext)
+    val timetableCacheStore = TimetableCacheStore(privateFile(TimetableCacheStore.FILE_NAME))
     val timetableRepository = TimetableRepository(
         cacheStore = timetableCacheStore,
         sessionStore = sessionStore,
@@ -63,7 +71,7 @@ class AppContainer(context: Context) {
     val schoolData = SchoolDataRepository(untisApi, sessionStore)
     val attachmentDownloader = AttachmentDownloader(appContext, schoolData)
     val absenceLessonHistory = AbsenceLessonHistory(
-        store = AbsenceLessonStore(appContext),
+        store = AbsenceLessonStore(privateFile(AbsenceLessonStore.FILE_NAME)),
         timetable = timetableRepository,
         sessionStore = sessionStore,
         api = untisApi,

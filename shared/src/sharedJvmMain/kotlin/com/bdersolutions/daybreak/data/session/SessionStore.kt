@@ -1,10 +1,10 @@
 package com.bdersolutions.daybreak.data.session
 
-import android.content.Context
+import com.bdersolutions.daybreak.platform.KeyValueStore
+import com.bdersolutions.daybreak.platform.SecretStore
 import com.bdersolutions.daybreak.untis.UntisChild
 import com.bdersolutions.daybreak.untis.UntisLoginResult
 import com.bdersolutions.daybreak.untis.UntisSession
-import com.bdersolutions.daybreak.data.security.SecretVault
 import com.google.gson.JsonArray
 import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,13 +30,12 @@ data class SessionCredentials(
 )
 
 /**
- * Persists non-secret profile data and delegates the WebUntis key to [SecretVault].
+ * Persists non-secret profile data and delegates the WebUntis key to [SecretStore].
  */
 class SessionStore(
-    private val context: Context,
-    private val vault: SecretVault,
+    private val preferences: KeyValueStore,
+    private val vault: SecretStore,
 ) {
-    private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val lock = Any()
     private val _session = MutableStateFlow(loadSession())
     val session: StateFlow<DaybreakSession?> = _session.asStateFlow()
@@ -170,7 +169,7 @@ class SessionStore(
         }.getOrDefault(emptyList())
     }
 
-    private companion object {
+    companion object {
         const val PREFS_NAME = "daybreak_session"
         const val KEY_SERVER = "server"
         const val KEY_SCHOOL = "school"

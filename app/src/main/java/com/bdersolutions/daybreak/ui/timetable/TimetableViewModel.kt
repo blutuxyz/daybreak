@@ -144,8 +144,9 @@ class TimetableViewModel(
                 if (result.successCount > 0) {
                     widgetUpdater.update()
                 }
-                if (force && result.error != null) {
-                    _events.tryEmit(result.error)
+                val failure = result.error
+                if (force && failure != null) {
+                    _events.tryEmit(failure)
                 }
             } catch (error: Throwable) {
                 if (force) _events.tryEmit(error)

@@ -1,16 +1,17 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import com.bdersolutions.daybreak.untis.UntisLesson
 import java.time.LocalTime
 
 /** How many lessons are drawn side by side. More than this collapse into a "+N" chip. */
-internal const val MAX_VISIBLE_COLUMNS = 2
+const val MAX_VISIBLE_COLUMNS = 2
 
 /**
  * Lessons that did not fit beside each other, as one run in time. [hidden] are the blocks that are
  * not drawn; [concurrent] is everything that overlaps the run (hidden or not), for the list that the
  * chip opens.
  */
-internal data class TimelineOverflow(
+data class TimelineOverflow(
     val start: LocalTime,
     val end: LocalTime,
     val hidden: List<TimelineBlock>,
@@ -22,7 +23,7 @@ internal data class TimelineOverflow(
  * [overflows] stand for the blocks that were left out, and [all] is every block, for the gaps
  * between lessons.
  */
-internal data class TimelineLayout(
+data class TimelineLayout(
     val all: List<TimelineBlock>,
     val visible: List<TimelineBlock>,
     val overflows: List<TimelineOverflow>,
@@ -33,7 +34,7 @@ internal data class TimelineLayout(
  * the same time, the ones with the highest [priority] are kept (ties go to the earlier one) as long
  * as no moment has more than [maxColumns] of them; the rest are reported as [TimelineOverflow].
  */
-internal fun layoutTimeline(
+fun layoutTimeline(
     blocks: List<TimelineBlock>,
     maxColumns: Int = MAX_VISIBLE_COLUMNS,
     priority: (TimelineBlock) -> Int = { 0 },
@@ -149,3 +150,20 @@ private fun groupOverflows(hidden: List<TimelineBlock>, all: List<TimelineBlock>
     close()
     return overflows
 }
+
+data class TimelineBlock(
+    val lessons: List<UntisLesson>,
+    val start: LocalTime,
+    val end: LocalTime,
+    val column: Int = 0,
+    val columnCount: Int = 1,
+) {
+    val lesson: UntisLesson get() = lessons.first()
+    val isCancelled: Boolean get() = lessons.any { it.isCancelled }
+    val hasRoomChange: Boolean get() = lessons.any { it.hasRoomChange }
+    val hasSubstitution: Boolean get() = lessons.any { it.hasSubstitution }
+    val durationMinutes: Int get() = minutesBetweenLessons(start, end)
+}
+
+private fun minutesBetweenLessons(start: LocalTime, end: LocalTime): Int =
+    java.time.Duration.between(start, end).toMinutes().toInt().coerceAtLeast(0)

@@ -2071,21 +2071,6 @@ private data class FreeGap(
     val end: LocalTime,
 )
 
-internal data class TimelineBlock(
-    val lessons: List<UntisLesson>,
-    val start: LocalTime,
-    val end: LocalTime,
-    val column: Int = 0,
-    val columnCount: Int = 1,
-) {
-    val lesson: UntisLesson get() = lessons.first()
-    val isCancelled: Boolean get() = lessons.any { it.isCancelled }
-    val hasRoomChange: Boolean get() = lessons.any { it.hasRoomChange }
-    val hasSubstitution: Boolean get() = lessons.any { it.hasSubstitution }
-    val durationMinutes: Int get() = minutesBetween(start, end)
-
-}
-
 private fun mergeLessons(lessons: List<UntisLesson>): List<TimelineBlock> {
     if (lessons.isEmpty()) return emptyList()
     val merged = mutableListOf<TimelineBlock>()

@@ -57,7 +57,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Run the unit tests
-        run: ./gradlew :untis:testDebugUnitTest :app:testDebugUnitTest --no-daemon
+        run: ./gradlew :untis:test :app:testDebugUnitTest --no-daemon
 
       - name: Decode the signing key
         env:
