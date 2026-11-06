@@ -25,6 +25,7 @@ import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
+import com.bdersolutions.daybreak.data.schedule.IcsExport
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
 import com.bdersolutions.daybreak.data.settings.SubjectColorMode
 import com.bdersolutions.daybreak.data.settings.TextScale
@@ -276,15 +277,36 @@ class SettingsViewModel(
     /** Supporter extra: the name under the app icon. Ignored without a confirmed payment. */
     fun setAppNamePreset(preset: AppNamePreset) {
         if (!supportStore.paid.value) return
+        // Only stored here. The launcher entry itself is switched by RestartActivity once the app has
+        // exited (and by AppContainer.start() on the next start): switching it while the app is open
+        // makes some phones close it without restarting.
         settingsRepository.setAppNamePreset(preset)
-        launcherNameSwitcher.apply(preset, settingsRepository.current().appIconStyle)
     }
 
     /** Supporter extra: the picture of the app icon (Standard or Classic). Ignored without a payment. */
     fun setAppIconStyle(style: AppIconStyle) {
         if (!supportStore.paid.value) return
         settingsRepository.setAppIconStyle(style)
-        launcherNameSwitcher.apply(settingsRepository.current().appNamePreset, style)
+    }
+
+    /**
+     * Supporter extra: the timetable of this week and the next [weekCount] - 1 as iCalendar text.
+     * Missing weeks are fetched first (fresh ones are not asked again). Fails when nothing could be
+     * loaded; a week that is missing among others is simply left out.
+     */
+    suspend fun buildCalendar(weekCount: Int, labels: IcsExport.Labels): String {
+        check(supportStore.paid.value) { "Calendar export is a supporter extra." }
+        val first = repository.weekStartFor(LocalDate.now())
+        val weeks = (0 until weekCount).map { first.plusWeeks(it.toLong()) }
+        var failure: Throwable? = null
+        for (week in weeks) {
+            failure = repository.ensureWeek(week).error ?: failure
+        }
+        val cache = repository.cache.value
+        val lessons = weeks.flatMap { cache.weeks[it]?.lessons.orEmpty() }
+        if (lessons.isEmpty()) throw failure ?: IllegalStateException("No timetable loaded.")
+        val last = first.plusWeeks(weekCount.toLong()).minusDays(1)
+        return IcsExport.build(lessons, cache.exams, labels, first, last)
     }
 
     /** Supporter extra: the title shown in the app. Ignored without a confirmed payment. */

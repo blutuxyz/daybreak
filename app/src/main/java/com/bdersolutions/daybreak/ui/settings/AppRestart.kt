@@ -3,7 +3,6 @@ package com.bdersolutions.daybreak.ui.settings
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
@@ -19,7 +18,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.bdersolutions.daybreak.MainActivity
+import android.os.Handler
+import android.os.Looper
+import android.os.Process
+import com.bdersolutions.daybreak.DaybreakApplication
+import com.bdersolutions.daybreak.RestartActivity
+import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.R
 import kotlinx.coroutines.delay
 
@@ -56,15 +60,26 @@ internal fun RestartDialog() {
 }
 
 /**
- * Starts the app's screen again from scratch: opens MainActivity in a fresh task and closes the old
- * one, so the title and the new launcher entry are read anew. The process is not ended: the new
- * activity runs in it too, so killing it would close the app again a moment after it opened.
+ * Restarts the whole app. The new launcher name and icon are not switched here but by
+ * [RestartActivity], which runs in its own process after this one has exited: a restart from inside
+ * the process that is being restarted fails on phones that close an app whose launcher entry changes
+ * (seen on Samsung and Xiaomi release builds). This process ends right after handing over.
  */
 private fun restartApp(context: Context) {
-    val intent = Intent(context, MainActivity::class.java)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    val container = (context.applicationContext as DaybreakApplication).container
+    val chosen = container.settingsRepository.current()
+    val paid = container.supportStore.paid.value
+    val intent = RestartActivity.intent(
+        context,
+        AppNaming.effectivePreset(paid, chosen.appNamePreset),
+        AppNaming.effectiveIconStyle(paid, chosen.appIconStyle),
+    )
     context.startActivity(intent)
     var host: Context = context
     while (host is ContextWrapper && host !is Activity) host = host.baseContext
-    (host as? Activity)?.finishAffinity()
+    (host as? Activity)?.finishAndRemoveTask()
+    // Let the system take over the launch, then end this process so the app starts clean.
+    Handler(Looper.getMainLooper()).postDelayed({ Process.killProcess(Process.myPid()) }, EXIT_AFTER_HANDOVER_MS)
 }
+
+private const val EXIT_AFTER_HANDOVER_MS = 250L

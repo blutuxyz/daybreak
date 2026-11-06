@@ -43,10 +43,16 @@ class ServerNoticeStore(context: Context) {
 class ServerNotices(
     private val api: UpdateApi?,
     private val store: ServerNoticeStore,
+    /**
+     * False in debug builds (see `daybreak.debugServerNotices` in app/build.gradle.kts): the server is
+     * never asked and an answer cached earlier is ignored, so a development build is not stopped by
+     * the production minimum version or switched off by a remote switch.
+     */
+    private val enabled: Boolean = true,
 ) {
     private val refreshLock = Mutex()
 
-    private val _status = MutableStateFlow(ServerStatusJson.parse(store.cachedStatusBody()))
+    private val _status = MutableStateFlow(if (enabled) ServerStatusJson.parse(store.cachedStatusBody()) else null)
 
     /** The last known status, or null before the server has ever been asked. */
     val status: StateFlow<ServerStatus?> = _status.asStateFlow()
@@ -56,6 +62,7 @@ class ServerNotices(
 
     /** Asks the server again. An unreachable server or an unusable answer keeps the old status. */
     suspend fun refresh() {
+        if (!enabled) return
         val api = api ?: return
         refreshLock.withLock {
             val body = try {

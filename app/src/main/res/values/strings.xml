@@ -7,6 +7,7 @@
     <string name="launcher_name_plan" translatable="false">Plan</string>
     <string name="launcher_name_kalender" translatable="false">Kalender</string>
     <string name="launcher_name_timetable" translatable="false">Timetable</string>
+    <string name="launcher_name_von_user_fuer_user" translatable="false">Von User für User</string>
 
     <string name="nav_timetable">Stundenplan</string>
     <string name="nav_settings">Mehr</string>
@@ -26,6 +27,7 @@
 
     <string name="error_network">Keine Verbindung zu WebUntis. Die zuletzt gespeicherten Daten bleiben verfügbar.</string>
     <string name="error_auth">Anmeldung fehlgeschlagen. Prüfe Server, Schule, Benutzername und Schlüssel.</string>
+    <string name="error_no_permission">Deine Schule erlaubt diese Ansicht oder Funktion für Schülerinnen und Schüler nicht. Das ist eine Einstellung deiner Schule in WebUntis, kein Fehler der App.</string>
     <string name="error_second_factor">Für dieses Konto ist ein zweiter Faktor erforderlich.</string>
     <string name="error_no_student">Mit diesem Konto ist keine Schülerin und kein Schüler verknüpft.</string>
     <string name="error_parse">WebUntis hat eine unerwartete Antwort geliefert.</string>
@@ -134,6 +136,21 @@
     <string name="app_name_phone_hint">So heißt die App unter ihrem Symbol auf dem Startbildschirm. Es kann einen Moment dauern, bis dein Handy den neuen Namen zeigt. Beliebiger Text ist hier nicht möglich, Android erlaubt nur diese Namen.</string>
     <string name="app_name_inapp_title">Name in der App</string>
     <string name="app_name_restart">Änderungen werden übernommen …</string>
+    <string name="settings_calendar_export">Kalender-Export</string>
+    <string name="settings_calendar_export_desc">Stundenplan als Kalenderdatei (.ics)</string>
+    <string name="calendar_export_intro">Dein Stundenplan als Kalenderdatei: Stunden, Räume, Lehrkräfte und Prüfungen. Entfallene Stunden werden nicht eingetragen, Doppelstunden sind ein Termin. Die Datei entsteht auf deinem Handy und wird nirgends hingeschickt.</string>
+    <string name="calendar_export_range">Zeitraum</string>
+    <string name="calendar_export_this_week">Diese Woche</string>
+    <string name="calendar_export_four_weeks">Die nächsten 4 Wochen</string>
+    <string name="calendar_export_eight_weeks">Die nächsten 8 Wochen</string>
+    <string name="calendar_export_open">In Kalender-App öffnen</string>
+    <string name="calendar_export_share">Teilen oder speichern</string>
+    <string name="calendar_export_hint">Ändert sich dein Stundenplan später, exportiere ihn einfach noch einmal. Bereits importierte Termine werden dabei ersetzt, wenn deine Kalender-App das unterstützt.</string>
+    <string name="calendar_export_no_app">Keine App gefunden, die Kalenderdateien öffnen kann. Nutze „Teilen oder speichern“.</string>
+    <string name="calendar_export_exam">Prüfung</string>
+    <string name="calendar_export_teacher">Lehrkraft</string>
+    <string name="calendar_export_class">Klasse</string>
+    <string name="calendar_export_substituted">Vertretung oder Änderung</string>
     <string name="settings_app_icon">App-Symbol</string>
     <string name="settings_app_icon_desc">Sechs Symbole zur Auswahl</string>
     <string name="icon_style_standard">Standard</string>

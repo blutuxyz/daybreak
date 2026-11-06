@@ -129,12 +129,14 @@ data class AbsenceTotals(
     val unexcused: Duration get() = total.minus(excused)
 }
 
-fun absenceTotals(absences: List<UntisAbsence>): AbsenceTotals {
+/** [windows] clips each absence to the school days' first and last lesson, see [countedDuration]. */
+fun absenceTotals(absences: List<UntisAbsence>, windows: SchoolDayWindows? = null): AbsenceTotals {
     var total = Duration.ZERO
     var excused = Duration.ZERO
     for (absence in absences) {
-        total = total.plus(absence.duration)
-        if (absence.excused) excused = excused.plus(absence.duration)
+        val counted = absence.countedDuration(windows)
+        total = total.plus(counted)
+        if (absence.excused) excused = excused.plus(counted)
     }
     return AbsenceTotals(total, excused)
 }

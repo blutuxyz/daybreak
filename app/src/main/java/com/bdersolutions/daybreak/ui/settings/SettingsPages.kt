@@ -96,6 +96,7 @@ enum class SettingsPage {
     HAPTICS,
     APP_NAME,
     APP_ICON,
+    CALENDAR_EXPORT,
     UPDATES,
     ABOUT,
     LEGAL,
@@ -118,6 +119,7 @@ fun SettingsPageHost(
         SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
         SettingsPage.APP_NAME -> AppNameScreen(viewModel, onBack)
         SettingsPage.APP_ICON -> AppIconScreen(viewModel, onBack)
+        SettingsPage.CALENDAR_EXPORT -> CalendarExportScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
         SettingsPage.LEGAL -> LegalScreen(onBack = onBack)

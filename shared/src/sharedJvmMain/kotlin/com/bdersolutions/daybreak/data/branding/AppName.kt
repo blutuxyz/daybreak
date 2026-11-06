@@ -14,6 +14,7 @@ enum class AppNamePreset(val displayName: String, val aliasName: String) {
     PLAN("Plan", "AliasPlan"),
     KALENDER("Kalender", "AliasKalender"),
     TIMETABLE("Timetable", "AliasTimetable"),
+    VON_USER_FUER_USER("Von User für User", "AliasVonUserFuerUser"),
     ;
 
     companion object {

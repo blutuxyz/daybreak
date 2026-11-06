@@ -126,14 +126,35 @@ class DesktopTermsStore(private val prefs: KeyValueStore) {
     }
 }
 
-/** The version of the privacy policy and terms of use. Mirrors `LegalTerms.VERSION` in the Android app. */
-const val LEGAL_VERSION = 5
+/**
+ * The version of the privacy policy and terms of use of the desktop app. It follows the Android
+ * app's `LegalTerms.VERSION` in spirit, but the desktop texts are versioned on their own: raise it
+ * whenever the meaning of the desktop texts (AppStrings `legal_*`) changes. 6: the desktop app now has
+ * the same supporter extras as Android, so a payment is checked with the update server.
+ */
+const val LEGAL_VERSION = 6
 
 /**
- * The support popup's counters, in a properties file. Donating unlocks nothing on the desktop app, so
- * there is no paid state: the popup stops only when the person chooses "Don't ask again".
+ * The support popup's counters, in a properties file, and whether a Ko-fi payment was confirmed. As
+ * on Android, a confirmed payment unlocks the supporter extras and stops the popup for good; the
+ * unlock code the person writes into the Ko-fi message is random and made on first use.
  */
 class DesktopSupportStore(private val prefs: KeyValueStore) {
+    private val _paid = MutableStateFlow(prefs.getBoolean(KEY_PAID, false))
+
+    /** True once the update server confirmed a payment for this computer's unlock code. */
+    val paid: StateFlow<Boolean> = _paid.asStateFlow()
+
+    /** This computer's unlock code. It is made on first use and then stays the same. */
+    fun unlockCode(): String {
+        prefs.getString(KEY_UNLOCK_CODE, null)?.takeIf { SupportCode.isValid(it) }?.let { return it }
+        val code = SupportCode.generate()
+        prefs.edit().putString(KEY_UNLOCK_CODE, code).commit()
+        return code
+    }
+
+    fun markPaid(): SupportState = update { SupportPromptPolicy.afterPaid(it) }
+
     fun state(): SupportState = SupportState(
         firstSeenDay = prefs.getLong(KEY_FIRST_SEEN, SupportState.NEVER),
         openDays = prefs.getInt(KEY_OPEN_DAYS, 0),
@@ -141,7 +162,7 @@ class DesktopSupportStore(private val prefs: KeyValueStore) {
         shownCount = prefs.getInt(KEY_SHOWN_COUNT, 0),
         lastShownDay = prefs.getLong(KEY_LAST_SHOWN, SupportState.NEVER),
         optedOut = prefs.getBoolean(KEY_OPTED_OUT, false),
-        paid = false,
+        paid = prefs.getBoolean(KEY_PAID, false),
     )
 
     fun recordOpen(today: Long): SupportState = update { SupportPromptPolicy.afterOpen(it, today) }
@@ -159,7 +180,9 @@ class DesktopSupportStore(private val prefs: KeyValueStore) {
             .putInt(KEY_SHOWN_COUNT, next.shownCount)
             .putLong(KEY_LAST_SHOWN, next.lastShownDay)
             .putBoolean(KEY_OPTED_OUT, next.optedOut)
+            .putBoolean(KEY_PAID, next.paid)
             .commit()
+        _paid.value = next.paid
         return next
     }
 
@@ -170,6 +193,8 @@ class DesktopSupportStore(private val prefs: KeyValueStore) {
         const val KEY_SHOWN_COUNT = "shown_count"
         const val KEY_LAST_SHOWN = "last_shown_day"
         const val KEY_OPTED_OUT = "opted_out"
+        const val KEY_PAID = "paid"
+        const val KEY_UNLOCK_CODE = "unlock_code"
     }
 }
 

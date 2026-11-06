@@ -13,6 +13,16 @@ class UntisAuthException(
     cause: Throwable? = null,
 ) : UntisException(message, cause)
 
+/**
+ * The school does not let this account use a view or a function (for example the timetables of
+ * teachers and rooms, or messages, which many schools switch off for students). The sign-in is fine;
+ * the screens say so instead of "sign-in failed".
+ */
+class UntisPermissionException(
+    message: String,
+    val apiCode: Int? = null,
+) : UntisException(message)
+
 class UntisNetworkException(message: String, cause: Throwable? = null) : UntisException(message, cause)
 
 class UntisProtocolException(

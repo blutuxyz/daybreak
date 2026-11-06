@@ -20,6 +20,7 @@
 
     <string name="error_network">Could not reach WebUntis. Your last synced data is still available.</string>
     <string name="error_auth">Sign-in failed. Check the server, school, username and key.</string>
+    <string name="error_no_permission">Your school does not allow students to use this view or function. It is a setting of your school in WebUntis, not a problem with the app.</string>
     <string name="error_second_factor">This account requires a second factor.</string>
     <string name="error_no_student">No student is linked to this account.</string>
     <string name="error_parse">WebUntis returned an unexpected response.</string>
@@ -128,6 +129,21 @@
     <string name="app_name_phone_hint">This is how the app is named under its icon on your home screen. It can take a moment for your phone to show the new name. Free text is not possible here: Android only allows these names.</string>
     <string name="app_name_inapp_title">Name in the app</string>
     <string name="app_name_restart">Applying changes…</string>
+    <string name="settings_calendar_export">Calendar export</string>
+    <string name="settings_calendar_export_desc">Timetable as a calendar file (.ics)</string>
+    <string name="calendar_export_intro">Your timetable as a calendar file: lessons, rooms, teachers and exams. Cancelled lessons are left out and a double lesson is one entry. The file is made on your phone and is not sent anywhere.</string>
+    <string name="calendar_export_range">Period</string>
+    <string name="calendar_export_this_week">This week</string>
+    <string name="calendar_export_four_weeks">The next 4 weeks</string>
+    <string name="calendar_export_eight_weeks">The next 8 weeks</string>
+    <string name="calendar_export_open">Open in a calendar app</string>
+    <string name="calendar_export_share">Share or save</string>
+    <string name="calendar_export_hint">If your timetable changes later, just export it again. Entries you imported before are replaced when your calendar app supports that.</string>
+    <string name="calendar_export_no_app">No app found that opens calendar files. Use “Share or save”.</string>
+    <string name="calendar_export_exam">Exam</string>
+    <string name="calendar_export_teacher">Teacher</string>
+    <string name="calendar_export_class">Class</string>
+    <string name="calendar_export_substituted">Substitution or change</string>
     <string name="settings_app_icon">App icon</string>
     <string name="settings_app_icon_desc">Six icons to choose from</string>
     <string name="icon_style_standard">Standard</string>

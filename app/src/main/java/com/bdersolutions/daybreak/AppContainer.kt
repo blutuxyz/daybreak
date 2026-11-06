@@ -91,7 +91,12 @@ class AppContainer(context: Context) {
 
     // The minimum app version and the messages (the same server). A too old app is stopped at the
     // "update required" screen; messages are shown once in a pop-up.
-    val serverNotices = ServerNotices(api = updateApi, store = ServerNoticeStore(appContext))
+    // Debug builds skip it entirely (BuildConfig.SERVER_NOTICES), so a dev build is never blocked.
+    val serverNotices = ServerNotices(
+        api = updateApi,
+        store = ServerNoticeStore(appContext),
+        enabled = BuildConfig.SERVER_NOTICES,
+    )
     val updateNotificationManager = UpdateNotificationManager(appContext, settingsRepository)
     val updateScheduler = UpdateScheduler(appContext)
 

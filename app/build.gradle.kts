@@ -34,6 +34,7 @@ android {
         versionCode = daybreakVersionCode
         versionName = daybreakVersionName
         buildConfigField("String", "UPDATE_API_URL", "\"$daybreakUpdateApiUrl\"")
+        buildConfigField("boolean", "SERVER_NOTICES", "true")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -49,6 +50,13 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Development builds do not ask the update server for the minimum version, messages or
+            // remote switches (the production minimum would block the emulator). Opt back in with
+            // -Pdaybreak.debugServerNotices=true. Updates and the Ko-fi check still use the server.
+            val serverNotices = (findProperty("daybreak.debugServerNotices") as String?)?.trim() == "true"
+            buildConfigField("boolean", "SERVER_NOTICES", serverNotices.toString())
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             optimization {

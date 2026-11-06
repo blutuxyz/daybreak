@@ -180,16 +180,20 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
     // Own timetable: the shared repository caches each week. The visible week first, then its neighbours.
     LaunchedEffect(activeWeek, reloadKey) {
         if (target != null) return@LaunchedEffect
+        // Flipping through weeks (holding an arrow key) must not start a request for every week it
+        // passes: wait a moment, and only for weeks that are not cached yet. The next change of the
+        // week cancels this effect, which is normal and never shown as an error.
+        if (repository.cache.value.weeks[activeWeek] == null) delay(250)
         try {
             error = repository.ensureWeek(activeWeek, force = reloadKey > 0).error?.let {
-                it.message ?: trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable.")
+                it.userMessage(language, trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable."))
             }
             repository.ensureWeek(activeWeek.plusWeeks(1))
             repository.ensureWeek(activeWeek.minusWeeks(1))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable.")
+            error = e.userMessage(language, trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable."))
         }
     }
 
@@ -206,7 +210,7 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
                 throw e
             } catch (e: Exception) {
                 if (weekStart == activeWeek) {
-                    error = e.message ?: trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable.")
+                    error = e.userMessage(language, trFor(language, "Stundenplan konnte nicht geladen werden.", "Could not load the timetable."))
                 }
             }
         }
@@ -233,7 +237,8 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
     val dayStatus: DayStatus = remember(lessonsByDate, now) {
         NowAndNext.compute(lessonsByDate[today].orEmpty(), now)
     }
-    val title = settings.customAppName.ifBlank { "Daybreak" }
+    val paid by container.supportStore.paid.collectAsState()
+    val title = appTitle(paid, settings.customAppName)
     val targetName = target?.displayName ?: session(container)
     val subtitle = trFor(language, "KW $weekNumber · $targetName", "CW $weekNumber · $targetName")
 
@@ -242,9 +247,9 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
         if (showChooser || opened != null) return
         scope.launch {
             if (week) {
-                weekPager.animateScrollToPage((weekPager.currentPage + delta).coerceIn(0, WEEK_PAGE_COUNT - 1))
+                weekPager.animateScrollToPage((weekPager.targetPage + delta).coerceIn(0, WEEK_PAGE_COUNT - 1))
             } else {
-                dayPager.animateScrollToPage((dayPager.currentPage + delta).coerceIn(0, DAY_PAGE_COUNT - 1))
+                dayPager.animateScrollToPage((dayPager.targetPage + delta).coerceIn(0, DAY_PAGE_COUNT - 1))
             }
         }
     }
@@ -320,6 +325,17 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
                 ModePill(tr("Tag", "Day"), selected = !week, modifier = Modifier.widthIn(min = 120.dp, max = 180.dp).weight(1f, fill = false)) { week = false }
                 ModePill(tr("Woche", "Week"), selected = week, modifier = Modifier.widthIn(min = 120.dp, max = 180.dp).weight(1f, fill = false)) { week = true }
                 Spacer(Modifier.weight(1f))
+                // Previous and next day or week, for people who do not use the arrow keys.
+                StepButton(
+                    forward = false,
+                    description = if (week) tr("Vorherige Woche", "Previous week") else tr("Vorheriger Tag", "Previous day"),
+                    onClick = { move(-1) },
+                )
+                StepButton(
+                    forward = true,
+                    description = if (week) tr("Nächste Woche", "Next week") else tr("Nächster Tag", "Next day"),
+                    onClick = { move(1) },
+                )
                 AnimatedVisibility(
                     visible = !isOnToday,
                     enter = fadeIn(DesktopMotion.effects()) + scaleIn(DesktopMotion.spatial(), initialScale = 0.8f),
@@ -441,6 +457,17 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
                 onClose = close,
             )
         }
+    }
+}
+
+/** A round arrow button that moves the day or week pager one step. */
+@Composable
+private fun StepButton(forward: Boolean, description: String, onClick: () -> Unit) {
+    androidx.compose.material3.FilledTonalIconButton(onClick = onClick, modifier = Modifier.size(44.dp).handCursor()) {
+        Icon(
+            if (forward) Icons.AutoMirrored.Outlined.ArrowForward else Icons.AutoMirrored.Outlined.ArrowBack,
+            contentDescription = description,
+        )
     }
 }
 

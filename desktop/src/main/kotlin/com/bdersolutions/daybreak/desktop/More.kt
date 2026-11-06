@@ -51,6 +51,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,6 +93,9 @@ fun MoreScreen(
     val settings by container.settings.settings.collectAsState()
     val language = LocalLanguage.current
     val debugUnlocked by container.debugUnlock.unlocked.collectAsState()
+    val paid by container.supportStore.paid.collectAsState()
+    // The dialog that unlocks the extras or hides the Ko-fi button; the text says what paying does.
+    var supportNote by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
     ) {
@@ -99,8 +105,31 @@ fun MoreScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ProfileHeader(session)
-            // The Ko-fi button stays: donating unlocks nothing on the desktop, so it is never hidden.
-            KofiButton(onClick = { openSupportPage() })
+            // The Ko-fi button hides once a payment is confirmed. Hiding it is paid, as on Android, and
+            // needs the update server to confirm; builds without one keep the button.
+            if (!paid) {
+                KofiButton(onClick = { openSupportPage() })
+                if (container.supportApi != null) {
+                    TextButton(
+                        onClick = { supportNote = trFor(language, "Dieser Button verschwindet, sobald du auf Ko-fi zahlst.", "This button hides when you pay on Ko-fi.") },
+                        modifier = Modifier.align(Alignment.CenterHorizontally).handCursor(),
+                    ) {
+                        Text(str("settings_support_hide"), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+            // The extras need the update server to confirm a payment, so builds without one hide the card.
+            if (container.supportApi != null || paid) {
+                SupporterExtras(
+                    paid = paid,
+                    currentTitle = appTitle(paid, settings.customAppName),
+                    onOpenAppName = { onOpen(SubRoute.APP_NAME) },
+                    onOpenCalendarExport = { onOpen(SubRoute.CALENDAR_EXPORT) },
+                    onLocked = {
+                        supportNote = trFor(language, "Dieses Extra wird freigeschaltet, sobald du auf Ko-fi zahlst.", "This extra unlocks when you pay on Ko-fi.")
+                    },
+                )
+            }
             SectionLabel(tr("Mein Profil", "My profile"))
             ListCard {
                 SettingsRow(
@@ -206,6 +235,14 @@ fun MoreScreen(
             // Log out asks first, inside the card, as on Android.
             LogoutCard(onConfirm = onLogout)
         }
+    }
+    supportNote?.let { note ->
+        HideSupportButtonDialog(
+            unlockCode = container.supportStore.unlockCode(),
+            note = note,
+            onDismiss = { supportNote = null },
+            onCheckPayment = { checkSupportPayment(container) },
+        )
     }
 }
 
@@ -530,6 +567,8 @@ fun SyncSettings(container: DesktopContainer) {
                         container.settings.setSyncInterval(it)
                     }
                 }
+                HorizontalDivider()
+                ManualSync(container)
             }
             ListCard {
                 SettingBlock(
@@ -546,6 +585,49 @@ fun SyncSettings(container: DesktopContainer) {
                 }
             }
         }
+    }
+}
+
+/** "Sync now" with the time of the last sync, as the Android sync page has it. */
+@Composable
+private fun ManualSync(container: DesktopContainer) {
+    val language = LocalLanguage.current
+    val scope = rememberCoroutineScope()
+    val status by container.timetable.status.collectAsState()
+    var message by remember { mutableStateOf<String?>(null) }
+    val last = status.lastSyncAt?.let {
+        java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+    }
+    SettingBlock(
+        Icons.Outlined.Sync,
+        tr("Jetzt synchronisieren", "Sync now"),
+        if (last != null) {
+            trFor(language, "Zuletzt: $last", "Last: $last")
+        } else {
+            trFor(language, "Noch nicht synchronisiert", "Not synced yet")
+        },
+    ) {
+        OutlinedButton(
+            onClick = {
+                if (status.isLoading) return@OutlinedButton
+                message = null
+                scope.launch {
+                    try {
+                        syncTimetableOnce(container, container.settings.current())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        message = e.userMessage(language, trFor(language, "Synchronisierung fehlgeschlagen.", "Sync failed."))
+                    }
+                }
+            },
+            enabled = !status.isLoading,
+            modifier = Modifier.handCursor(),
+        ) {
+            Text(if (status.isLoading) tr("Synchronisiere …", "Syncing …") else tr("Jetzt synchronisieren", "Sync now"))
+        }
+        message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
