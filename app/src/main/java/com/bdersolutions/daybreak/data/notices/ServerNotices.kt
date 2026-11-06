@@ -46,7 +46,32 @@ data class ServerStatus(
     val minVersionName: String?,
     val minVersionCode: Long?,
     val messages: List<ServerMessage>,
+    val switches: RemoteSwitches = RemoteSwitches(),
 )
+
+/**
+ * The developer's switches, read from the server on every start. A switch that is off turns its part
+ * of the app off for everyone without a new release. Everything is on until the server says otherwise.
+ */
+data class RemoteSwitches(
+    /** The whole in-app update feature: checks, notifications, the update screen and the gate. */
+    val updates: Boolean = true,
+    /** Only the required-version gate. */
+    val requiredVersion: Boolean = true,
+    /** The message pop-ups. */
+    val messages: Boolean = true,
+    /** Single features that are turned off; the ids are in [RemoteFeatures]. */
+    val disabledFeatures: Set<String> = emptySet(),
+) {
+    fun featureOn(id: String): Boolean = id !in disabledFeatures
+}
+
+/** The ids of single app features the server can turn off. The app checks each one where it starts. */
+object RemoteFeatures {
+    const val MESSAGES_SEND = "messages.send"
+    const val SUPPORT_POPUP = "support.popup"
+    const val REMINDERS = "reminders"
+}
 
 /** Reads the server's status answer. Tolerant: a broken message is skipped, a broken answer is null. */
 object ServerStatusJson {
@@ -59,12 +84,31 @@ object ServerStatusJson {
                 minVersionName = root.string("minVersionName") ?: code?.let { versionNameOf(it) },
                 minVersionCode = code,
                 messages = root.array("messages").mapNotNull { (it as? JsonObject)?.let { obj -> messageFrom(obj) } },
+                switches = switchesFrom(root),
             )
         }.getOrNull()
     }
 
     /** 10203 becomes "1.2.3", the same formula as the server and the release workflow. */
     fun versionNameOf(code: Long): String = "${code / 10_000}.${(code / 100) % 100}.${code % 100}"
+
+    private fun switchesFrom(root: JsonObject): RemoteSwitches {
+        val switches = (root.get("switches") as? JsonObject) ?: JsonObject()
+        val disabled = root.array("disabledFeatures")
+            .mapNotNull { element -> element.takeIf { it.isJsonPrimitive }?.asString }
+            .toSet()
+        return RemoteSwitches(
+            updates = switches.bool("updates"),
+            requiredVersion = switches.bool("requiredVersion"),
+            messages = switches.bool("messages"),
+            disabledFeatures = disabled,
+        )
+    }
+
+    private fun JsonObject.bool(name: String): Boolean {
+        val value = get(name)
+        return if (value != null && value.isJsonPrimitive && value.asJsonPrimitive.isBoolean) value.asBoolean else true
+    }
 
     private fun messageFrom(obj: JsonObject): ServerMessage? {
         val id = obj.string("id") ?: return null
@@ -93,9 +137,17 @@ object ServerStatusJson {
 
 /** Decides whether the installed app is too old to be used. */
 object UpdateGate {
-    /** True when the installed version is older than the minimum the server requires. */
-    fun isRequired(installedVersionCode: Long, requiredVersionCode: Long?): Boolean =
-        requiredVersionCode != null && installedVersionCode < requiredVersionCode
+    /**
+     * True when the installed version is older than the minimum the server requires. Switching off the
+     * updates or the required version in [switches] lifts the gate at once.
+     */
+    fun isRequired(
+        installedVersionCode: Long,
+        requiredVersionCode: Long?,
+        switches: RemoteSwitches = RemoteSwitches(),
+    ): Boolean =
+        switches.updates && switches.requiredVersion &&
+            requiredVersionCode != null && installedVersionCode < requiredVersionCode
 }
 
 /** Chooses the messages to show: not dismissed, not over, the most serious first. */

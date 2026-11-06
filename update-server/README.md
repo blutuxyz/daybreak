@@ -50,8 +50,23 @@ The same server can tell every app two things. Both are set on the admin page, `
   when it opens, and remembers the "OK". There is no editing: a new text is a new message, which is shown
   again on every phone. "Hide" keeps a message without deleting it.
 
-The app reads `GET /v1/status`, which returns `{ minVersionName, minVersionCode, messages: [...] }` with only
-the messages that are switched on and not over yet. It sends nothing except the request itself.
+The app reads `GET /v1/status`, which returns `{ minVersionName, minVersionCode, switches, disabledFeatures, messages }`
+with only the messages that are switched on and not over yet. It sends nothing except the request itself.
+
+### Switches: turn features off without a release
+
+The admin page also has **switches**. The app reads them on every start, and when it comes back to the front
+(and the background update check reads them too), so a switch takes effect on phones without an update.
+
+| Switch | Off means |
+| --- | --- |
+| In-app updates | No update checks (background or manual), no update notifications, no "What's new", no Updates row, and no required-version gate. Use it when the update feature itself is buggy. |
+| Minimum app version | Only the gate is lifted; update checks and notifications keep working. |
+| Messages | No pop-ups from the messages list. |
+| Single features (`messages.send`, `support.popup`, `reminders`) | That feature is hidden or stopped in the app. |
+
+Everything is on until the server says otherwise, and an app that has never reached the server behaves as before.
+The app keeps the last answer, so a switch that is off also stays off while the phone is offline.
 
 Without `ADMIN_TOKEN` the admin page and its POST routes are not there. Writes are refused when the browser
 sends an `Origin` from another site, and the admin page allows 60 requests per minute per address. Store the

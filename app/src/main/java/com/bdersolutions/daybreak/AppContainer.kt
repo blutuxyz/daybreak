@@ -102,6 +102,7 @@ class AppContainer(context: Context) {
         timetable = timetableRepository,
         sessionStore = sessionStore,
         store = reminderStore,
+        serverNotices = serverNotices,
     )
 
     fun start() {
@@ -119,7 +120,8 @@ class AppContainer(context: Context) {
         }
         if (updateManager.isConfigured) {
             updateNotificationManager.ensureChannel()
-            updateScheduler.schedule(settingsRepository.current().autoCheckUpdates)
+            val settings = settingsRepository.current()
+            updateScheduler.schedule(settings.autoCheckUpdates, settings.updateCheckHours)
         }
     }
 }

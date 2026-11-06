@@ -21,7 +21,7 @@ import { isSafeTag } from './version.js';
  *                           KOFI_VERIFICATION_TOKEN)
  *   GET  /v1/support/status ?code=DB-XXXX-XXXX  { paid } whether that unlock code was paid for
  *   GET  /v1/status         the minimum app version and the messages for the app (announcements.js)
- *   GET  /admin             the admin page, behind ADMIN_TOKEN: minimum version and messages
+ *   GET  /admin             the admin page, behind ADMIN_TOKEN: minimum version, switches and messages
  */
 export function buildServer({
   config,
@@ -295,6 +295,12 @@ export function buildServer({
   app.post('/admin/min-version', async (request, reply) => {
     if (!guardAdmin(request, reply, { write: true })) return reply;
     const result = await notices.setMinVersion(request.body?.version);
+    return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  app.post('/admin/switches', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const result = await notices.setSwitches(request.body ?? {});
     return backToAdmin(reply, result.error ?? 'saved');
   });
 

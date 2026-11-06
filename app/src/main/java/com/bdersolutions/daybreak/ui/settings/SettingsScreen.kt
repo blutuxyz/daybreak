@@ -384,7 +384,7 @@ fun SettingsScreen(
                         )
                         SettingsDivider()
                     }
-                    if (viewModel.updatesConfigured) {
+                    if (viewModel.updatesConfigured && viewModel.updatesEnabled) {
                         NavigationRow(
                             icon = Icons.Outlined.SystemUpdate,
                             title = stringResource(R.string.settings_updates),

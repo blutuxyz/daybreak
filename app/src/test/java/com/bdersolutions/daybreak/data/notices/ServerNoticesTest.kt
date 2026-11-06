@@ -98,4 +98,39 @@ class ServerNoticesTest {
         assertEquals("Deutsch", both.textFor(german = true))
         assertEquals("English", both.textFor(german = false))
     }
+
+    @Test
+    fun switchesAreOnUnlessTheServerTurnsThemOff() {
+        val none = ServerStatusJson.parse("""{"messages":[]}""")!!.switches
+
+        assertEquals(RemoteSwitches(), none)
+        assertTrue(none.featureOn(RemoteFeatures.REMINDERS))
+    }
+
+    @Test
+    fun theServerCanTurnOffTheUpdateFeatureAndSingleFeatures() {
+        val status = ServerStatusJson.parse(
+            """
+            {"switches":{"updates":false,"requiredVersion":true,"messages":false},
+             "disabledFeatures":["reminders","made.up"]}
+            """.trimIndent(),
+        )!!
+
+        assertFalse(status.switches.updates)
+        assertTrue(status.switches.requiredVersion)
+        assertFalse(status.switches.messages)
+        assertFalse(status.switches.featureOn(RemoteFeatures.REMINDERS))
+        assertTrue(status.switches.featureOn(RemoteFeatures.MESSAGES_SEND))
+    }
+
+    @Test
+    fun turningOffUpdatesOrTheRequiredVersionLiftsTheGate() {
+        val required = 10200L
+        val updatesOff = RemoteSwitches(updates = false)
+        val requirementOff = RemoteSwitches(requiredVersion = false)
+
+        assertTrue(UpdateGate.isRequired(10100, required, RemoteSwitches()))
+        assertFalse(UpdateGate.isRequired(10100, required, updatesOff))
+        assertFalse(UpdateGate.isRequired(10100, required, requirementOff))
+    }
 }

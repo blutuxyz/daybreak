@@ -82,6 +82,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
+import com.bdersolutions.daybreak.data.notices.RemoteFeatures
+import com.bdersolutions.daybreak.data.notices.RemoteSwitches
 import com.bdersolutions.daybreak.data.notices.UpdateGate
 import com.bdersolutions.daybreak.ui.notices.ServerMessageDialog
 import com.bdersolutions.daybreak.ui.update.UpdateRequiredRoute
@@ -146,9 +148,12 @@ fun DaybreakApp(
     val appTitle = AppNaming.resolve(supportPaid, settings.appNamePreset, settings.customAppName)
     // The minimum version comes from the last answer of the update server, so it also holds offline.
     val serverStatus by container.serverNotices.status.collectAsStateWithLifecycle()
+    // The developer's switches (see RemoteSwitches): each one can turn a part of the app off remotely.
+    val remote = serverStatus?.switches ?: RemoteSwitches()
     val updateRequired = container.updateManager.isConfigured && UpdateGate.isRequired(
         installedVersionCode = container.updateManager.currentVersionCode,
         requiredVersionCode = serverStatus?.minVersionCode,
+        switches = remote,
     )
     val stage = when {
         !termsAccepted -> AppStage.TERMS
@@ -200,7 +205,7 @@ fun DaybreakApp(
                     )
                 }
             }
-            if (stage == AppStage.APP) ServerMessageDialog(notices = container.serverNotices)
+            if (stage == AppStage.APP && remote.messages) ServerMessageDialog(notices = container.serverNotices)
         }
     }
 }
@@ -304,9 +309,9 @@ private fun LoggedInContent(
     var whatsNew by remember { mutableStateOf<ReleaseInfo?>(null) }
     LaunchedEffect(Unit) {
         val updates = container.updateManager
-        if (!updates.isConfigured) return@LaunchedEffect
+        if (!updates.isConfigured || !container.serverNotices.switches.updates) return@LaunchedEffect
         whatsNew = updates.whatsNew()
-        if (settings.autoCheckUpdates && updates.isCheckDue()) updates.check()
+        if (settings.autoCheckUpdates && updates.isCheckDue(settings.updateCheckHours)) updates.check()
     }
 
     // A rare, friendly request to support Daybreak on Ko-fi (see SupportPromptPolicy). It waits a few
@@ -315,7 +320,8 @@ private fun LoggedInContent(
     LaunchedEffect(session.studentId) {
         val today = LocalDate.now().toEpochDay()
         val state = container.supportStore.recordOpen(today)
-        if (SupportPromptPolicy.shouldShow(state, today)) {
+        val popupAllowed = container.serverNotices.featureOn(RemoteFeatures.SUPPORT_POPUP)
+        if (popupAllowed && SupportPromptPolicy.shouldShow(state, today)) {
             delay(5_000)
             if (whatsNew == null) {
                 container.supportStore.markShown(today)

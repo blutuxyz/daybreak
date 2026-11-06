@@ -52,9 +52,9 @@ class UpdateManager(
     /** When the server was last asked, in epoch milliseconds; 0 if never. */
     val lastCheckAt: Long get() = store.lastCheckAt
 
-    /** Whether it is time to look again without the user asking. */
-    fun isCheckDue(now: Long = System.currentTimeMillis()): Boolean =
-        isConfigured && now - store.lastCheckAt > CHECK_INTERVAL_MS
+    /** Whether it is time to look again without the user asking, given the chosen interval in hours. */
+    fun isCheckDue(intervalHours: Int, now: Long = System.currentTimeMillis()): Boolean =
+        isConfigured && now - store.lastCheckAt > intervalHours * HOUR_MS
 
     /** Asks the server for the newest release and updates [state]. */
     suspend fun check(): UpdateState {
@@ -299,7 +299,7 @@ class UpdateManager(
         /** The detail of a [UpdateFailure.INSTALL] that the package verifier caused. */
         const val VERIFIER_REFUSED = "verifier"
 
-        private const val CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000
+        private const val HOUR_MS = 60L * 60 * 1000
         private const val BUFFER_SIZE = 32 * 1024
         private const val PROGRESS_INTERVAL_NS = 150_000_000L
     }

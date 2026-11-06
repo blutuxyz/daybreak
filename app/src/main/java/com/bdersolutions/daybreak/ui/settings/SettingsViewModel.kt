@@ -32,6 +32,7 @@ import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.data.branding.AppIconStyle
 import com.bdersolutions.daybreak.data.reminders.ReminderNotificationManager
+import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
 import com.bdersolutions.daybreak.data.branding.AppNamePreset
 import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
@@ -79,6 +80,7 @@ class SettingsViewModel(
     private val launcherNameSwitcher: LauncherNameSwitcher,
     private val reminderScheduler: ReminderScheduler,
     private val reminderNotifier: ReminderNotificationManager,
+    private val serverNotices: ServerNotices,
 ) : ViewModel() {
     // ---- Support (Ko-fi) ----
 
@@ -128,6 +130,9 @@ class SettingsViewModel(
 
     /** False when the app was built without an update server address; the screen is hidden then. */
     val updatesConfigured: Boolean get() = updateManager.isConfigured
+
+    /** False while the developer has the in-app update feature switched off. */
+    val updatesEnabled: Boolean get() = serverNotices.switches.updates
     val updateState: StateFlow<UpdateState> = updateManager.state
     val updateReleases: StateFlow<List<ReleaseInfo>> = updateManager.releases
     val currentVersionName: String get() = updateManager.currentVersionName
@@ -138,6 +143,8 @@ class SettingsViewModel(
     fun installPermissionIntent() = updateManager.installer.permissionSettingsIntent()
 
     fun checkForUpdates() {
+        // Nothing is checked while the developer has the update feature switched off.
+        if (!updatesEnabled) return
         viewModelScope.launch { updateManager.check() }
     }
 
@@ -151,7 +158,13 @@ class SettingsViewModel(
 
     fun setAutoCheckUpdates(enabled: Boolean) {
         settingsRepository.setAutoCheckUpdates(enabled)
-        updateScheduler.schedule(enabled)
+        updateScheduler.schedule(enabled, settingsRepository.current().updateCheckHours)
+    }
+
+    /** How often the background check looks for a new version; the plan changes at once. */
+    fun setUpdateCheckHours(hours: Int) {
+        settingsRepository.setUpdateCheckHours(hours)
+        updateScheduler.schedule(settingsRepository.current().autoCheckUpdates, settingsRepository.current().updateCheckHours)
     }
 
     fun updateLessonColors(transform: (LessonColorSettings) -> LessonColorSettings) {
@@ -353,6 +366,7 @@ class SettingsViewModel(
                 launcherNameSwitcher = container.launcherNameSwitcher,
                 reminderScheduler = container.reminderScheduler,
                 reminderNotifier = container.reminderNotifier,
+                serverNotices = container.serverNotices,
             ) as T
         }
     }

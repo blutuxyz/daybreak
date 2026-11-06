@@ -53,7 +53,13 @@ test('the minimum version and messages change what the app is told', async () =>
   const app = await setup();
 
   const before = (await app.inject({ method: 'GET', url: '/v1/status', headers: host })).json();
-  assert.deepEqual(before, { minVersionName: null, minVersionCode: null, messages: [] });
+  assert.deepEqual(before, {
+    minVersionName: null,
+    minVersionCode: null,
+    switches: { updates: true, requiredVersion: true, messages: true },
+    disabledFeatures: [],
+    messages: [],
+  });
 
   const saved = await app.inject({ method: 'POST', url: '/admin/min-version', headers: form, payload: 'version=1.4.0' });
   assert.equal(saved.statusCode, 303);
@@ -102,6 +108,8 @@ test('a refused input reports why and changes nothing', async () => {
   assert.deepEqual((await app.inject({ method: 'GET', url: '/v1/status', headers: host })).json(), {
     minVersionName: null,
     minVersionCode: null,
+    switches: { updates: true, requiredVersion: true, messages: true },
+    disabledFeatures: [],
     messages: [],
   });
 });
@@ -130,4 +138,31 @@ test('an ended message is not sent to the app', async () => {
   });
 
   assert.deepEqual((await app.inject({ method: 'GET', url: '/v1/status', headers: host })).json().messages, []);
+});
+
+test('the switches are set from the admin form and reach the app', async () => {
+  const app = await setup();
+
+  const saved = await app.inject({
+    method: 'POST',
+    url: '/admin/switches',
+    headers: form,
+    payload: 'updates=on&feature%3Areminders=on&feature%3Amessages.send=on',
+  });
+  assert.equal(saved.headers.location, '/admin?notice=saved');
+
+  const status = (await app.inject({ method: 'GET', url: '/v1/status', headers: host })).json();
+  assert.deepEqual(status.switches, { updates: true, requiredVersion: false, messages: false });
+  assert.deepEqual(status.disabledFeatures, ['messages.send', 'reminders']);
+});
+
+test('the admin page shows the switches as checkboxes', async () => {
+  const app = await setup();
+  await app.inject({ method: 'POST', url: '/admin/switches', headers: form, payload: 'requiredVersion=on' });
+
+  const body = (await app.inject({ method: 'GET', url: '/admin', headers: auth })).body;
+
+  assert.match(body, /name="requiredVersion" checked/);
+  assert.match(body, /name="updates">/);
+  assert.match(body, /name="feature:reminders"/);
 });

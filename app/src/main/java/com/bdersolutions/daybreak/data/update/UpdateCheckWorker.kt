@@ -23,7 +23,13 @@ class UpdateCheckWorker(
     override suspend fun doWork(): Result {
         val container = (applicationContext as? DaybreakApplication)?.container ?: return Result.success()
         val manager = container.updateManager
-        if (!manager.isConfigured || !container.settingsRepository.current().autoCheckUpdates) {
+        // The switches may have changed since the app last opened: ask before deciding.
+        container.serverNotices.refresh()
+        // Off when the user turned automatic checks off, or the developer switched the update feature off.
+        if (!manager.isConfigured ||
+            !container.settingsRepository.current().autoCheckUpdates ||
+            !container.serverNotices.switches.updates
+        ) {
             return Result.success()
         }
 
@@ -53,22 +59,24 @@ class UpdateCheckWorker(
     }
 }
 
-/** Runs [UpdateCheckWorker] twice a day while the setting is on. */
+/** Runs [UpdateCheckWorker] at the interval chosen in the Updates settings while the setting is on. */
 class UpdateScheduler(private val context: Context) {
-    fun schedule(enabled: Boolean) {
+    /** Plans the background check every [intervalHours] hours, or cancels it when [enabled] is false. */
+    fun schedule(enabled: Boolean, intervalHours: Int) {
         val workManager = WorkManager.getInstance(context)
         if (!enabled) {
             workManager.cancelUniqueWork(WORK_NAME)
             return
         }
-        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(12, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(intervalHours.toLong(), TimeUnit.HOURS)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build(),
             )
             .build()
-        workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+        // UPDATE, not KEEP: a changed interval must replace the planned one.
+        workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     private companion object {

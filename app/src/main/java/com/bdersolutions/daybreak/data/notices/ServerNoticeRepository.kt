@@ -69,6 +69,12 @@ class ServerNotices(
         }
     }
 
+    /** The developer's switches as last received; everything is on before the first answer. */
+    val switches: RemoteSwitches get() = _status.value?.switches ?: RemoteSwitches()
+
+    /** False while the developer has turned the single feature [id] off. */
+    fun featureOn(id: String): Boolean = switches.featureOn(id)
+
     /** Remembers that the user has read [id]; it is not shown again. */
     fun dismiss(id: String) {
         store.dismiss(id)

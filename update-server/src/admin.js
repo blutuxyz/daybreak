@@ -1,5 +1,5 @@
 import { escapeHtml } from './page.js';
-import { LEVELS } from './announcements.js';
+import { FEATURES, LEVELS, readSwitches } from './announcements.js';
 
 /**
  * The admin page (GET /admin). Deliberately plain: no CSS and no scripts, just forms, so it works in
@@ -14,6 +14,29 @@ const NOTICES = {
   bad_until: 'The end time is not a date. Use a form such as 2026-11-07T18:00:00Z (with the offset).',
   not_found: 'That message does not exist any more.',
 };
+
+function checkbox(name, checked, label) {
+  return `<label><input type="checkbox" name="${name}"${checked ? ' checked' : ''}> ${label}</label>`;
+}
+
+function switchesSection(state) {
+  const switches = readSwitches(state.switches);
+  const disabled = new Set(switches.disabledFeatures);
+  const features = FEATURES.map(
+    (feature) => `<p>${checkbox(`feature:${feature.id}`, disabled.has(feature.id), `Turn off: ${escapeHtml(feature.label)} (<code>${escapeHtml(feature.id)}</code>)`)}</p>`,
+  ).join('\n');
+  return `<h2>Switches</h2>
+<p>Read by the app each time it starts or comes back to the front. Untick a switch to turn it off for everyone.</p>
+<form method="post" action="/admin/switches">
+<p>${checkbox('updates', switches.updates, 'In-app updates on (update checks, notifications, the update screen and the required-version gate)')}</p>
+<p>${checkbox('requiredVersion', switches.requiredVersion, 'Minimum app version on (apps older than it stop at the update screen)')}</p>
+<p>${checkbox('messages', switches.messages, 'Messages from this page are shown as pop-ups')}</p>
+<p>Single features (tick to turn one off):</p>
+${features}
+<p><button type="submit">Save switches</button></p>
+</form>
+`;
+}
 
 function formatMinVersion(minVersion) {
   return minVersion ? `${minVersion.name} (versionCode ${minVersion.code})` : 'none';
@@ -62,6 +85,7 @@ ${notes ? `<p><strong>${escapeHtml(notes)}</strong></p>` : ''}
 <button type="submit">Save minimum version</button></p>
 </form>
 
+${switchesSection(state)}
 <h2>Add a message</h2>
 <p>Each message is shown once per phone as a pop-up when the app opens. There is no editing: to change a text, hide or delete the old message and add a new one, which is shown again.</p>
 <form method="post" action="/admin/messages">

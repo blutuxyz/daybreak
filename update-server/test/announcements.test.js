@@ -67,6 +67,8 @@ test('without a minimum version the app is told there is none', () => {
   assert.deepEqual(publicStatus({ minVersion: null, messages: [] }, NOW), {
     minVersionName: null,
     minVersionCode: null,
+    switches: { updates: true, requiredVersion: true, messages: true },
+    disabledFeatures: [],
     messages: [],
   });
 });
@@ -75,7 +77,13 @@ test('the store keeps its state between runs and writes nothing it refuses', asy
   const config = await testConfig();
   const store = new AnnouncementStore({ config });
 
-  assert.deepEqual(await store.status(NOW), { minVersionName: null, minVersionCode: null, messages: [] });
+  assert.deepEqual(await store.status(NOW), {
+    minVersionName: null,
+    minVersionCode: null,
+    switches: { updates: true, requiredVersion: true, messages: true },
+    disabledFeatures: [],
+    messages: [],
+  });
   assert.deepEqual(await store.setMinVersion('bogus'), { error: 'bad_version' });
   assert.equal((await store.status(NOW)).minVersionCode, null);
 
@@ -106,4 +114,31 @@ test('a file that exists but cannot be read is an error, not an empty state', as
   const store = new AnnouncementStore({ config: { dataDir } });
 
   await assert.rejects(store.status(NOW));
+});
+
+test('switches default to everything on, and unknown feature ids are dropped', async () => {
+  const { readSwitches, defaultSwitches } = await import('../src/announcements.js');
+  assert.deepEqual(readSwitches(undefined), defaultSwitches());
+  assert.deepEqual(readSwitches({ updates: false, disabledFeatures: ['reminders', 'made.up'] }), {
+    updates: false,
+    requiredVersion: true,
+    messages: true,
+    disabledFeatures: ['reminders'],
+  });
+});
+
+test('the app is told the switches and the disabled features', async () => {
+  const config = await testConfig();
+  const store = new AnnouncementStore({ config });
+
+  await store.setSwitches({ requiredVersion: 'on', 'feature:reminders': 'on' });
+
+  assert.deepEqual(await store.status(NOW), {
+    minVersionName: null,
+    minVersionCode: null,
+    switches: { updates: false, requiredVersion: true, messages: false },
+    disabledFeatures: ['reminders'],
+    messages: [],
+  });
+  assert.deepEqual((await new AnnouncementStore({ config }).status(NOW)).disabledFeatures, ['reminders']);
 });
