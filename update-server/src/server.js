@@ -422,6 +422,25 @@ export function buildServer({
     return backToAdmin(reply, result.error ?? 'saved');
   });
 
+  /** Tells whether an unlock code the app shows has a payment on record. Changes nothing. */
+  app.post('/admin/support/check', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!support) return reply.code(404).send({ error: 'not_found' });
+    const code = normalizeCode(request.body?.code);
+    if (!code) return backToAdmin(reply, 'bad_code');
+    return backToAdmin(reply, (await support.isPaid(code)) ? 'code_paid' : 'code_unpaid');
+  });
+
+  /** Grants the payment for an unlock code by hand. The app learns of it when its user taps "Check payment". */
+  app.post('/admin/support/grant', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!support) return reply.code(404).send({ error: 'not_found' });
+    const code = normalizeCode(request.body?.code);
+    if (!code) return backToAdmin(reply, 'bad_code');
+    const granted = await support.grant({ code, at: new Date(now()) });
+    return backToAdmin(reply, granted ? 'granted' : 'already_paid');
+  });
+
   return { app, warm };
 }
 

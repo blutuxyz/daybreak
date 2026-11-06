@@ -13,6 +13,11 @@ const NOTICES = {
   bad_text: 'Write the text in German or English. Each text may have up to 500 characters.',
   bad_until: 'The end time is not a date. Use a form such as 2026-11-07T18:00:00Z (with the offset).',
   not_found: 'That message does not exist any more.',
+  granted: 'Payment granted for that code. The app shows its thanks when its user taps "Check payment".',
+  already_paid: 'That code already has a payment on record.',
+  bad_code: 'Enter a code such as DB-K7M2-9QXP, as the app shows it.',
+  code_paid: 'That code has a payment on record.',
+  code_unpaid: 'No payment is on record for that code yet.',
 };
 
 function checkbox(name, checked, label) {
@@ -34,6 +39,17 @@ function switchesSection(state) {
 <p>Single features (tick to turn one off):</p>
 ${features}
 <p><button type="submit">Save switches</button></p>
+</form>
+`;
+}
+
+/** The form to check or grant a payment for an unlock code, as the app shows it. */
+function supportSection() {
+  return `<h2>Support payments</h2>
+<p>A Ko-fi payment is recorded by itself when its message holds the code. If a payment did not arrive, enter the code the app shows on its "Hide this popup" page. Check it first, or grant the payment by hand. A granted payment is marked as made by hand. The app learns of it when its user taps "Check payment".</p>
+<form method="post" action="/admin/support/check">
+<p><label>Unlock code <input name="code" placeholder="DB-K7M2-9QXP" size="20" autocomplete="off" spellcheck="false"></label></p>
+<p><button type="submit">Check code</button> <button type="submit" formaction="/admin/support/grant">Grant payment</button></p>
 </form>
 `;
 }
@@ -86,6 +102,7 @@ ${notes ? `<p><strong>${escapeHtml(notes)}</strong></p>` : ''}
 </form>
 
 ${switchesSection(state)}
+${supportSection()}
 <h2>Add a message</h2>
 <p>Each message is shown once per phone as a pop-up when the app opens. There is no editing: to change a text, hide or delete the old message and add a new one, which is shown again.</p>
 <form method="post" action="/admin/messages">
