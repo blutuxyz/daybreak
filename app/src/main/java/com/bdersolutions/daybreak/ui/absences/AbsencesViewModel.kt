@@ -76,6 +76,15 @@ class AbsencesViewModel(
 
     private val absences = MutableStateFlow<List<UntisAbsence>?>(null)
     private val history = MutableStateFlow<LessonHistory?>(null)
+
+    private val _windows = MutableStateFlow<SchoolDayWindows?>(null)
+
+    /**
+     * First and last held lesson of each school day with an absence, so a whole-day absence the
+     * teacher wrote as 07:55 to 17:30 counts only the hours of the lessons. Null until loaded; the
+     * screen then counts the recorded time.
+     */
+    val windows: StateFlow<SchoolDayWindows?> = _windows.asStateFlow()
     private var historyJob: Job? = null
 
     val categories: StateFlow<CategoriesUiState> = combine(
@@ -125,10 +134,28 @@ class AbsencesViewModel(
                 val directory = schoolData.loadDirectory()
                 val loaded = schoolData.absences(schoolYearStart, LocalDate.now())
                 absences.value = loaded
+                loadWindows(loaded)
                 loadHistory(force = true)
                 AbsencesUiState.Loaded(loaded, directory.absenceReasons)
             } catch (error: Exception) {
                 AbsencesUiState.Failed(error)
+            }
+        }
+    }
+
+    private fun loadWindows(loaded: List<UntisAbsence>) {
+        viewModelScope.launch {
+            _windows.value = try {
+                val weeks = absenceWeekStarts(loaded)
+                if (weeks.isEmpty()) {
+                    null
+                } else {
+                    SchoolDayWindows.from(lessonHistory.lessonsOfWeeks(weeks).lessons)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                null
             }
         }
     }

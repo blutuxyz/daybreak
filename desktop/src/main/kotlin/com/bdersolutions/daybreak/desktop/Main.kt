@@ -1,6 +1,34 @@
 package com.bdersolutions.daybreak.desktop
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,9 +90,12 @@ fun main() {
     val container = DesktopContainer()
     DemoData.seedIfRequested(container)
     application {
+        val settings by container.settings.settings.collectAsState()
+        val paid by container.supportStore.paid.collectAsState()
         Window(
             onCloseRequest = ::exitApplication,
-            title = "Daybreak",
+            // The supporter extra "app name" also shows in the title bar.
+            title = appTitle(paid, settings.customAppName),
             // The taskbar and title bar icon. Without it the window shows the Java cup.
             icon = BitmapPainter(useResource("daybreak-icon.png", ::loadImageBitmap)),
             state = rememberWindowState(width = 1100.dp, height = 760.dp),
@@ -82,6 +113,7 @@ enum class SubRoute {
     SEARCH, UPCOMING, NOTICES, MESSAGES,
     APPEARANCE, TIMETABLE_SETTINGS, LESSON_COLORS, LANGUAGE, NOTIFICATIONS, SYNC_UPDATES,
     LEGAL, ABOUT, DEBUG,
+    APP_NAME, CALENDAR_EXPORT,
 }
 
 @Composable
@@ -152,12 +184,15 @@ fun App(container: DesktopContainer, onQuit: () -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun SignedInScreen(container: DesktopContainer, session: UntisSession, onLogout: () -> Unit) {
-    var tab by remember { mutableStateOf(MainTab.TIMETABLE) }
-    var sub by remember { mutableStateOf<SubRoute?>(null) }
+    // Back and forward like a browser: Escape, Alt+Left/Right and the mouse side buttons use it.
+    val nav = remember { NavHistory() }
+    val place = nav.current
     var supportRequest by remember { mutableStateOf<SupportRequest?>(null) }
     val settings by container.settings.settings.collectAsState()
+    val focus = remember { FocusRequester() }
 
     // The support popup: rare, after several days of use. Counted once per start, as on Android.
     LaunchedEffect(Unit) {
@@ -214,62 +249,167 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            NavigationRail(
-                modifier = Modifier.fillMaxHeight(),
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                MainTab.entries.forEach { item ->
-                    NavigationRailItem(
-                        selected = sub == null && tab == item,
-                        onClick = {
-                            sub = null
-                            tab = item
-                        },
-                        icon = { Icon(item.icon(), contentDescription = item.label()) },
-                        label = { Text(item.label()) },
-                    )
+    // The root takes keyboard focus so Escape and Alt+arrows work on every page, whatever is inside.
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focus)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when {
+                    event.key == Key.Escape -> nav.back()
+                    event.isAltPressed && event.key == Key.DirectionLeft -> nav.back()
+                    event.isAltPressed && event.key == Key.DirectionRight -> nav.forward()
+                    event.key == Key.Back -> nav.back()
+                    else -> false
                 }
             }
-            Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
-                // Pages open over the tabs with a slide, and slide back when closed, as on Android.
-                AnimatedContent(
-                    targetState = sub,
-                    modifier = Modifier.fillMaxSize(),
-                    transitionSpec = {
-                        val opening = targetState != null
-                        (
-                            slideInHorizontally(DesktopMotion.spatial<IntOffset>()) { width -> if (opening) width / 8 else -width / 8 } +
-                                fadeIn(DesktopMotion.effects<Float>())
-                            ).togetherWith(
-                            slideOutHorizontally(DesktopMotion.spatial<IntOffset>()) { width -> if (opening) -width / 8 else width / 8 } +
-                                fadeOut(DesktopMotion.fastEffects<Float>()),
-                        ).using(SizeTransform(clip = false))
-                    },
-                    label = "subPage",
-                ) { route ->
-                if (route != null) {
-                    SubPage(container, route, onBack = { sub = null })
-                } else {
-                    when (tab) {
-                        MainTab.TIMETABLE -> TimetableScreen(
-                            container = container,
-                            onOpenSearch = { sub = SubRoute.SEARCH },
-                            onOpenUpcoming = { sub = SubRoute.UPCOMING },
-                        )
-                        MainTab.ABSENCES -> AbsencesScreen(container)
-                        MainTab.MORE -> MoreScreen(
-                            container = container,
-                            session = session,
-                            onOpen = { sub = it },
-                            onLogout = onLogout,
-                        )
-                    }
+            .onPointerEvent(PointerEventType.Press, PointerEventPass.Initial) { event ->
+                // The side buttons of a mouse, as in a browser.
+                when (event.button) {
+                    PointerButton.Back -> if (nav.back()) event.changes.forEach { it.consume() }
+                    PointerButton.Forward -> if (nav.forward()) event.changes.forEach { it.consume() }
+                    else -> Unit
                 }
+            },
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Row(modifier = Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SideRail(
+                tab = place.tab,
+                onTab = { nav.open(Place(it)) },
+                inPage = place.sub != null,
+                canGoBack = nav.canGoBack,
+                canGoForward = nav.canGoForward,
+                onBack = { nav.back() },
+                onForward = { nav.forward() },
+            )
+            Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
+                // Pages open over the tabs with a slide, and slide back when closed, as on Android. A
+                // change of tab fades through, moving a little in the direction of the new tab.
+                AnimatedContent(
+                    targetState = place,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = { placeTransition(initialState, targetState) },
+                    label = "place",
+                ) { target ->
+                    val route = target.sub
+                    if (route != null) {
+                        SubPage(container, route, onBack = { nav.back() })
+                    } else {
+                        when (target.tab) {
+                            MainTab.TIMETABLE -> TimetableScreen(
+                                container = container,
+                                onOpenSearch = { nav.open(Place(MainTab.TIMETABLE, SubRoute.SEARCH)) },
+                                onOpenUpcoming = { nav.open(Place(MainTab.TIMETABLE, SubRoute.UPCOMING)) },
+                            )
+                            MainTab.ABSENCES -> AbsencesScreen(container)
+                            MainTab.MORE -> MoreScreen(
+                                container = container,
+                                session = session,
+                                onOpen = { nav.open(Place(MainTab.MORE, it)) },
+                                onLogout = onLogout,
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/** How one place gives way to the next: pages slide sideways, tabs fade and drift. */
+private fun AnimatedContentTransitionScope<Place>.placeTransition(from: Place, to: Place): ContentTransform {
+    val opening = to.sub != null && (from.sub == null || to != from)
+    val closing = to.sub == null && from.sub != null
+    return when {
+        opening || closing -> (
+            slideInHorizontally(DesktopMotion.spatial<IntOffset>()) { width -> if (opening) width / 8 else -width / 8 } +
+                fadeIn(DesktopMotion.effects<Float>())
+            ).togetherWith(
+            slideOutHorizontally(DesktopMotion.spatial<IntOffset>()) { width -> if (opening) -width / 8 else width / 8 } +
+                fadeOut(DesktopMotion.fastEffects<Float>()),
+        ).using(SizeTransform(clip = false))
+
+        else -> {
+            val direction = if (to.tab.ordinal >= from.tab.ordinal) 1 else -1
+            (
+                slideInVertically(DesktopMotion.spatial<IntOffset>()) { height -> direction * height / 24 } +
+                    fadeIn(DesktopMotion.effects<Float>())
+                ).togetherWith(
+                slideOutVertically(DesktopMotion.fastSpatial<IntOffset>()) { height -> -direction * height / 24 } +
+                    fadeOut(DesktopMotion.fastEffects<Float>()),
+            ).using(SizeTransform(clip = false))
+        }
+    }
+}
+
+/**
+ * The navigation rail: a rounded panel with a margin around it, the app mark on top, the three tabs,
+ * and back and forward at the bottom, like a browser's.
+ */
+@Composable
+private fun SideRail(
+    tab: MainTab,
+    onTab: (MainTab) -> Unit,
+    inPage: Boolean,
+    canGoBack: Boolean,
+    canGoForward: Boolean,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxHeight().width(92.dp),
+        shape = RoundedCornerShape(30.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        NavigationRail(
+            modifier = Modifier.fillMaxHeight(),
+            containerColor = Color.Transparent,
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            header = {
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        MainTab.TIMETABLE.icon(),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            },
+        ) {
+            MainTab.entries.forEach { item ->
+                NavigationRailItem(
+                    selected = !inPage && tab == item,
+                    onClick = { onTab(item) },
+                    icon = { Icon(item.icon(), contentDescription = item.label()) },
+                    label = { Text(item.label()) },
+                    modifier = Modifier.handCursor().padding(vertical = 4.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            RailArrow(forward = false, enabled = canGoBack, description = tr("Zurück (Esc)", "Back (Esc)"), onClick = onBack)
+            RailArrow(forward = true, enabled = canGoForward, description = tr("Vorwärts (Alt+→)", "Forward (Alt+→)"), onClick = onForward)
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun RailArrow(forward: Boolean, enabled: Boolean, description: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.handCursor()) {
+        Icon(
+            if (forward) Icons.AutoMirrored.Outlined.ArrowForward else Icons.AutoMirrored.Outlined.ArrowBack,
+            contentDescription = description,
+        )
     }
 }
 
@@ -293,6 +433,8 @@ private fun SubPage(container: DesktopContainer, route: SubRoute, onBack: () -> 
             PageHeader(title = tr("Nachrichten", "Messages"), onBack = onBack)
             MessagesScreen(container)
         }
+        SubRoute.APP_NAME -> SettingsSubPage(tr("App-Name", "App name"), onBack) { AppNamePage(container) }
+        SubRoute.CALENDAR_EXPORT -> SettingsSubPage(tr("Kalender-Export", "Calendar export"), onBack) { CalendarExportPage(container) }
         SubRoute.LEGAL -> SettingsSubPage(str("settings_legal"), onBack) { LegalPage() }
         SubRoute.ABOUT -> SettingsSubPage(str("settings_about"), onBack) { AboutPage(container) }
         SubRoute.DEBUG -> SettingsSubPage(str("settings_debug_title"), onBack) { DebugPage(container) }
@@ -352,12 +494,25 @@ private object SupportRequest
 @Composable
 private fun SupportHost(container: DesktopContainer, request: SupportRequest?, onClosed: () -> Unit) {
     if (request == null) return
+    val api = container.supportApi
     SupportDialog(
+        // Without an update server there is nothing to pay-check against, so the free opt-out stays.
+        unlockCode = if (api != null) container.supportStore.unlockCode() else null,
         onSupport = { openSupportPage() },
         onLater = {},
         onNever = { container.supportStore.optOut() },
+        onCheckPayment = { checkSupportPayment(container) },
+        onPaid = {},
         onClosed = onClosed,
     )
+}
+
+/** Asks the server whether this computer's code was paid for; a confirmed payment is remembered. */
+suspend fun checkSupportPayment(container: DesktopContainer): com.bdersolutions.daybreak.data.support.PaymentCheck {
+    val api = container.supportApi ?: return com.bdersolutions.daybreak.data.support.PaymentCheck.UNAVAILABLE
+    val result = api.check(container.supportStore.unlockCode())
+    if (result == com.bdersolutions.daybreak.data.support.PaymentCheck.PAID) container.supportStore.markPaid()
+    return result
 }
 
 /** Centres a page at a readable width on a wide window. */

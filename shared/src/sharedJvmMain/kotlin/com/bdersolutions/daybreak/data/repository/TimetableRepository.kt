@@ -7,6 +7,7 @@ import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.untis.UntisAuthException
 import com.bdersolutions.daybreak.untis.UntisSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -157,69 +158,78 @@ class TimetableRepository(
                 studentType = currentSession.studentType,
             )
 
-            for (weekStart in weeks) {
-                val cached = workingCache.weeks[weekStart]
-                val fresh = cached != null &&
-                    System.currentTimeMillis() - cached.updatedAt < FRESHNESS_MS
-                if (!force && fresh) continue
+            try {
+                for (weekStart in weeks) {
+                    val cached = workingCache.weeks[weekStart]
+                    val fresh = cached != null &&
+                        System.currentTimeMillis() - cached.updatedAt < FRESHNESS_MS
+                    if (!force && fresh) continue
 
-                try {
-                    val timetable = api.fetchTimetable(
-                        session = untisSession,
-                        startDate = weekStart,
-                        endDate = weekStart.plusDays(6),
-                    )
-                    workingCache = workingCache.copy(
-                        subjectNames = workingCache.subjectNames + timetable.directory.subjectNamesById,
-                        // Every timetable answer carries the whole holiday list, so the newest one wins.
-                        holidays = timetable.directory.holidays.ifEmpty { workingCache.holidays },
-                        weeks = workingCache.weeks + (
-                            weekStart to CachedWeek(
-                                weekStart = weekStart,
-                                lessons = timetable.lessons,
-                                updatedAt = System.currentTimeMillis(),
-                            )
-                            ),
-                    )
-                    successes++
-                } catch (error: Throwable) {
-                    if (nextError == null) nextError = error
-                    if (error is UntisAuthException && error.apiCode == -8520) {
-                        // Authentication failure affects every later request.
-                        break
+                    try {
+                        val timetable = api.fetchTimetable(
+                            session = untisSession,
+                            startDate = weekStart,
+                            endDate = weekStart.plusDays(6),
+                        )
+                        workingCache = workingCache.copy(
+                            subjectNames = workingCache.subjectNames + timetable.directory.subjectNamesById,
+                            // Every timetable answer carries the whole holiday list, so the newest one wins.
+                            holidays = timetable.directory.holidays.ifEmpty { workingCache.holidays },
+                            weeks = workingCache.weeks + (
+                                weekStart to CachedWeek(
+                                    weekStart = weekStart,
+                                    lessons = timetable.lessons,
+                                    updatedAt = System.currentTimeMillis(),
+                                )
+                                ),
+                        )
+                        successes++
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        if (nextError == null) nextError = error
+                        if (error is UntisAuthException && error.apiCode == -8520) {
+                            // Authentication failure affects every later request.
+                            break
+                        }
                     }
                 }
-            }
 
-            // Exams are an extra. A failed exam request must not hide a good timetable, so it
-            // is isolated, and the exams for this range are replaced only when it succeeds.
-            // The exam window covers every cached week, not only the requested ones, so exams
-            // stored before subject names were known are refreshed with the names too.
-            val window = (workingCache.weeks.keys + weeks)
-            if (window.isNotEmpty() && nextError !is UntisAuthException) {
-                val from = window.min()
-                val to = window.max().plusDays(6)
-                runCatching {
-                    api.fetchExams(
-                        session = untisSession,
-                        startDate = from,
-                        endDate = to,
-                        subjectNames = workingCache.subjectNames,
-                    )
-                }.onSuccess { exams ->
-                    val kept = workingCache.exams.filterNot { it.date in from..to }
-                    workingCache = workingCache.copy(exams = kept + exams)
-                }
-                // Absences work the same way: they only grey out the part of a lesson the student
-                // missed, so a failure here must not hide the timetable either.
-                runCatching {
-                    api.fetchAbsences(session = untisSession, startDate = from, endDate = to)
-                }.onSuccess { absences ->
-                    val kept = workingCache.absences.filterNot {
-                        it.start.toLocalDate() in from..to || it.end.toLocalDate() in from..to
+                // Exams are an extra. A failed exam request must not hide a good timetable, so it
+                // is isolated, and the exams for this range are replaced only when it succeeds.
+                // The exam window covers every cached week, not only the requested ones, so exams
+                // stored before subject names were known are refreshed with the names too.
+                val window = (workingCache.weeks.keys + weeks)
+                if (window.isNotEmpty() && nextError !is UntisAuthException) {
+                    val from = window.min()
+                    val to = window.max().plusDays(6)
+                    attempt {
+                        api.fetchExams(
+                            session = untisSession,
+                            startDate = from,
+                            endDate = to,
+                            subjectNames = workingCache.subjectNames,
+                        )
+                    }.onSuccess { exams ->
+                        val kept = workingCache.exams.filterNot { it.date in from..to }
+                        workingCache = workingCache.copy(exams = kept + exams)
                     }
-                    workingCache = workingCache.copy(absences = kept + absences)
+                    // Absences work the same way: they only grey out the part of a lesson the student
+                    // missed, so a failure here must not hide the timetable either.
+                    attempt {
+                        api.fetchAbsences(session = untisSession, startDate = from, endDate = to)
+                    }.onSuccess { absences ->
+                        val kept = workingCache.absences.filterNot {
+                            it.start.toLocalDate() in from..to || it.end.toLocalDate() in from..to
+                        }
+                        workingCache = workingCache.copy(absences = kept + absences)
+                    }
                 }
+            } catch (cancelled: CancellationException) {
+                // The caller left (for example the week changed while this one was loading). Say that nothing is
+                // loading any more, and do not report the cancellation as a failure of the timetable.
+                _status.value = _status.value.copy(isLoading = false)
+                throw cancelled
             }
 
             val now = System.currentTimeMillis()
@@ -247,6 +257,15 @@ class TimetableRepository(
                 error = nextError,
             )
         }
+    }
+
+    /** Like runCatching, but a cancellation is passed on instead of being kept as a failure. */
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
+        Result.failure(error)
     }
 
     private companion object {

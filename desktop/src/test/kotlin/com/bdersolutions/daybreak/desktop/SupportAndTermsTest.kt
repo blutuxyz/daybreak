@@ -31,12 +31,28 @@ private class MemoryStore : KeyValueStore {
 }
 
 class SupportAndTermsTest {
-    /** Donating gives no advantage on the desktop: the store has no paid state at all. */
+    /** A confirmed payment is remembered, stops the popup for good and survives a restart. */
     @Test
-    fun theSupportStoreHasNoPaidState() {
-        val store = DesktopSupportStore(MemoryStore())
-        store.optOut()
-        assertFalse(store.state().paid)
+    fun aConfirmedPaymentIsRememberedAndStopsThePopup() {
+        val prefs = MemoryStore()
+        val store = DesktopSupportStore(prefs)
+        assertFalse(store.paid.value)
+
+        store.markPaid()
+
+        assertTrue(store.paid.value)
+        assertTrue(store.state().paid)
+        assertTrue(DesktopSupportStore(prefs).paid.value)
+        assertFalse(com.bdersolutions.daybreak.data.support.SupportPromptPolicy.shouldShow(store.state(), 10_000L))
+    }
+
+    @Test
+    fun theUnlockCodeIsValidAndStaysTheSame() {
+        val prefs = MemoryStore()
+        val first = DesktopSupportStore(prefs).unlockCode()
+
+        assertTrue(com.bdersolutions.daybreak.data.support.SupportCode.isValid(first))
+        assertEquals(first, DesktopSupportStore(prefs).unlockCode())
     }
 
     @Test

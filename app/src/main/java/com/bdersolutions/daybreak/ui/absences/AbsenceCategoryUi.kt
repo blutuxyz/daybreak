@@ -139,6 +139,7 @@ internal fun AbsenceSummaryPager(
     absences: List<UntisAbsence>,
     categories: CategoriesUiState,
     pagerState: PagerState,
+    windows: SchoolDayWindows? = null,
 ) {
     val pageCount = 1 + categories.categories.size
     val scope = rememberCoroutineScope()
@@ -171,7 +172,7 @@ internal fun AbsenceSummaryPager(
             key = { page -> if (page == 0) "total" else categories.categories.getOrNull(page - 1)?.id ?: page },
         ) { page ->
             if (page == 0) {
-                AbsenceSummary(absences = absences, modifier = cardModifier)
+                AbsenceSummary(absences = absences, windows = windows, modifier = cardModifier)
             } else {
                 val category = categories.categories.getOrNull(page - 1)
                 if (category != null) {

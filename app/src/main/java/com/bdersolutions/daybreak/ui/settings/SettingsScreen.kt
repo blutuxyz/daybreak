@@ -138,6 +138,7 @@ import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Star
@@ -292,6 +293,7 @@ fun SettingsScreen(
                         appTitle = appTitle,
                         onOpenAppName = { onOpenPage(SettingsPage.APP_NAME) },
                         onOpenAppIcon = { onOpenPage(SettingsPage.APP_ICON) },
+                        onOpenCalendarExport = { onOpenPage(SettingsPage.CALENDAR_EXPORT) },
                         onLocked = { supportSheetNote = R.string.settings_extras_locked_note },
                     )
                 }
@@ -450,6 +452,7 @@ private fun SupporterExtras(
     appTitle: String,
     onOpenAppName: () -> Unit,
     onOpenAppIcon: () -> Unit,
+    onOpenCalendarExport: () -> Unit,
     onLocked: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -525,6 +528,41 @@ private fun SupporterExtras(
                         },
                         subtitleMaxLines = 1,
                         onClick = if (paid) onOpenAppIcon else onLocked,
+                        trailing = {
+                            if (paid) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    NewBadge()
+                                    Icon(
+                                        Icons.Outlined.ChevronRight,
+                                        contentDescription = null,
+                                        tint = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Lock,
+                                    contentDescription = stringResource(R.string.settings_extras_locked),
+                                    tint = scheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 66.dp, end = 16.dp),
+                    color = scheme.tertiary.copy(alpha = 0.25f),
+                )
+                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Event,
+                        title = stringResource(R.string.settings_calendar_export),
+                        subtitle = if (paid) {
+                            stringResource(R.string.settings_calendar_export_desc)
+                        } else {
+                            stringResource(R.string.settings_extras_locked)
+                        },
+                        subtitleMaxLines = 1,
+                        onClick = if (paid) onOpenCalendarExport else onLocked,
                         trailing = {
                             if (paid) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {

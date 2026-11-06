@@ -101,6 +101,7 @@ fun AbsencesScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val windows by viewModel.windows.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val sinceText = remember(viewModel.schoolYearStart) {
@@ -196,6 +197,7 @@ fun AbsencesScreen(
                 categories = categories,
                 pagerState = pagerState,
                 contentPadding = innerPadding,
+                windows = windows,
             )
         }
     }
@@ -221,6 +223,7 @@ private fun AbsenceList(
     categories: CategoriesUiState,
     pagerState: PagerState,
     contentPadding: PaddingValues,
+    windows: SchoolDayWindows?,
 ) {
     var filter by rememberSaveable { mutableStateOf(AbsenceFilter.ALL) }
     val motion = MaterialTheme.motionScheme
@@ -252,10 +255,11 @@ private fun AbsenceList(
                 absences = absences,
                 categories = categories,
                 pagerState = pagerState,
+                windows = windows,
             )
         }
         item(key = "filters") {
-            val totals = remember(base) { absenceTotals(base) }
+            val totals = remember(base, windows) { absenceTotals(base, windows) }
             val totalTime = totals.total
             val excusedTime = totals.excused
             val unexcusedTime = totals.unexcused
@@ -353,6 +357,7 @@ private fun AbsenceList(
                     absence = absence,
                     reasons = reasons,
                     lessons = lessonsByAbsence?.get(absence.id),
+                    windows = windows,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -368,8 +373,9 @@ private fun AbsenceList(
 internal fun AbsenceSummary(
     absences: List<UntisAbsence>,
     modifier: Modifier = Modifier,
+    windows: SchoolDayWindows? = null,
 ) {
-    val totals = remember(absences) { absenceTotals(absences) }
+    val totals = remember(absences, windows) { absenceTotals(absences, windows) }
     val total = totals.total
     val excusedTime = totals.excused
     val unexcusedTime = totals.unexcused
@@ -509,6 +515,7 @@ private fun AbsenceCard(
     reasons: Map<Long, String>,
     /** Lessons of the selected category's subject this absence covers; null on the Total card. */
     lessons: Int? = null,
+    windows: SchoolDayWindows? = null,
     modifier: Modifier = Modifier,
 ) {
     val range = remember(absence) { absenceRange(absence) }
@@ -546,7 +553,7 @@ private fun AbsenceCard(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = formatDuration(absence.duration),
+                    text = formatDuration(absence.countedDuration(windows)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

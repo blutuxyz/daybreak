@@ -74,7 +74,7 @@ fun MessagesScreen(container: DesktopContainer) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Nachrichten konnten nicht geladen werden.", "Could not load messages.")
+            error = e.userMessage(language, trFor(language, "Nachrichten konnten nicht geladen werden.", "Could not load messages."))
         } finally {
             loading = false
         }
@@ -88,7 +88,7 @@ fun MessagesScreen(container: DesktopContainer) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Nachricht konnte nicht geöffnet werden.", "Could not open the message.")
+            error = e.userMessage(language, trFor(language, "Nachricht konnte nicht geöffnet werden.", "Could not open the message."))
         }
     }
 
@@ -199,7 +199,7 @@ private fun AttachmentRow(container: DesktopContainer, attachment: UntisAttachme
                     throw e
                 } catch (e: Exception) {
                     target.delete()
-                    onStatus(e.message ?: trFor(language, "Anhang konnte nicht gespeichert werden.", "Could not save the attachment."))
+                    onStatus(e.userMessage(language, trFor(language, "Anhang konnte nicht gespeichert werden.", "Could not save the attachment.")))
                 }
             }
         }) { Text(tr("Speichern…", "Save…")) }

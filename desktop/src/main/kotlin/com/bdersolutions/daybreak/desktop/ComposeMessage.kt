@@ -56,7 +56,7 @@ internal fun ComposeDialog(container: DesktopContainer, onDismiss: () -> Unit, o
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            recipientsError = e.message ?: trFor(language, "Empfänger konnten nicht geladen werden.", "Could not load recipients.")
+            recipientsError = e.userMessage(language, trFor(language, "Empfänger konnten nicht geladen werden.", "Could not load recipients."))
         } finally {
             loadingRecipients = false
         }
@@ -163,7 +163,7 @@ internal fun ComposeDialog(container: DesktopContainer, onDismiss: () -> Unit, o
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
-                                    error = e.message ?: trFor(language, "Senden fehlgeschlagen.", "Sending failed.")
+                                    error = e.userMessage(language, trFor(language, "Senden fehlgeschlagen.", "Sending failed."))
                                 } finally {
                                     sending = false
                                 }

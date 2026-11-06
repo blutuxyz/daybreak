@@ -92,7 +92,7 @@ fun ElementChooser(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Die Liste konnte nicht geladen werden.", "Could not load the list.")
+            error = e.userMessage(language, trFor(language, "Die Liste konnte nicht geladen werden.", "Could not load the list."))
         }
     }
 

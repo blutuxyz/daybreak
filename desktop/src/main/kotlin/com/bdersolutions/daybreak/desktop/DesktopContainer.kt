@@ -40,8 +40,11 @@ class DesktopContainer(
     /** Which privacy policy version was accepted on this computer. */
     val termsStore = DesktopTermsStore(PropertiesStore(File(dataDirectory, "terms.properties")))
 
-    /** The support popup's counters. */
+    /** The support popup's counters and whether a payment was confirmed. */
     val supportStore = DesktopSupportStore(PropertiesStore(File(dataDirectory, "support.properties")))
+
+    /** Asks the update server whether the unlock code was paid for. Null in builds without a server. */
+    val supportApi: DesktopSupportApi? = updater.build.updateApiUrl.takeIf { it.isNotBlank() }?.let { DesktopSupportApi(it) }
 
     /** Ten taps on the "System" theme unlock the debug page, as on Android. */
     val debugUnlock = DebugUnlock()

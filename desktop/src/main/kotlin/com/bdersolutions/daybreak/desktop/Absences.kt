@@ -109,7 +109,10 @@ import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.ui.absences.AbsenceCategory
 import com.bdersolutions.daybreak.ui.absences.CategoryUsage
+import com.bdersolutions.daybreak.ui.absences.SchoolDayWindows
 import com.bdersolutions.daybreak.ui.absences.absenceTotals
+import com.bdersolutions.daybreak.ui.absences.absenceWeekStarts
+import com.bdersolutions.daybreak.ui.absences.countedDuration
 import com.bdersolutions.daybreak.ui.absences.countMissedLessons
 import com.bdersolutions.daybreak.ui.absences.formatSchoolLessons
 import com.bdersolutions.daybreak.ui.absences.missedLessonsByAbsence
@@ -169,6 +172,9 @@ fun AbsencesScreen(container: DesktopContainer) {
     var absences by remember { mutableStateOf<List<UntisAbsence>?>(null) }
     var reasons by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var history by remember { mutableStateOf<LessonHistory?>(null) }
+    // First and last lesson of each day with an absence: a whole-day absence the teacher wrote as
+    // 07:55 to 17:30 counts only the hours of the lessons. Null until loaded (recorded time then).
+    var windows by remember { mutableStateOf<SchoolDayWindows?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var subjectsRequested by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
@@ -188,7 +194,18 @@ fun AbsencesScreen(container: DesktopContainer) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Fehlstunden konnten nicht geladen werden.", "Could not load absences.")
+            error = e.userMessage(language, trFor(language, "Fehlstunden konnten nicht geladen werden.", "Could not load absences."))
+        }
+    }
+    LaunchedEffect(absences) {
+        val list = absences ?: return@LaunchedEffect
+        windows = try {
+            val weeks = absenceWeekStarts(list)
+            if (weeks.isEmpty()) null else SchoolDayWindows.from(container.absenceHistory.lessonsOfWeeks(weeks).lessons)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
         }
     }
     LaunchedEffect(reloadKey, needsHistory) {
@@ -251,7 +268,7 @@ fun AbsencesScreen(container: DesktopContainer) {
     val groups = remember(shown) {
         shown.groupBy { it.start.toLocalDate() }.toSortedMap(Comparator.reverseOrder())
     }
-    val totals = remember(base) { absenceTotals(base) }
+    val totals = remember(base, windows) { absenceTotals(base, windows) }
 
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxSize()) {
@@ -307,6 +324,7 @@ fun AbsencesScreen(container: DesktopContainer) {
                         partial = (lessonSet?.failedWeeks ?: 0) > 0,
                         unit = unit,
                         language = language,
+                        windows = windows,
                         pagerState = pagerState,
                         onAdd = {
                             subjectsRequested = true
@@ -346,7 +364,7 @@ fun AbsencesScreen(container: DesktopContainer) {
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                absenceGroups(groups, reasons, selectedLessons, unit, shown.isEmpty(), emptyText)
+                                absenceGroups(groups, reasons, selectedLessons, unit, windows, shown.isEmpty(), emptyText)
                             }
                             VerticalScrollbar(
                                 adapter = rememberScrollbarAdapter(listState),
@@ -365,7 +383,7 @@ fun AbsencesScreen(container: DesktopContainer) {
                         ) {
                             item(key = "summary") { summary() }
                             item(key = "filters") { filters() }
-                            absenceGroups(groups, reasons, selectedLessons, unit, shown.isEmpty(), emptyText)
+                            absenceGroups(groups, reasons, selectedLessons, unit, windows, shown.isEmpty(), emptyText)
                         }
                         VerticalScrollbar(
                             adapter = rememberScrollbarAdapter(listState),
@@ -440,6 +458,7 @@ private fun SummaryPager(
     partial: Boolean,
     unit: AbsenceUnit,
     language: AppLanguage,
+    windows: SchoolDayWindows?,
     pagerState: PagerState,
     onAdd: () -> Unit,
 ) {
@@ -475,7 +494,7 @@ private fun SummaryPager(
                 key = { page -> if (page == 0) "total" else categories.getOrNull(page - 1)?.id ?: page },
             ) { page ->
                 if (page == 0) {
-                    AbsenceSummary(absences = absences, unit = unit, language = language, modifier = cardModifier)
+                    AbsenceSummary(absences = absences, unit = unit, language = language, windows = windows, modifier = cardModifier)
                 } else {
                     val category = categories.getOrNull(page - 1)
                     if (category != null) {
@@ -556,9 +575,10 @@ private fun AbsenceSummary(
     absences: List<UntisAbsence>,
     unit: AbsenceUnit,
     language: AppLanguage,
+    windows: SchoolDayWindows?,
     modifier: Modifier = Modifier,
 ) {
-    val totals = remember(absences) { absenceTotals(absences) }
+    val totals = remember(absences, windows) { absenceTotals(absences, windows) }
     val total = totals.total
     val excusedTime = totals.excused
     val unexcusedTime = totals.unexcused
@@ -870,6 +890,7 @@ private fun LazyListScope.absenceGroups(
     reasons: Map<Long, String>,
     lessonsByAbsence: Map<Long, Int>?,
     unit: AbsenceUnit,
+    windows: SchoolDayWindows?,
     empty: Boolean,
     emptyText: String,
 ) {
@@ -899,6 +920,7 @@ private fun LazyListScope.absenceGroups(
                 reasons = reasons,
                 lessons = lessonsByAbsence?.get(absence.id),
                 unit = unit,
+                windows = windows,
                 modifier = Modifier.animateItem(),
             )
         }
@@ -922,6 +944,7 @@ private fun AbsenceCard(
     reasons: Map<Long, String>,
     lessons: Int?,
     unit: AbsenceUnit,
+    windows: SchoolDayWindows?,
     modifier: Modifier = Modifier,
 ) {
     val language = LocalLanguage.current
@@ -951,7 +974,7 @@ private fun AbsenceCard(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    formatDuration(absence.duration, unit, language),
+                    formatDuration(absence.countedDuration(windows), unit, language),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

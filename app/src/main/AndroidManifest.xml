@@ -40,6 +40,16 @@
             android:windowSoftInputMode="adjustResize">
         </activity>
 
+        <!-- Restarts the app after the name or icon was switched. Own process on purpose, see RestartActivity. -->
+        <activity
+            android:name=".RestartActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:process=":restart"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- The launcher entries: one alias per name and icon style, exactly one enabled. The picker in
              data/branding switches them. Labels are the names under the icon (keep them equal to
              AppNamePreset.displayName); icons are the mipmaps ic_launcher[_style]. Only Daybreak with the
@@ -645,6 +655,108 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher_bloom"
             android:label="@string/launcher_name_timetable"
+            android:roundIcon="@mipmap/ic_launcher_bloom_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUser"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/launcher_name_von_user_fuer_user"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUserClassic"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_classic"
+            android:label="@string/launcher_name_von_user_fuer_user"
+            android:roundIcon="@mipmap/ic_launcher_classic_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUserGrid"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_grid"
+            android:label="@string/launcher_name_von_user_fuer_user"
+            android:roundIcon="@mipmap/ic_launcher_grid_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUserNight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_night"
+            android:label="@string/launcher_name_von_user_fuer_user"
+            android:roundIcon="@mipmap/ic_launcher_night_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUserLetter"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_letter"
+            android:label="@string/launcher_name_von_user_fuer_user"
+            android:roundIcon="@mipmap/ic_launcher_letter_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasVonUserFuerUserBloom"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bloom"
+            android:label="@string/launcher_name_von_user_fuer_user"
             android:roundIcon="@mipmap/ic_launcher_bloom_round"
             android:targetActivity=".MainActivity">
             <intent-filter>

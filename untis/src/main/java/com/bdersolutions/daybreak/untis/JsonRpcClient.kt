@@ -70,6 +70,9 @@ internal class JsonRpcClient(
 
             if (!received.isSuccessful) {
                 val apiError = runCatching { parseError(body) }.getOrNull()
+                if (isPermissionDenied(apiError?.first, apiError?.second)) {
+                    throw UntisPermissionException(apiError?.second ?: "Not allowed for this account.", apiError?.first)
+                }
                 if (received.code == 401 || received.code == 403) {
                     throw UntisAuthException(
                         apiError?.second ?: "WebUntis rejected the login.",
@@ -94,6 +97,7 @@ internal class JsonRpcClient(
             if (error != null) {
                 val code = error.intOrNull("code")
                 val message = error.stringOrNull("message", "data") ?: "WebUntis returned an error."
+                if (isPermissionDenied(code, message)) throw UntisPermissionException(message, code)
                 val requiresSecondFactor = code == CODE_SECOND_FACTOR ||
                     message.contains("second factor", ignoreCase = true) ||
                     message.contains("token", ignoreCase = true)
@@ -149,6 +153,8 @@ internal class JsonRpcClient(
             }
             if (recordRaw) rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
             if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
+            // 403 on the REST API: the token is good, the school does not allow this view to students.
+            if (received.code == 403) throw UntisPermissionException("HTTP 403")
             if (!received.isSuccessful) {
                 val message = runCatching {
                     JsonParser.parseString(text).asJsonObject.stringOrNull("errorMessage")
@@ -206,6 +212,7 @@ internal class JsonRpcClient(
             }
             rawSink.onResponse(label, System.currentTimeMillis(), text.take(MAX_RAW_BODY_CHARS))
             if (received.code == 401) throw UntisAuthException("WebUntis rejected the token.")
+            if (received.code == 403) throw UntisPermissionException("HTTP 403")
             if (!received.isSuccessful) throw UntisProtocolException(describeFailure(received.code, text))
             runCatching { JsonParser.parseString(text) }.getOrNull() ?: JsonObject()
         }
@@ -293,6 +300,18 @@ internal class JsonRpcClient(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MAX_RAW_BODY_CHARS = 250_000
         private const val CODE_SECOND_FACTOR = -8519
+
+        /** WebUntis: "no right for timetable" and the generic "not allowed". */
+        private val PERMISSION_CODES = setOf(-8509, -7004)
+        private val PERMISSION_WORDS = Regex(
+            "no right|not allowed|no permission|not permitted|permission denied|access denied|forbidden|" +
+                "keine berechtigung|nicht berechtigt|keine rechte",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** True when the answer says the account may not do this, as opposed to not being signed in. */
+        internal fun isPermissionDenied(code: Int?, message: String?): Boolean =
+            code in PERMISSION_CODES || (message != null && PERMISSION_WORDS.containsMatchIn(message))
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)

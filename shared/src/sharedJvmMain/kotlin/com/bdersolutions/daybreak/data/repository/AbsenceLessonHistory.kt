@@ -6,6 +6,7 @@ import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.untis.UntisAuthException
 import com.bdersolutions.daybreak.untis.UntisLesson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -35,7 +36,22 @@ class AbsenceLessonHistory(
     private val mutex = Mutex()
     private var data: AbsenceLessonData? = null
 
-    suspend fun lessons(from: LocalDate, to: LocalDate): LessonHistory = mutex.withLock {
+    suspend fun lessons(from: LocalDate, to: LocalDate): LessonHistory {
+        val weeks = mutableListOf<LocalDate>()
+        var weekStart = timetable.weekStartFor(from)
+        val lastWeek = timetable.weekStartFor(to)
+        while (!weekStart.isAfter(lastWeek)) {
+            weeks += weekStart
+            weekStart = weekStart.plusWeeks(1)
+        }
+        return lessonsOfWeeks(weeks)
+    }
+
+    /**
+     * The lessons of just the given weeks (Mondays). The absence list needs the days of its own
+     * absences only, which is far fewer requests than a whole school year.
+     */
+    suspend fun lessonsOfWeeks(weekStarts: Collection<LocalDate>): LessonHistory = mutex.withLock {
         val session = sessionStore.timetableSession() ?: throw UntisAuthException("Not signed in.")
         var working = loadData(session.studentId)
         var changed = false
@@ -45,10 +61,8 @@ class AbsenceLessonHistory(
         val thisWeek = timetable.weekStartFor(LocalDate.now())
         val result = mutableListOf<UntisLesson>()
 
-        var weekStart = timetable.weekStartFor(from)
-        val lastWeek = timetable.weekStartFor(to)
         var authFailed = false
-        while (!weekStart.isAfter(lastWeek)) {
+        for (weekStart in weekStarts.sorted()) {
             val past = weekStart.isBefore(thisWeek)
             val stored = working.weeks[weekStart]
             val cached = cache.weeks[weekStart]
@@ -76,11 +90,12 @@ class AbsenceLessonHistory(
                     // A bad key fails every later request too, so stop asking.
                     authFailed = true
                     failed++
+                } catch (error: CancellationException) {
+                    throw error
                 } catch (error: Exception) {
                     failed++
                 }
             }
-            weekStart = weekStart.plusWeeks(1)
         }
 
         if (changed) {

@@ -85,7 +85,7 @@ private fun <T> LoadedList(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: trFor(language, "Konnte nicht geladen werden.", "Could not load.")
+            error = e.userMessage(language, trFor(language, "Konnte nicht geladen werden.", "Could not load."))
         } finally {
             loading = false
         }
