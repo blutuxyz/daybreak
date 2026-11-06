@@ -1,8 +1,8 @@
 name: Release Windows app
 
 # Runs when you publish a release on GitHub, next to the Android release (release.yml). The release's
-# tag (v1.2.3) gives the same version as the Android app, so both builds of a release agree. The MSI
-# installer and the portable ZIP are attached to the release, and the update server (update-server/)
+# tag (v1.2.3) gives the same version as the Android app, so both builds of a release agree. The one-click
+# setup (Daybreak-<version>-setup.exe, Inno Setup) and the portable ZIP are attached to the release, and the update server (update-server/)
 # offers the installer to the desktop app, which downloads it, checks its SHA-256 and installs it.
 #
 # It can also be started by hand (Actions > Release Windows app > Run workflow) for a release that
@@ -59,26 +59,27 @@ jobs:
 
       # The update address is the same one the Android release uses. Without it the desktop app
       # would not look for updates at all.
-      # jpackage builds the MSI with the WiX Toolset; Compose downloads WiX on first use.
-      - name: Build the MSI installer and the portable ZIP
+      # :desktop:windowsInstaller packs the app image into the setup .exe with Inno Setup, which is
+      # preinstalled on windows-latest (desktop/packaging/windows/daybreak.iss).
+      - name: Build the setup installer and the portable ZIP
         env:
           UPDATE_API_URL: ${{ vars.UPDATE_API_URL }}
         run: |
-          ./gradlew :desktop:packageMsi :desktop:portableZip --no-daemon \
+          ./gradlew :desktop:windowsInstaller :desktop:portableZip --no-daemon \
             -Pdaybreak.versionName="${{ steps.version.outputs.name }}" \
             -Pdaybreak.updateApiUrl="$UPDATE_API_URL"
 
-      # The installer is named Daybreak-<version>.msi; the update server finds it by that name.
+      # The installer is named Daybreak-<version>-setup.exe; the update server finds it by that name.
       - name: Collect and check the artifacts
         run: |
           mkdir -p out
-          msi="desktop/build/compose/binaries/main/msi/Daybreak-${{ steps.version.outputs.name }}.msi"
-          if [ ! -f "$msi" ]; then
-            echo "The installer was not built as $msi:" >&2
-            ls -la desktop/build/compose/binaries/main/msi >&2 || true
+          setup="desktop/build/installer/Daybreak-${{ steps.version.outputs.name }}-setup.exe"
+          if [ ! -f "$setup" ]; then
+            echo "The installer was not built as $setup:" >&2
+            ls -la desktop/build/installer >&2 || true
             exit 1
           fi
-          cp "$msi" out/
+          cp "$setup" out/
           cp desktop/build/distributions/*.zip out/
           ls -la out
 

@@ -28,10 +28,11 @@ export function loadConfig(env = process.env) {
     /** Which release asset is the APK. */
     apkPattern: new RegExp(env.APK_ASSET_PATTERN ?? '\\.apk$', 'i'),
     /**
-     * Which release asset is the Windows installer. The desktop workflow names it Daybreak-1.2.3.msi
-     * (jpackage uses the packageName and the version); a release without one is served without it.
+     * Which release asset is the Windows setup program. The desktop workflow names it
+     * Daybreak-1.2.3-setup.exe (Inno Setup, desktop/packaging/windows); a release without one is
+     * served without it. Releases before the one-click setup carried an .msi, which is not offered.
      */
-    msiPattern: new RegExp(env.MSI_ASSET_PATTERN ?? '^Daybreak-\\d+\\.\\d+\\.\\d+\\.msi$', 'i'),
+    setupPattern: new RegExp(env.SETUP_ASSET_PATTERN ?? '^Daybreak-\\d+\\.\\d+\\.\\d+-setup\\.exe$', 'i'),
     /** How many APK versions to keep on disk. */
     keepApks: Number(env.KEEP_APKS ?? 3),
     /**

@@ -7,9 +7,9 @@ import { SupportLedger } from './support.js';
 const config = loadConfig();
 const releases = new ReleaseService({ config });
 const apks = new ReleaseFileCache({ config, kind: 'apk' });
-const msis = new ReleaseFileCache({ config, kind: 'msi' });
+const setups = new ReleaseFileCache({ config, kind: 'setup' });
 const support = new SupportLedger({ config });
-const { app, warm } = buildServer({ config, releases, apks, msis, support, logger: true });
+const { app, warm } = buildServer({ config, releases, apks, setups, support, logger: true });
 
 try {
   await listen(config.host);

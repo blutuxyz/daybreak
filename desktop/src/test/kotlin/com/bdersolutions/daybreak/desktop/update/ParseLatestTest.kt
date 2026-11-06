@@ -15,9 +15,9 @@ private const val COMPLETE = """
   "changelog": "- Neu: Automatische Updates",
   "apk": { "url": "https://updates.example.com/v1/apk/v1.2.3", "size": 100, "sha256": "aa" },
   "windows": {
-    "msi": {
-      "url": "https://updates.example.com/v1/msi/v1.2.3",
-      "name": "Daybreak-1.2.3.msi",
+    "installer": {
+      "url": "https://updates.example.com/v1/setup/v1.2.3",
+      "name": "Daybreak-1.2.3-setup.exe",
       "size": 4096,
       "sha256": "ABCDEF0123"
     }
@@ -34,11 +34,11 @@ class ParseLatestTest {
         assertEquals("1.2.3", release.versionName)
         assertEquals(10203, release.versionCode)
         assertEquals("- Neu: Automatische Updates", release.changelog)
-        assertEquals("https://updates.example.com/v1/msi/v1.2.3", release.msi.url)
-        assertEquals("Daybreak-1.2.3.msi", release.msi.name)
-        assertEquals(4096L, release.msi.size)
+        assertEquals("https://updates.example.com/v1/setup/v1.2.3", release.installer.url)
+        assertEquals("Daybreak-1.2.3-setup.exe", release.installer.name)
+        assertEquals(4096L, release.installer.size)
         // The checksum is compared in lower case, as the server writes it.
-        assertEquals("abcdef0123", release.msi.sha256)
+        assertEquals("abcdef0123", release.installer.sha256)
     }
 
     @Test
@@ -52,8 +52,21 @@ class ParseLatestTest {
     }
 
     @Test
+    fun aReleaseWithOnlyTheOldMsiIsNotOffered() {
+        // Releases before the one-click setup carry only an MSI, which this version cannot install.
+        val msiOnly = COMPLETE.replace("\"installer\": {", "\"msi\": {")
+
+        assertThrows(IllegalStateException::class.java) { parseLatest(msiOnly) }
+    }
+
+    @Test
+    fun theSetupRunsSilentlyWithoutRebootOrDialogs() {
+        assertEquals(listOf("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"), SILENT_SETUP_ARGUMENTS.toList())
+    }
+
+    @Test
     fun anInstallerWithoutAnAddressIsNotOffered() {
-        val noUrl = COMPLETE.replace("\"url\": \"https://updates.example.com/v1/msi/v1.2.3\",", "")
+        val noUrl = COMPLETE.replace("\"url\": \"https://updates.example.com/v1/setup/v1.2.3\",", "")
 
         assertThrows(IllegalStateException::class.java) { parseLatest(noUrl) }
     }
@@ -63,6 +76,6 @@ class ParseLatestTest {
         // The downloader refuses to install without a checksum, so the parser only has to report it.
         val noSha = COMPLETE.replace(",\n      \"sha256\": \"ABCDEF0123\"", "")
 
-        assertNull(parseLatest(noSha).msi.sha256)
+        assertNull(parseLatest(noSha).installer.sha256)
     }
 }
