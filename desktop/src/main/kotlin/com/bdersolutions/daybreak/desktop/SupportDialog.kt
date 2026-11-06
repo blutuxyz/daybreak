@@ -67,6 +67,8 @@ fun KofiButton(onClick: () -> Unit) {
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(containerColor = KofiBlue, contentColor = Color.White),
     ) {
+        Icon(KofiIcon, contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(30.dp))
+        Spacer(Modifier.width(10.dp))
         Text(str("settings_support_button"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
 }
