@@ -84,6 +84,19 @@ export class ReleaseService {
   }
 }
 
+/** The parts of a GitHub asset the server needs, or undefined when there is no asset. */
+function toAsset(asset) {
+  if (!asset) return undefined;
+  return {
+    name: asset.name,
+    size: asset.size,
+    // GitHub fills this for newer uploads, as "sha256:<hex>".
+    digest: typeof asset.digest === 'string' ? asset.digest : undefined,
+    downloadUrl: asset.browser_download_url,
+    apiUrl: asset.url,
+  };
+}
+
 /** Maps GitHub's release objects to what the server serves. */
 export function mapReleases(body, config) {
   if (!Array.isArray(body)) return [];
@@ -92,26 +105,20 @@ export function mapReleases(body, config) {
     .map((release) => {
       const version = parseTag(release.tag_name ?? '');
       if (!version) return undefined;
-      const asset = (release.assets ?? []).find(
-        (candidate) => candidate.state === 'uploaded' && config.apkPattern.test(candidate.name),
+      const find = (pattern) => (release.assets ?? []).find(
+        (candidate) => candidate.state === 'uploaded' && pattern.test(candidate.name),
       );
+      const apk = find(config.apkPattern);
+      const msi = find(config.msiPattern);
       return {
         tag: release.tag_name,
         versionName: version.versionName,
         versionCode: version.versionCode,
         publishedAt: release.published_at ?? release.created_at ?? null,
         changelog: (release.body ?? '').replace(/\r\n/g, '\n').trim(),
-        asset: asset
-          ? {
-              name: asset.name,
-              size: asset.size,
-              // GitHub fills this for newer uploads, as "sha256:<hex>".
-              digest: typeof asset.digest === 'string' ? asset.digest : undefined,
-              downloadUrl: asset.browser_download_url,
-              apiUrl: asset.url,
-            }
-          : undefined,
-        apk: Boolean(asset),
+        asset: toAsset(apk),
+        apk: Boolean(apk),
+        msi: toAsset(msi),
       };
     })
     .filter(Boolean)

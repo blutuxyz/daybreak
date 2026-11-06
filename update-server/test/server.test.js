@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { access } from 'node:fs/promises';
 import { test } from 'node:test';
-import { ApkCache } from '../src/apk-cache.js';
+import { ReleaseFileCache } from '../src/release-files.js';
 import { ReleaseService } from '../src/releases.js';
 import { buildServer, parseRange } from '../src/server.js';
 import { apkBytes, apkSha256, fakeFetch, githubRelease, jsonResponse, testConfig } from './helpers.js';
@@ -14,7 +14,7 @@ async function setup({ releasesBody, configOverrides, apkResponse } = {}) {
     'https://github.com/': () => apkResponse?.() ?? new Response(apkBytes),
   });
   const releases = new ReleaseService({ config, fetchImpl });
-  const apks = new ApkCache({ config, fetchImpl });
+  const apks = new ReleaseFileCache({ config, fetchImpl, kind: 'apk' });
   const server = buildServer({ config, releases, apks });
   return { ...server, config, fetchImpl };
 }
@@ -62,7 +62,7 @@ test('/v1/latest is a 502 when GitHub cannot be reached and nothing is cached', 
   const { app } = buildServer({
     config,
     releases: new ReleaseService({ config, fetchImpl }),
-    apks: new ApkCache({ config, fetchImpl }),
+    apks: new ReleaseFileCache({ config, fetchImpl, kind: 'apk' }),
   });
 
   const response = await app.inject({ method: 'GET', url: '/v1/latest' });

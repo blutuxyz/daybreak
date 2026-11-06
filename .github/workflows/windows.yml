@@ -1,0 +1,52 @@
+name: Windows app (test build)
+
+# Builds the Windows desktop app (desktop/) as an MSI installer and a portable ZIP for testing.
+# - Every push to feat/windows-port builds both and keeps them as workflow artifacts.
+# - Can also be started by hand (Actions > Windows app (test build) > Run workflow).
+# Releases are built by release-windows.yml, which uses the version of the release tag and attaches
+# the files to the release. Nothing here is attached to a release.
+on:
+  push:
+    branches: [feat/windows-port]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run the unit tests
+        run: ./gradlew :untis:test :desktop:test --no-daemon
+
+      # jpackage builds the MSI with the WiX Toolset. Compose downloads WiX on first use.
+      - name: Build the MSI installer and the portable ZIP
+        run: |
+          ./gradlew :desktop:packageMsi :desktop:portableZip --no-daemon \
+            -Pdaybreak.versionName=1.0.0
+
+      - name: Collect the artifacts
+        run: |
+          mkdir -p out
+          cp desktop/build/compose/binaries/main/msi/*.msi out/
+          cp desktop/build/distributions/*.zip out/
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daybreak-windows-test
+          path: out/*
+          if-no-files-found: error

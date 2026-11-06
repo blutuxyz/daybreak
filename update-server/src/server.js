@@ -3,7 +3,8 @@ import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
 import { AnnouncementStore, MESSAGE_ID_PATTERN } from './announcements.js';
 import { renderAdmin } from './admin.js';
-import { pickLanguage, renderPage } from './page.js';
+import { pickLanguage, renderDesktopPage, renderPage } from './page.js';
+import { ReleaseFileCache } from './release-files.js';
 import { RateLimiter, extractCode, normalizeCode, parseKofiBody, sameSecret } from './support.js';
 import { isSafeTag } from './version.js';
 
@@ -12,10 +13,13 @@ import { isSafeTag } from './version.js';
  *
  *   GET  /                  the download page for people who do not have the app yet
  *   GET  /download         redirects to the newest APK
+ *   GET  /desktop           the download page for the Windows app
+ *   GET  /desktop/download  redirects to the newest Windows installer
  *   GET  /health            liveness check
  *   GET  /v1/latest         the newest release: version, changelog, APK link, size and SHA-256
  *   GET  /v1/releases       the release history with changelogs (?limit=, default 20)
  *   GET  /v1/apk/:tag       the APK of a release; supports Range for resuming a download
+ *   GET  /v1/msi/:tag       the Windows installer of a release, the same way (desktop app)
  *   POST /v1/refresh        asks GitHub right now (needs REFRESH_TOKEN); CI calls it after a release
  *   POST /v1/kofi           Ko-fi's webhook: a payment whose message holds an unlock code (needs
  *                           KOFI_VERIFICATION_TOKEN)
@@ -27,6 +31,7 @@ export function buildServer({
   config,
   releases,
   apks,
+  msis = new ReleaseFileCache({ config, kind: 'msi' }),
   support,
   announcements,
   logger = false,
@@ -65,13 +70,41 @@ export function buildServer({
             sha256: meta?.sha256 ?? digestHex,
           }
         : null,
+      windows: release.msi ? await describeMsi(release, request, { ensure }) : null,
     };
   };
 
-  /** Downloads the newest APK ahead of time, so the first app that asks does not wait. */
+  /**
+   * The Windows installer of a release: where to get it and its checksum. A failure to get the
+   * installer leaves it out (null), so the Android app's answer is never affected by it.
+   */
+  const describeMsi = async (release, request, { ensure }) => {
+    let meta;
+    try {
+      meta = ensure ? await msis.ensure(release) : await msis.meta(release.tag);
+    } catch (error) {
+      request.log.error(error);
+      return null;
+    }
+    const digestHex = release.msi.digest?.startsWith('sha256:') ? release.msi.digest.slice(7).toLowerCase() : null;
+    return {
+      msi: {
+        url: `${baseUrl(request)}/v1/msi/${release.tag}`,
+        name: release.msi.name,
+        size: meta?.size ?? release.msi.size,
+        sha256: meta?.sha256 ?? digestHex,
+      },
+    };
+  };
+
+  /** Downloads the newest APK and installer ahead of time, so the first app that asks does not wait. */
   const warm = async () => {
     const latest = await releases.latest();
     if (latest) await apks.ensure(latest);
+    const newestMsi = (await releases.list()).find((release) => release.msi);
+    if (newestMsi) {
+      await msis.ensure(newestMsi).catch((error) => app.log.warn({ err: error }, 'warming the installer cache failed'));
+    }
     return latest;
   };
 
@@ -102,6 +135,51 @@ export function buildServer({
       list.slice(0, 11).map((release) => describe(release, request, { ensure: false })),
     );
     return reply.send(renderPage({ app: config.appName, lang, latest, older }));
+  });
+
+  /** The headers of the public download pages: HTML, never scripted. */
+  const pageHeaders = (reply) =>
+    reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'no-cache')
+      .header('Vary', 'Accept-Language')
+      .header(
+        'Content-Security-Policy',
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+      )
+      .header('X-Content-Type-Options', 'nosniff');
+
+  /** The download page for the Windows desktop app. */
+  app.get('/desktop', async (request, reply) => {
+    const lang = pickLanguage(request.headers['accept-language']);
+    pageHeaders(reply);
+    let list;
+    try {
+      list = (await releases.list()).filter((release) => release.msi);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send(renderDesktopPage({ app: config.appName, lang, status: 'unavailable' }));
+    }
+    if (list.length === 0) {
+      return reply.code(404).send(renderDesktopPage({ app: config.appName, lang, status: 'empty' }));
+    }
+    const [latest, ...older] = await Promise.all(
+      list.slice(0, 11).map((release) => describe(release, request, { ensure: false })),
+    );
+    return reply.send(renderDesktopPage({ app: config.appName, lang, latest, older }));
+  });
+
+  /** A direct link to the newest Windows installer, as /download is for the Android app. */
+  app.get('/desktop/download', async (request, reply) => {
+    let latest;
+    try {
+      latest = (await releases.list()).find((release) => release.msi);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: 'upstream_unavailable' });
+    }
+    if (!latest) return reply.code(404).send({ error: 'no_release' });
+    return reply.header('Cache-Control', 'no-cache').redirect(`/v1/msi/${latest.tag}`, 302);
   });
 
   app.get('/download', async (request, reply) => {
@@ -148,7 +226,11 @@ export function buildServer({
     return { releases: described };
   });
 
-  app.get('/v1/apk/:tag', async (request, reply) => {
+  /**
+   * Serves the cached file of a release with Range support. The APK and the Windows installer are
+   * served the same way; only the type, the error code and the release field differ.
+   */
+  const serveReleaseFile = ({ cache, field, contentType, errorCode }) => async (request, reply) => {
     const { tag } = request.params;
     if (!isSafeTag(tag)) return reply.code(404).send({ error: 'not_found' });
     let release;
@@ -158,20 +240,20 @@ export function buildServer({
       request.log.error(error);
       return reply.code(502).send({ error: 'upstream_unavailable' });
     }
-    if (!release?.apk) return reply.code(404).send({ error: 'not_found' });
+    if (!release?.[field]) return reply.code(404).send({ error: 'not_found' });
 
     let meta;
     try {
-      meta = await apks.ensure(release);
+      meta = await cache.ensure(release);
     } catch (error) {
       request.log.error(error);
-      return reply.code(502).send({ error: 'apk_unavailable' });
+      return reply.code(502).send({ error: errorCode });
     }
 
-    const total = (await stat(apks.path(tag))).size;
+    const total = (await stat(cache.path(tag))).size;
     reply
-      .header('Content-Type', 'application/vnd.android.package-archive')
-      .header('Content-Disposition', `attachment; filename="${release.asset.name}"`)
+      .header('Content-Type', contentType)
+      .header('Content-Disposition', `attachment; filename="${release[field].name}"`)
       .header('Accept-Ranges', 'bytes')
       .header('ETag', `"${meta.sha256}"`)
       .header('Cache-Control', 'public, max-age=31536000, immutable');
@@ -185,11 +267,25 @@ export function buildServer({
         .code(206)
         .header('Content-Range', `bytes ${range.start}-${range.end}/${total}`)
         .header('Content-Length', range.end - range.start + 1);
-      return reply.send(createReadStream(apks.path(tag), range));
+      return reply.send(createReadStream(cache.path(tag), range));
     }
     reply.header('Content-Length', total);
-    return reply.send(createReadStream(apks.path(tag)));
-  });
+    return reply.send(createReadStream(cache.path(tag)));
+  };
+
+  app.get('/v1/apk/:tag', serveReleaseFile({
+    cache: apks,
+    field: 'asset',
+    contentType: 'application/vnd.android.package-archive',
+    errorCode: 'apk_unavailable',
+  }));
+
+  app.get('/v1/msi/:tag', serveReleaseFile({
+    cache: msis,
+    field: 'msi',
+    contentType: 'application/x-msi',
+    errorCode: 'msi_unavailable',
+  }));
 
   app.post('/v1/refresh', async (request, reply) => {
     if (!config.refreshToken) return reply.code(404).send({ error: 'not_found' });

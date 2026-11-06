@@ -1,7 +1,6 @@
 package com.bdersolutions.daybreak.data.cache
 
-import android.content.Context
-import android.util.AtomicFile
+import com.bdersolutions.daybreak.platform.TextFileStore
 import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisExam
@@ -12,7 +11,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -39,37 +37,20 @@ data class TimetableCache(
 
 /**
  * Persists normalized weeks as plain JSON. No credentials or secrets are stored here.
- * AtomicFile prevents a crash from leaving half a cache file behind.
+ * [file] must replace its content atomically, so a crash cannot leave half a cache behind.
  */
-class TimetableCacheStore(context: Context) {
-    private val file = File(context.filesDir, FILE_NAME)
-    private val atomicFile = AtomicFile(file)
-
+class TimetableCacheStore(private val file: TextFileStore) {
     suspend fun load(): TimetableCache = withContext(Dispatchers.IO) {
-        if (!file.exists()) return@withContext TimetableCache()
-        runCatching {
-            val text = atomicFile.readFully().toString(Charsets.UTF_8)
-            decode(text)
-        }.getOrDefault(TimetableCache())
+        val text = file.read() ?: return@withContext TimetableCache()
+        runCatching { decode(text) }.getOrDefault(TimetableCache())
     }
 
     suspend fun save(cache: TimetableCache): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            File(file.parentFile, "$FILE_NAME.tmp").delete()
-            val stream = atomicFile.startWrite()
-            try {
-                stream.write(encode(cache).toByteArray(Charsets.UTF_8))
-                atomicFile.finishWrite(stream)
-            } catch (error: Exception) {
-                atomicFile.failWrite(stream)
-                throw error
-            }
-            true
-        }.getOrDefault(false)
+        runCatching { file.write(encode(cache)) }.getOrDefault(false)
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
-        runCatching { atomicFile.delete() }
+        runCatching { file.delete() }
         Unit
     }
 
@@ -250,7 +231,7 @@ class TimetableCacheStore(context: Context) {
         )
     }.getOrNull()
 
-    private companion object {
+    companion object {
         const val FILE_NAME = "timetable_cache.json"
         const val MAX_WEEKS = 8
 

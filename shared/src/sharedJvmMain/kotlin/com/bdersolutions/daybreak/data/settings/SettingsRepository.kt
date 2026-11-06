@@ -1,6 +1,6 @@
 package com.bdersolutions.daybreak.data.settings
 
-import android.content.Context
+import com.bdersolutions.daybreak.platform.KeyValueStore
 import com.bdersolutions.daybreak.data.branding.AppIconStyle
 import com.bdersolutions.daybreak.data.branding.AppNamePreset
 import com.bdersolutions.daybreak.data.branding.AppNaming
@@ -103,8 +103,7 @@ data class AppSettings(
     val examRemindersEnabled: Boolean = true,
 )
 
-class SettingsRepository(context: Context) {
-    private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class SettingsRepository(private val preferences: KeyValueStore) {
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
@@ -334,7 +333,7 @@ class SettingsRepository(context: Context) {
 
         /** The choices for how often the app looks for updates, in hours. */
         val UPDATE_CHECK_HOURS = listOf(6, 12, 24, 72)
-        private const val PREFS_NAME = "daybreak_settings"
+        const val PREFS_NAME = "daybreak_settings"
         private const val KEY_LANGUAGE = "language"
         private const val KEY_SYNC_ENABLED = "sync_enabled"
         private const val KEY_SYNC_INTERVAL = "sync_interval"

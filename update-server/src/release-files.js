@@ -8,22 +8,35 @@ import { pipeline } from 'node:stream/promises';
 const USER_AGENT = 'daybreak-update-server';
 
 /**
- * Keeps the APK of each release on disk, so the app downloads from this server and GitHub is
- * asked once per release. While an APK is fetched its SHA-256 is computed; the app checks it too.
+ * The files the server keeps for each release, by kind:
+ *   apk  the Android app (its folder is still called apks/, so existing downloads are kept)
+ *   msi  the Windows installer of the desktop app
+ * [field] is the release property that holds the GitHub asset of that kind (see releases.js).
  */
-export class ApkCache {
-  constructor({ config, fetchImpl = fetch }) {
+export const FILE_KINDS = {
+  apk: { dir: 'apks', extension: '.apk', field: 'asset' },
+  msi: { dir: 'msis', extension: '.msi', field: 'msi' },
+};
+
+/**
+ * Keeps one kind of release file on disk, so the apps download from this server and GitHub is asked
+ * once per release. While a file is fetched its SHA-256 is computed; the apps check it too.
+ */
+export class ReleaseFileCache {
+  constructor({ config, kind = 'apk', fetchImpl = fetch }) {
+    if (!FILE_KINDS[kind]) throw new Error(`Unknown release file kind: ${kind}`);
     this.config = config;
     this.fetch = fetchImpl;
-    this.dir = join(config.dataDir, 'apks');
+    this.kind = FILE_KINDS[kind];
+    this.dir = join(config.dataDir, this.kind.dir);
     this.downloads = new Map();
   }
 
   path(tag) {
-    return join(this.dir, `${tag}.apk`);
+    return join(this.dir, `${tag}${this.kind.extension}`);
   }
 
-  /** What is known about the cached APK of [tag]: { sha256, size }, or undefined. */
+  /** What is known about the cached file of [tag]: { sha256, size }, or undefined. */
   async meta(tag) {
     try {
       const meta = JSON.parse(await readFile(join(this.dir, `${tag}.json`), 'utf8'));
@@ -34,13 +47,13 @@ export class ApkCache {
     }
   }
 
-  /** The APK of [release] on disk. Downloads it from GitHub the first time. */
+  /** The file of [release] on disk. Downloads it from GitHub the first time. */
   async ensure(release) {
     const existing = await this.meta(release.tag);
     if (existing) return existing;
     let pending = this.downloads.get(release.tag);
     if (!pending) {
-      // Two requests for the same APK share one download.
+      // Two requests for the same file share one download.
       pending = this.#download(release).finally(() => this.downloads.delete(release.tag));
       this.downloads.set(release.tag, pending);
     }
@@ -48,7 +61,9 @@ export class ApkCache {
   }
 
   async #download(release) {
-    const { asset, tag } = release;
+    const { tag } = release;
+    const asset = release[this.kind.field];
+    if (!asset) throw new Error(`Release ${tag} has no ${this.kind.field} asset`);
     await mkdir(this.dir, { recursive: true });
 
     const headers = { 'User-Agent': USER_AGENT };
@@ -95,16 +110,17 @@ export class ApkCache {
     }
   }
 
-  /** Deletes the oldest APKs beyond the number to keep. */
+  /** Deletes the oldest files beyond the number to keep. */
   async #prune() {
-    const names = (await readdir(this.dir)).filter((name) => name.endsWith('.apk'));
+    const extension = this.kind.extension;
+    const names = (await readdir(this.dir)).filter((name) => name.endsWith(extension));
     const dated = await Promise.all(
       names.map(async (name) => ({ name, time: (await stat(join(this.dir, name))).mtimeMs })),
     );
     dated.sort((a, b) => b.time - a.time);
     for (const { name } of dated.slice(this.config.keepApks)) {
       await rm(join(this.dir, name), { force: true });
-      await rm(join(this.dir, name.replace(/\.apk$/, '.json')), { force: true });
+      await rm(join(this.dir, name.slice(0, -extension.length) + '.json'), { force: true });
     }
   }
 }

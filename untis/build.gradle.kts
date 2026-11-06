@@ -1,27 +1,23 @@
+// Plain JVM module: it has no Android dependencies, so the Android app and the Windows
+// desktop app both use it. Bytecode stays at Java 11 to match the Android app.
 plugins {
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.jvm)
 }
 
-android {
-    namespace = "com.bdersolutions.daybreak.untis"
-    compileSdk {
-        version = release(37)
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
 
-    defaultConfig {
-        minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
     }
 }
 
 dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
-    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit)
 }

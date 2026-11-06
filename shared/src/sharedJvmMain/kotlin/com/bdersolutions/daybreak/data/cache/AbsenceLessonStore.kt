@@ -1,7 +1,6 @@
 package com.bdersolutions.daybreak.data.cache
 
-import android.content.Context
-import android.util.AtomicFile
+import com.bdersolutions.daybreak.platform.TextFileStore
 import com.bdersolutions.daybreak.untis.LessonStatus
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.google.gson.JsonArray
@@ -9,7 +8,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -24,32 +22,18 @@ data class AbsenceLessonData(
  * few weeks, because absences reach back to the start of the school year. Only the fields needed
  * for matching are written: no teachers, rooms or credentials.
  */
-class AbsenceLessonStore(context: Context) {
-    private val file = File(context.filesDir, FILE_NAME)
-    private val atomicFile = AtomicFile(file)
-
+class AbsenceLessonStore(private val file: TextFileStore) {
     suspend fun load(): AbsenceLessonData = withContext(Dispatchers.IO) {
-        if (!file.exists()) return@withContext AbsenceLessonData()
-        runCatching { decode(atomicFile.readFully().toString(Charsets.UTF_8)) }
-            .getOrDefault(AbsenceLessonData())
+        val text = file.read() ?: return@withContext AbsenceLessonData()
+        runCatching { decode(text) }.getOrDefault(AbsenceLessonData())
     }
 
     suspend fun save(data: AbsenceLessonData): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            val stream = atomicFile.startWrite()
-            try {
-                stream.write(encode(data).toByteArray(Charsets.UTF_8))
-                atomicFile.finishWrite(stream)
-            } catch (error: Exception) {
-                atomicFile.failWrite(stream)
-                throw error
-            }
-            true
-        }.getOrDefault(false)
+        runCatching { file.write(encode(data)) }.getOrDefault(false)
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
-        runCatching { atomicFile.delete() }
+        runCatching { file.delete() }
         Unit
     }
 
@@ -111,7 +95,7 @@ class AbsenceLessonStore(context: Context) {
         )
     }
 
-    private companion object {
+    companion object {
         const val FILE_NAME = "absence_lessons.json"
         const val VERSION = 1
     }
