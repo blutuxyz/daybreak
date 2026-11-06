@@ -15,6 +15,11 @@ val daybreakVersionName = (findProperty("daybreak.versionName") as String?)
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+    // Build and package with JDK 17, the version the workflows install and the app targets. The
+    // bundled runtime is made from this JDK, so it matches the Java used everywhere else.
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
 kotlin {
@@ -51,6 +56,9 @@ compose.desktop {
             packageVersion = daybreakVersionName
             description = "Daybreak timetable for WebUntis"
             vendor = "BDER Solutions"
+            // Bundle every standard module instead of the reduced set jlink picks. A reduced runtime
+            // is the suspected cause of "Failed to launch JVM" on Windows; not confirmed yet.
+            includeAllModules = true
 
             windows {
                 menuGroup = "Daybreak"
