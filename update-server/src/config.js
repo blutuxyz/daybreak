@@ -47,5 +47,13 @@ export function loadConfig(env = process.env) {
      * Without it the admin page does not exist. Any user name works with it; use a long random value.
      */
     adminToken: env.ADMIN_TOKEN || undefined,
+    /**
+     * Optional. The OpenRouter API key for the in-app assistant (POST /v1/assistant). Without it the
+     * assistant is off and the app hides it. The key never leaves this server. Models, provider routing
+     * and limits are set on the admin page.
+     */
+    openRouterApiKey: env.OPENROUTER_API_KEY || undefined,
+    /** The OpenRouter API address. Change it to point tests at a fake. */
+    openRouterUrl: (env.OPENROUTER_API_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
   };
 }

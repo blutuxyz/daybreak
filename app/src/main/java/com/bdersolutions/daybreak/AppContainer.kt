@@ -3,6 +3,9 @@ package com.bdersolutions.daybreak
 import android.app.UiModeManager
 import android.content.Context
 import android.os.Build
+import com.bdersolutions.daybreak.data.assistant.AssistantApi
+import com.bdersolutions.daybreak.data.assistant.AssistantIdentity
+import com.bdersolutions.daybreak.data.assistant.ChatStore
 import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
@@ -33,6 +36,7 @@ import com.bdersolutions.daybreak.data.update.UpdateManager
 import com.bdersolutions.daybreak.data.update.UpdateNotificationManager
 import com.bdersolutions.daybreak.data.update.UpdateScheduler
 import com.bdersolutions.daybreak.data.update.UpdateStore
+import com.bdersolutions.daybreak.data.tutorial.TutorialStore
 import com.bdersolutions.daybreak.platform.AtomicTextFile
 import com.bdersolutions.daybreak.platform.SharedPreferencesStore
 import com.bdersolutions.daybreak.untis.UntisApi
@@ -70,6 +74,17 @@ class AppContainer(context: Context) {
 
     // Confirms a Ko-fi payment through the update server; null (no paid hide) without that address.
     val supportApi: SupportApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { SupportApi(it) }
+
+    // The AI assistant asks the same server, which holds the API key; null without that address.
+    val assistantIdentity = AssistantIdentity(appContext)
+    // Saved assistant chats, only on this device; deleted on logout.
+    val chatStore = ChatStore(appContext)
+    val assistantApi: AssistantApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let {
+        AssistantApi(it, installId = { assistantIdentity.installId })
+    }
+
+    // Whether the introduction was finished (see TutorialStore). Kept apart from the session.
+    val tutorialStore = TutorialStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(preferences(SessionStore.PREFS_NAME), secretVault)
     val rawLogStore = RawLogStore(appContext)
@@ -157,7 +172,7 @@ class AppContainer(context: Context) {
         }
         appScope.launch {
             settingsRepository.settings
-                .map { listOf(it.widget, it.themeMode, it.dynamicColor, it.accent, it.language, it.lessonColors, it.subjectColorMode) }
+                .map { listOf(it.widget, it.themeMode, it.dynamicColor, it.amoledBlack, it.accent, it.language, it.lessonColors, it.subjectColorMode) }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(400)

@@ -121,11 +121,18 @@ import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
+import com.bdersolutions.daybreak.data.tutorial.TutorialProgress
+import com.bdersolutions.daybreak.ui.tutorial.TutorialScreen
+import com.bdersolutions.daybreak.ui.assistant.AssistantScreen
+import com.bdersolutions.daybreak.ui.assistant.AssistantViewModel
 import java.time.LocalDate
 import java.util.Locale
 
-/** What the app shows, in order: the terms first, then the update gate, then the app itself. */
-private enum class AppStage { TERMS, UPDATE_REQUIRED, APP }
+/**
+ * What the app shows, in order: the terms first, then the update gate, then the introduction (once, for
+ * everyone, also for users who were already signed in), then the app itself.
+ */
+private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, APP }
 
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
@@ -153,9 +160,11 @@ fun DaybreakApp(
         requiredVersionCode = serverStatus?.minVersionCode,
         switches = remote,
     )
+    val tutorialVersion by container.tutorialStore.completedVersion.collectAsStateWithLifecycle()
     val stage = when {
         !termsAccepted -> AppStage.TERMS
         updateRequired -> AppStage.UPDATE_REQUIRED
+        !TutorialProgress.isDone(tutorialVersion) -> AppStage.TUTORIAL
         else -> AppStage.APP
     }
 
@@ -192,6 +201,11 @@ fun DaybreakApp(
                     AppStage.UPDATE_REQUIRED -> UpdateRequiredRoute(
                         manager = container.updateManager,
                         requiredVersionName = serverStatus?.minVersionName ?: "",
+                    )
+
+                    AppStage.TUTORIAL -> TutorialScreen(
+                        settingsRepository = container.settingsRepository,
+                        onFinish = { container.tutorialStore.complete() },
                     )
 
                     AppStage.APP -> DaybreakRoot(
@@ -333,6 +347,16 @@ private fun LoggedInContent(
         }
     }
 
+    // The assistant shows when the server offers it and the developer's switch ("assistant") is on.
+    var assistantOffered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { assistantOffered = container.assistantApi?.models() != null }
+    val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
+    val openAssistant: (() -> Unit)? = if (assistantShown) {
+        { destination = Destination.Main(MainPage.ASSISTANT) }
+    } else {
+        null
+    }
+
     val timetableViewModel: TimetableViewModel = viewModel(
         key = "timetable_${session.studentId}",
         factory = TimetableViewModel.Factory(container),
@@ -397,6 +421,7 @@ private fun LoggedInContent(
                             ?: if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
                         openSearchOnStart = openSearch,
                         onOpenUpcoming = { destination = Destination.Main(MainPage.UPCOMING) },
+                        onOpenAssistant = openAssistant,
                     )
 
                     1 -> {
@@ -413,6 +438,8 @@ private fun LoggedInContent(
                         onOpenPage = { destination = Destination.Settings(it) },
                         onOpenAccount = { destination = Destination.Main(MainPage.ACCOUNT) },
                         onOpenMessages = { destination = Destination.Main(MainPage.MESSAGES) },
+                        onOpenAssistant = openAssistant,
+                        onOpenTutorial = { destination = Destination.Tutorial },
                     )
                 }
             }
@@ -425,6 +452,12 @@ private fun LoggedInContent(
                 page = page.page,
                 viewModel = settingsViewModel,
                 onBack = closePage,
+            )
+
+            Destination.Tutorial -> TutorialScreen(
+                settingsRepository = container.settingsRepository,
+                onFinish = closePage,
+                onClose = closePage,
             )
 
             Destination.Debug -> DebugScreen(
@@ -446,6 +479,14 @@ private fun LoggedInContent(
                     viewModel = viewModel(
                         key = "account_${session.studentId}",
                         factory = AccountViewModel.Factory(container),
+                    ),
+                    onBack = closePage,
+                )
+
+                MainPage.ASSISTANT -> AssistantScreen(
+                    viewModel = viewModel(
+                        key = "assistant_${session.studentId}",
+                        factory = AssistantViewModel.Factory(container),
                     ),
                     onBack = closePage,
                 )
@@ -496,13 +537,14 @@ private fun LoggedInContent(
 }
 
 /** Pages that are not settings but open over the tabs the same way. */
-private enum class MainPage { UPCOMING, ACCOUNT, MESSAGES }
+private enum class MainPage { UPCOMING, ACCOUNT, MESSAGES, ASSISTANT }
 
 /** A full-screen page pushed over the tabs. */
 private sealed interface Destination {
     data class Settings(val page: SettingsPage) : Destination
     data class Main(val page: MainPage) : Destination
     data object Debug : Destination
+    data object Tutorial : Destination
 }
 
 /** Keeps the open page across configuration changes and process death, as a short text. */
@@ -512,12 +554,14 @@ private val DestinationSaver = Saver<Destination?, String>(
             is Destination.Settings -> "S:${destination.page.name}"
             is Destination.Main -> "M:${destination.page.name}"
             Destination.Debug -> "D"
+            Destination.Tutorial -> "T"
             null -> ""
         }
     },
     restore = { saved ->
         when {
             saved == "D" -> Destination.Debug
+            saved == "T" -> Destination.Tutorial
             saved.startsWith("S:") -> SettingsPage.entries.firstOrNull { it.name == saved.drop(2) }?.let { Destination.Settings(it) }
             saved.startsWith("M:") -> MainPage.entries.firstOrNull { it.name == saved.drop(2) }?.let { Destination.Main(it) }
             else -> null

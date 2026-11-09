@@ -73,6 +73,8 @@ data class AppSettings(
     val notificationsEnabled: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    /** Pure black surfaces in the dark theme (AMOLED). No effect in the light theme. */
+    val amoledBlack: Boolean = false,
     val accent: AccentColor = AccentColor.OCEAN,
     val motionStyle: MotionStyle = MotionStyle.EXPRESSIVE,
     val startView: StartView = StartView.DAY,
@@ -136,6 +138,10 @@ class SettingsRepository(private val preferences: KeyValueStore) {
 
     fun setDynamicColor(enabled: Boolean) {
         update(_settings.value.copy(dynamicColor = enabled))
+    }
+
+    fun setAmoledBlack(enabled: Boolean) {
+        update(_settings.value.copy(amoledBlack = enabled))
     }
 
     fun setAccent(accent: AccentColor) {
@@ -242,6 +248,7 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             .putBoolean(KEY_NOTIFICATIONS, value.notificationsEnabled)
             .putString(KEY_THEME_MODE, value.themeMode.name)
             .putBoolean(KEY_DYNAMIC_COLOR, value.dynamicColor)
+            .putBoolean(KEY_AMOLED_BLACK, value.amoledBlack)
             .putString(KEY_ACCENT, value.accent.name)
             .putString(KEY_MOTION_STYLE, value.motionStyle.name)
             .putString(KEY_START_VIEW, value.startView.name)
@@ -288,6 +295,7 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         notificationsEnabled = preferences.getBoolean(KEY_NOTIFICATIONS, true),
         themeMode = enumOrDefault(preferences.getString(KEY_THEME_MODE, null), ThemeMode.SYSTEM),
         dynamicColor = preferences.getBoolean(KEY_DYNAMIC_COLOR, true),
+        amoledBlack = preferences.getBoolean(KEY_AMOLED_BLACK, false),
         accent = enumOrDefault(preferences.getString(KEY_ACCENT, null), AccentColor.OCEAN),
         motionStyle = enumOrDefault(preferences.getString(KEY_MOTION_STYLE, null), MotionStyle.EXPRESSIVE),
         startView = enumOrDefault(preferences.getString(KEY_START_VIEW, null), StartView.DAY),
@@ -386,6 +394,7 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         private const val KEY_NOTIFICATIONS = "notifications_enabled"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        private const val KEY_AMOLED_BLACK = "amoled_black"
         private const val KEY_ACCENT = "accent"
         private const val KEY_MOTION_STYLE = "motion_style"
         private const val KEY_START_VIEW = "start_view"

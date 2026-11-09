@@ -47,4 +47,5 @@ desktop.ini
 node_modules/
 update-server/data/
 update-server/.tmpdata/
+update-server/data-dev/
 !.env.example

@@ -27,6 +27,7 @@ export const FEATURES = [
   { id: 'messages.send', label: 'Writing messages to teachers' },
   { id: 'support.popup', label: 'Ko-fi support pop-up' },
   { id: 'reminders', label: 'Morning summary and evening reminders' },
+  { id: 'assistant', label: 'AI assistant' },
 ];
 
 export function defaultSwitches() {

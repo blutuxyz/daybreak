@@ -52,6 +52,15 @@ class ParseLatestTest {
     }
 
     @Test
+    fun theVersionCodeIsReadWithoutNeedingAWindowsBuild() {
+        val apkOnly = """{"tag": "v1.5.1", "versionName": "1.5.1", "versionCode": 10501, "windows": null}"""
+
+        assertEquals(10501, latestVersionCode(apkOnly))
+        assertEquals(null, latestVersionCode("not json"))
+        assertEquals(null, latestVersionCode("{}"))
+    }
+
+    @Test
     fun aReleaseWithOnlyTheOldMsiIsNotOffered() {
         // Releases before the one-click setup carry only an MSI, which this version cannot install.
         val msiOnly = COMPLETE.replace("\"installer\": {", "\"msi\": {")
@@ -77,5 +86,15 @@ class ParseLatestTest {
         val noSha = COMPLETE.replace(",\n      \"sha256\": \"ABCDEF0123\"", "")
 
         assertNull(parseLatest(noSha).installer.sha256)
+    }
+}
+
+class SetupCommandTest {
+    @org.junit.Test
+    fun theSetupStartsDetachedAndSilent() {
+        val command = setupCommand("C:/Users/a b/Daybreak-2.0.0-setup.exe")
+        org.junit.Assert.assertEquals(listOf("cmd.exe", "/c", "start", "\"\""), command.take(4))
+        org.junit.Assert.assertEquals("C:/Users/a b/Daybreak-2.0.0-setup.exe", command[4])
+        org.junit.Assert.assertEquals(listOf("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"), command.drop(5))
     }
 }

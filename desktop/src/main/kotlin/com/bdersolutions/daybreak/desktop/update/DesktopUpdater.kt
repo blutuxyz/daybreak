@@ -112,7 +112,15 @@ class DesktopUpdater(
         if (simulated || _state.value is UpdateState.Downloading) return
         _state.value = UpdateState.Checking
         try {
-            val release = fetchLatest()
+            val body = fetchLatestBody()
+            // The version comes first: a server that still reports an older release (for example while it
+            // catches up with a new one) must not make an up-to-date app complain about a missing build.
+            val newest = latestVersionCode(body)
+            if (newest != null && newest <= build.versionCode) {
+                _state.value = UpdateState.UpToDate
+                return
+            }
+            val release = parseLatest(body)
             if (release.versionCode > build.versionCode) {
                 _state.value = UpdateState.Available(release)
                 if (autoDownload) scope.launch { download(release) }
@@ -151,10 +159,13 @@ class DesktopUpdater(
      * The setup closes this app itself if it still runs, so the caller may exit straight afterwards.
      */
     fun install(file: File) {
-        ProcessBuilder(file.absolutePath, *SILENT_SETUP_ARGUMENTS).start()
+        // Through `cmd /c start`, so the setup is not a child of this process: earlier setups closed
+        // Daybreak with `taskkill /T`, which also killed a setup started directly from the app, so an
+        // update only flashed the progress window and never installed.
+        ProcessBuilder(setupCommand(file.absolutePath)).start()
     }
 
-    private suspend fun fetchLatest(): LatestRelease = withContext(Dispatchers.IO) {
+    private suspend fun fetchLatestBody(): String = withContext(Dispatchers.IO) {
         val url = build.updateApiUrl + "/v1/latest"
         requireHttps(url)
         val response = client.send(
@@ -162,7 +173,7 @@ class DesktopUpdater(
             HttpResponse.BodyHandlers.ofString(),
         )
         if (response.statusCode() != 200) throw IllegalStateException("The update server answered ${response.statusCode()}.")
-        parseLatest(response.body())
+        response.body()
     }
 
     private fun downloadVerified(release: LatestRelease): File {
@@ -218,6 +229,14 @@ class DesktopUpdater(
 
 /** What the in-app update passes to the setup program (Inno Setup switches). */
 internal val SILENT_SETUP_ARGUMENTS = arrayOf("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
+
+/** The command that starts the setup detached from this app (the empty argument is `start`'s window title). */
+internal fun setupCommand(setupPath: String): List<String> =
+    listOf("cmd.exe", "/c", "start", "\"\"", setupPath, *SILENT_SETUP_ARGUMENTS)
+
+/** The version code in the answer of /v1/latest, or null when it has none. */
+internal fun latestVersionCode(body: String): Int? =
+    runCatching { JsonParser.parseString(body).asJsonObject.get("versionCode")?.takeUnless { it.isJsonNull }?.asInt }.getOrNull()
 
 /**
  * Reads the answer of the update server's /v1/latest. Kept apart from the network, so the contract

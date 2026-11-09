@@ -62,6 +62,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
@@ -201,6 +202,7 @@ fun TimetableScreen(
     initialMode: Int = 0,
     openSearchOnStart: Boolean = false,
     onOpenUpcoming: () -> Unit = {},
+    onOpenAssistant: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val cache by viewModel.displayCache.collectAsStateWithLifecycle()
@@ -414,6 +416,15 @@ fun TimetableScreen(
                         )
                     },
                     actions = {
+                        if (onOpenAssistant != null) {
+                            IconButton(onClick = onOpenAssistant) {
+                                Icon(
+                                    Icons.Outlined.AutoAwesome,
+                                    contentDescription = stringResource(R.string.assistant_title),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                         IconButton(onClick = { showSearch = true }) {
                             Icon(
                                 Icons.Outlined.Search,

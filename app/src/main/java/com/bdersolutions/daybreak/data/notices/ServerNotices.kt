@@ -71,6 +71,7 @@ object RemoteFeatures {
     const val MESSAGES_SEND = "messages.send"
     const val SUPPORT_POPUP = "support.popup"
     const val REMINDERS = "reminders"
+    const val ASSISTANT = "assistant"
 }
 
 /** Reads the server's status answer. Tolerant: a broken message is skipped, a broken answer is null. */
