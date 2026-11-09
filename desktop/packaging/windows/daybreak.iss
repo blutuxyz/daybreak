@@ -112,7 +112,9 @@ var
 begin
   { Restart Manager (CloseApplications) handles the install folder; this also catches a copy that
     runs from the old MSI folder or from the portable ZIP, whose files setup does not touch. }
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { No /T: the in-app updater starts this setup, so it can be a child of Daybreak.exe; killing the
+    process tree killed the setup itself a moment after it appeared, and nothing was updated. }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 { Looks for the entry the old MSI installer (jpackage/WiX) left in one uninstall branch. Its key is

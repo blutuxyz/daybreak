@@ -2,7 +2,9 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
 import { AnnouncementStore, MESSAGE_ID_PATTERN } from './announcements.js';
-import { renderAdmin } from './admin.js';
+import { parseAssistantRequest, parseTitleRequest } from './assistant.js';
+import { DEFAULT_SETTINGS, EFFORTS, HIDDEN_ROUTINGS, PROVIDER_SORTS, parseSettingsForm } from './assistant-store.js';
+import { renderAdmin, renderLogEntry } from './admin.js';
 import { pickLanguage, renderDesktopPage, renderPage } from './page.js';
 import { ReleaseFileCache } from './release-files.js';
 import { RateLimiter, extractCode, normalizeCode, parseKofiBody, sameSecret } from './support.js';
@@ -26,6 +28,10 @@ import { isSafeTag } from './version.js';
  *   GET  /v1/support/status ?code=DB-XXXX-XXXX  { paid } whether that unlock code was paid for
  *   GET  /v1/status         the minimum app version and the messages for the app (announcements.js)
  *   GET  /admin             the admin page, behind ADMIN_TOKEN: minimum version, switches and messages
+ *   GET  /v1/assistant/models  the models the app may offer (404 while the assistant is off)
+ *   POST /v1/assistant      the in-app assistant through OpenRouter: the chat in, the answer out as
+ *                           server-sent events (needs OPENROUTER_API_KEY; assistant.js)
+ *   GET  /admin/assistant/logs/:id  one logged assistant request, behind ADMIN_TOKEN
  */
 export function buildServer({
   config,
@@ -34,6 +40,8 @@ export function buildServer({
   setups = new ReleaseFileCache({ config, kind: 'setup' }),
   support,
   announcements,
+  assistant,
+  assistantStore,
   logger = false,
   now = () => Date.now(),
 }) {
@@ -46,6 +54,22 @@ export function buildServer({
     done(null, Object.fromEntries(new URLSearchParams(body)));
   });
   const statusLimiter = new RateLimiter({ limit: 30, windowMs: 60_000, now });
+  // Limits per IP address, set on the admin page (they apply at once, without a restart).
+  const limits = () => assistantStore?.currentSettings() ?? DEFAULT_SETTINGS;
+  const assistantLimiter = new RateLimiter({ limit: () => limits().assistantPerMinute, windowMs: 60_000, now });
+  const updateLimiter = new RateLimiter({ limit: () => limits().updateChecksPerMinute, windowMs: 60_000, now });
+  const downloadLimiter = new RateLimiter({ limit: () => limits().downloadsPerHour, windowMs: 3_600_000, now });
+  app.addHook('onRequest', async (request, reply) => {
+    const path = request.url.split('?')[0];
+    const limiter = /^\/v1\/(latest|releases|status|assistant\/models)$/.test(path)
+      ? updateLimiter
+      : /^\/(v1\/(apk|setup)\/[^/]+|download|desktop\/download)$/.test(path)
+        ? downloadLimiter
+        : undefined;
+    if (limiter && !limiter.allow(request.ip)) {
+      return reply.code(429).header('Retry-After', '60').send({ error: 'too_many_requests' });
+    }
+  });
 
   const baseUrl = (request) => config.publicUrl ?? `${request.protocol}://${request.host}`;
 
@@ -347,6 +371,72 @@ export function buildServer({
     }
   });
 
+  /** The models the app may offer, or 404 while the assistant is off (the app then hides it). */
+  app.get('/v1/assistant/models', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const models = await assistant?.models();
+    if (!models) return reply.code(404).send({ error: 'not_found' });
+    return models;
+  });
+
+  /** A short AI title for a new chat: { title } or 204 when none is made (the app keeps its own name). */
+  app.post('/v1/assistant/title', { bodyLimit: 16_384, logLevel: 'warn' }, async (request, reply) => {
+    if (!assistant?.configured) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!assistantLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const installId = String(request.headers['x-daybreak-install'] ?? '');
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(installId)) return reply.code(400).send({ error: 'no_install_id' });
+    const parsed = parseTitleRequest(request.body);
+    if (parsed.error) return reply.code(400).send({ error: parsed.error });
+    const title = await assistant.title({ request: parsed.value, installId });
+    return title ? { title } : reply.code(204).send();
+  });
+
+  /**
+   * The assistant. The answer streams as server-sent events, one JSON object per event:
+   *   {"type":"reasoning","text":"…"}               a piece of the model's reasoning (models that show it)
+   *   {"type":"text","text":"…"}                    a piece of the answer
+   *   {"type":"tool_calls","calls":[{id,name,arguments}]}  tools the app has to run, then post again
+   *   {"type":"done"}                               the turn is complete
+   *   {"type":"error","code":"…"}                   upstream, busy, limit or unavailable
+   * The user is the app's random install id (header X-Daybreak-Install), kept only as a hash.
+   */
+  app.post('/v1/assistant', { bodyLimit: 16 * 1024 * 1024, logLevel: 'warn' }, async (request, reply) => {
+    if (!assistant?.configured) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!assistantLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const installId = String(request.headers['x-daybreak-install'] ?? '');
+    if (!/^[A-Za-z0-9-]{16,64}$/.test(installId)) return reply.code(400).send({ error: 'no_install_id' });
+    const parsed = parseAssistantRequest(request.body);
+    if (parsed.error) return reply.code(400).send({ error: parsed.error });
+
+    const abort = new AbortController();
+    reply.hijack();
+    const out = reply.raw;
+    // The response closes early only when the app went away (stopped, or lost the connection).
+    out.on('close', () => {
+      if (!out.writableFinished) abort.abort();
+    });
+    out.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Accel-Buffering': 'no',
+      Connection: 'keep-alive',
+    });
+    const send = (event) => {
+      if (!out.writableEnded && !out.destroyed) out.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    try {
+      await assistant.run({ request: parsed.value, installId, send, signal: abort.signal });
+    } catch (error) {
+      request.log.warn({ name: error?.name }, 'assistant request failed');
+      send({ type: 'error', code: 'unavailable' });
+    } finally {
+      out.end();
+    }
+    return reply;
+  });
+
   // The admin page. Without ADMIN_TOKEN none of these routes answer, so nobody can find them.
   // Signing in is HTTP Basic: the password is the token, the user name is ignored.
   const guardAdmin = (request, reply, { write = false } = {}) => {
@@ -384,8 +474,23 @@ export function buildServer({
     if (!guardAdmin(request, reply)) return reply;
     const state = await notices.snapshot();
     const notice = typeof request.query.notice === 'string' ? request.query.notice : undefined;
+    let assistantState;
+    if (assistantStore) {
+      const settings = await assistantStore.settings();
+      assistantState = {
+        settings,
+        sorts: PROVIDER_SORTS,
+        routings: HIDDEN_ROUTINGS,
+        efforts: EFFORTS,
+        keyConfigured: Boolean(assistant?.configured),
+        clientSwitchOn: assistant ? await assistant.clientSwitchOn() : true,
+        unknownModels: assistant?.configured ? await assistant.unknownModels(settings.models.map((model) => model.id)) : null,
+        usage: await assistantStore.usageToday(),
+        logs: await assistantStore.logs({ limit: 200 }),
+      };
+    }
     adminHeaders(reply).type('text/html; charset=utf-8');
-    return reply.send(renderAdmin({ app: config.appName, state, notice, now: now() }));
+    return reply.send(renderAdmin({ app: config.appName, state, notice, now: now(), assistant: assistantState }));
   });
 
   app.post('/admin/min-version', async (request, reply) => {
@@ -420,6 +525,30 @@ export function buildServer({
       ? await notices.removeMessage(request.params.id)
       : { error: 'not_found' };
     return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  app.post('/admin/assistant', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!assistantStore) return reply.code(404).send({ error: 'not_found' });
+    const parsed = parseSettingsForm(request.body);
+    if (parsed.error) return backToAdmin(reply, parsed.error);
+    await assistantStore.saveSettings(parsed.value);
+    return backToAdmin(reply, 'assistant_saved');
+  });
+
+  app.post('/admin/assistant/logs/clear', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!assistantStore) return reply.code(404).send({ error: 'not_found' });
+    await assistantStore.clearLogs();
+    return backToAdmin(reply, 'logs_cleared');
+  });
+
+  app.get('/admin/assistant/logs/:id', async (request, reply) => {
+    if (!guardAdmin(request, reply)) return reply;
+    const entry = /^[0-9a-f]{12}$/.test(request.params.id) ? await assistantStore?.log(request.params.id) : undefined;
+    adminHeaders(reply).type('text/html; charset=utf-8');
+    if (!entry) return reply.code(404).send(renderLogEntry({ app: config.appName, entry: undefined }));
+    return reply.send(renderLogEntry({ app: config.appName, entry }));
   });
 
   /** Tells whether an unlock code the app shows has a payment on record. Changes nothing. */

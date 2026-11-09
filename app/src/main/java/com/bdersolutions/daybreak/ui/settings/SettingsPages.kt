@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Sync
@@ -97,6 +98,7 @@ import java.time.format.DateTimeFormatter
 
 /** The screens that open from the settings list. Each one slides in over it. */
 enum class SettingsPage {
+    LICENSES,
     APPEARANCE,
     TIMETABLE,
     LESSON_COLORS,
@@ -134,6 +136,7 @@ fun SettingsPageHost(
         SettingsPage.CALENDAR_EXPORT -> CalendarExportScreen(viewModel, onBack)
         SettingsPage.UPDATES -> UpdatesScreen(viewModel, onBack)
         SettingsPage.ABOUT -> AboutScreen(onBack = onBack)
+        SettingsPage.LICENSES -> LicensesScreen(onBack = onBack)
         SettingsPage.LEGAL -> LegalScreen(onBack = onBack)
     }
 }
@@ -271,6 +274,20 @@ fun AppearanceScreen(
                         },
                     )
                 }
+
+                AppearanceDivider()
+                SettingsRow(
+                    icon = Icons.Outlined.Contrast,
+                    title = stringResource(R.string.settings_amoled),
+                    subtitle = stringResource(R.string.settings_amoled_desc),
+                    onClick = { viewModel.setAmoledBlack(!settings.amoledBlack) },
+                    trailing = {
+                        SpringSwitch(
+                            checked = settings.amoledBlack,
+                            onCheckedChange = viewModel::setAmoledBlack,
+                        )
+                    },
+                )
 
                 if (dynamicAvailable) {
                     AppearanceDivider()

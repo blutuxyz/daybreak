@@ -25,6 +25,8 @@ GitHub release  ──►  update-server (Coolify)  ──►  Daybreak app
 | `GET /health` | `{ "ok": true }`, for Coolify's health check. |
 | `GET /v1/status` | The minimum app version and the messages for the app (see below). No secret, no account. |
 | `GET /admin` | The admin page to set the minimum version and messages. Needs `ADMIN_TOKEN`; without it the page does not exist. |
+| `GET /v1/assistant/models` | The models the app may offer and whether to show the model switcher. `404` hides the assistant in the app. |
+| `POST /v1/assistant` | The in-app AI assistant through OpenRouter (see below). Needs `OPENROUTER_API_KEY`. |
 
 The server asks GitHub at most every `CACHE_TTL_SECONDS` (5 minutes), uses the ETag so an unchanged
 list costs no rate limit, and keeps serving the last list if GitHub is down. It downloads a new APK
@@ -182,3 +184,47 @@ message text. The status endpoint allows 30 requests per minute per address.
   with the installed app's key, so a compromised server cannot push a different app.
 - `POST /v1/refresh` is the only write-like endpoint and needs the secret. Nothing else changes state.
 - The container runs as an unprivileged user.
+
+
+## AI assistant (OpenRouter)
+
+The app's assistant ("Frag Daybreak" / "Ask Daybreak") talks to the models **through this server**, which
+forwards to [OpenRouter](https://openrouter.ai). The OpenRouter key never ships inside the APK.
+
+- **Key:** set `OPENROUTER_API_KEY` (a secret environment variable on Coolify). Without it the assistant is off
+  and the app hides it. `OPENROUTER_API_URL` only matters for tests.
+- **Everything else is on the admin page**, section "AI assistant": the models (one OpenRouter id per line,
+  `id | label`), the default model, whether the app shows the model switcher (hidden: always the default model or a
+  random one), provider routing (default, cheapest, fastest throughput, lowest latency), provider fallbacks,
+  "no data collection" providers, the budgets, the per-IP limits and the request log.
+- **Reasoning effort:** optionally show a picker in the app and choose the levels it offers (sent as OpenRouter `reasoning.effort`; not every model takes every level, and a wrong one fails as "Upstream provider fail") plus a default.
+- **Local testing:** `npm run dev` starts the server on port 3000 (admin password `dev`) with a fake OpenRouter unless `OPENROUTER_API_KEY` is set.
+- **Two switches.** The client-side switch is the feature "AI assistant" under Switches: off hides the assistant
+  in the app and also turns the server side off. The server-side switch ("Server-side switch" in the assistant
+  section): off, every request fails and the app shows "Upstream provider fail".
+- **A wrong model id** (or any OpenRouter or provider failure) makes the app show "Upstream provider fail". The
+  admin page warns about ids OpenRouter does not know, and the log shows the exact error.
+- **Budgets** are per user and UTC day in US cents, from the cost OpenRouter reports for each request: 10 cents
+  for free users and 20 cents for supporters (a paid Ko-fi unlock code) by default. The user is the app's random
+  install id (stored only as a hash). The app never shows the budget: a user over it is told the assistant is not
+  available right now.
+- **Rate limits per IP address** (admin page): assistant requests per minute, update checks and status requests
+  (`/v1/latest`, `/v1/releases`, `/v1/status`, `/v1/assistant/models`) per minute, APK and installer downloads per hour.
+- **Log:** the last requests (status, model, provider, tokens, cost, duration, errors) with a page per request.
+  With "Log the text" on, it also keeps the questions, answers, tool calls and the timetable summary, for
+  `logRetentionDays` (7 by default). Turn it off to keep only the numbers. Attachments are never stored, only
+  their names and sizes.
+
+The app posts `{ language, today, context, model?, unlockCode?, messages }` with header `X-Daybreak-Install`.
+Messages are `user` (text and, for the newest question, `attachments`: images, PDFs or text files as base64),
+`assistant` (text and `toolCalls`) and `tool` (`toolCallId`, `content`). The answer streams as server-sent events:
+`{"type":"text","text":"…"}`, `{"type":"tool_calls","calls":[…]}`, `{"type":"done"}` or
+`{"type":"error","code":"upstream|busy|limit|unavailable"}`.
+
+**Tools run in the app** (the data and the WebUntis session are on the phone): `get_lessons`, `get_exams`,
+`get_lesson_notes` (what teachers wrote on a subject's lessons, for "what do I study for the exam"),
+`get_homework`, `get_absences`, `list_teachers` and `draft_message`. A drafted message is shown to the student,
+who has to confirm it before the app sends anything.
+
+Files: `assistant-settings.json`, `assistant-usage.json` (spend per user, last 3 days) and `assistant-log.json`
+in `DATA_DIR`.

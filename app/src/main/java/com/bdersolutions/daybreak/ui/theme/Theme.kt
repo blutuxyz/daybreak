@@ -237,7 +237,27 @@ fun daybreakColorScheme(context: Context, settings: AppSettings, dark: Boolean):
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 
     else -> fixedScheme(settings.accent, dark)
-}.boostedContainers(dark)
+}.boostedContainers(dark).let { if (dark && settings.amoledBlack) it.pitchBlack() else it }
+
+/**
+ * AMOLED black: the page itself is pure black, so OLED pixels switch off; cards and sheets stay a few steps
+ * above it, faintly tinted with the accent, so they still read as layers.
+ */
+private fun ColorScheme.pitchBlack(): ColorScheme {
+    fun level(amount: Float) = lerp(Color.Black, lerp(Color(0xFF1C1C1E), primary, 0.10f), amount)
+    return copy(
+        background = Color.Black,
+        surface = Color.Black,
+        surfaceDim = Color.Black,
+        surfaceContainerLowest = Color.Black,
+        surfaceContainerLow = level(0.35f),
+        surfaceContainer = level(0.55f),
+        surfaceContainerHigh = level(0.75f),
+        surfaceContainerHighest = level(1f),
+        surfaceBright = level(1.2f),
+        surfaceVariant = level(1f),
+    )
+}
 
 /** Resolves the user's theme choice against the system setting. */
 @Composable

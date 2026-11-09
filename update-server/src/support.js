@@ -111,14 +111,16 @@ export class RateLimiter {
   /** True if the call is allowed. */
   allow(key) {
     const time = this.now();
+    // The limit can be a function, so a value set on the admin page applies at once.
+    const limit = typeof this.limit === 'function' ? this.limit() : this.limit;
     const window = this.windows.get(key);
     if (!window || time - window.start >= this.windowMs) {
       this.windows.set(key, { start: time, count: 1 });
       if (this.windows.size > 10_000) this.#sweep(time);
-      return true;
+      return limit >= 1;
     }
     window.count += 1;
-    return window.count <= this.limit;
+    return window.count <= limit;
   }
 
   #sweep(time) {

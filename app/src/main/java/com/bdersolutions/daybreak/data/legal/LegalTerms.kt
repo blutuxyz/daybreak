@@ -19,7 +19,7 @@ data class LegalSection(
  * and [VERSION] did not.
  */
 object LegalTerms {
-    const val VERSION = 5
+    const val VERSION = 7
 
     val sections: List<LegalSection> = listOf(
         LegalSection(R.string.legal_what_title, R.string.legal_what_body),

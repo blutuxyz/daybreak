@@ -66,6 +66,7 @@ import java.util.Locale
 const val DEBUG_UNLOCK_TAPS = 10
 
 class SettingsViewModel(
+    private val chatStore: com.bdersolutions.daybreak.data.assistant.ChatStore,
     private val settingsRepository: SettingsRepository,
     private val sessionStore: SessionStore,
     private val repository: TimetableRepository,
@@ -245,6 +246,10 @@ class SettingsViewModel(
         settingsRepository.setDynamicColor(enabled)
     }
 
+    fun setAmoledBlack(enabled: Boolean) {
+        settingsRepository.setAmoledBlack(enabled)
+    }
+
     fun setAccent(accent: AccentColor) {
         settingsRepository.setAccent(accent)
     }
@@ -371,6 +376,7 @@ class SettingsViewModel(
                 absenceLessonHistory.clear()
                 schoolData.clear()
                 rawLogStore.clear()
+                chatStore.clear()
                 widgetUpdater.update()
             }
         }
@@ -381,6 +387,7 @@ class SettingsViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(SettingsViewModel::class.java))
             return SettingsViewModel(
+                chatStore = container.chatStore,
                 settingsRepository = container.settingsRepository,
                 sessionStore = container.sessionStore,
                 repository = container.timetableRepository,

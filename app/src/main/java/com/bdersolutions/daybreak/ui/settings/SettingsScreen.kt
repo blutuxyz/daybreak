@@ -51,6 +51,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.BugReport
@@ -168,6 +170,8 @@ fun SettingsScreen(
     onOpenPage: (SettingsPage) -> Unit,
     onOpenAccount: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenAssistant: (() -> Unit)? = null,
+    onOpenTutorial: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -319,6 +323,15 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.settings_messages_desc),
                         onClick = onOpenMessages,
                     )
+                    if (onOpenAssistant != null) {
+                        SettingsDivider()
+                        NavigationRow(
+                            icon = Icons.Outlined.AutoAwesome,
+                            title = stringResource(R.string.assistant_title),
+                            subtitle = stringResource(R.string.assistant_row_desc),
+                            onClick = onOpenAssistant,
+                        )
+                    }
                 }
             }
 
@@ -418,6 +431,13 @@ fun SettingsScreen(
                     )
                     SettingsDivider()
                     NavigationRow(
+                        icon = Icons.Outlined.School,
+                        title = stringResource(R.string.settings_tutorial),
+                        subtitle = stringResource(R.string.settings_tutorial_desc),
+                        onClick = onOpenTutorial,
+                    )
+                    SettingsDivider()
+                    NavigationRow(
                         icon = Icons.Outlined.PrivacyTip,
                         title = stringResource(R.string.settings_legal),
                         onClick = { onOpenPage(SettingsPage.LEGAL) },
@@ -427,6 +447,12 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Info,
                         title = stringResource(R.string.settings_about),
                         onClick = { onOpenPage(SettingsPage.ABOUT) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.Code,
+                        title = stringResource(R.string.settings_licenses),
+                        onClick = { onOpenPage(SettingsPage.LICENSES) },
                     )
                 }
             }
