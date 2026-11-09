@@ -38,6 +38,10 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Daybreak"
             android:windowSoftInputMode="adjustResize">
+            <!-- "Widget settings" on a placed widget opens the widget page (daybreak_widget_info.xml). -->
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
         </activity>
 
         <!-- Restarts the app after the name or icon was switched. Own process on purpose, see RestartActivity. -->

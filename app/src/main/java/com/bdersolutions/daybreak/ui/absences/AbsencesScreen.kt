@@ -45,6 +45,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -59,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.drop
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +103,8 @@ fun AbsencesScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val windows by viewModel.windows.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -115,11 +120,18 @@ fun AbsencesScreen(
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.drop(1).collect { haptics.perform(HapticEvent.PAGE_SNAP) }
     }
+    LaunchedEffect(viewModel) {
+        viewModel.refreshErrors.collect { error ->
+            haptics.perform(HapticEvent.ERROR)
+            snackbarHostState.showSnackbar(error.toUserMessage(context), withDismissAction = true)
+        }
+    }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.absences_title)) },
@@ -155,50 +167,69 @@ fun AbsencesScreen(
             )
         },
     ) { innerPadding ->
-        when (val current = state) {
-            AbsencesUiState.Loading -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
+        // The spinner, an error and the list cross-fade instead of cutting from one to the other.
+        val motion = MaterialTheme.motionScheme
+        AnimatedContent(
+            targetState = state,
+            contentKey = { it::class },
+            transitionSpec = {
+                fadeIn(motion.defaultEffectsSpec()).togetherWith(fadeOut(motion.fastEffectsSpec()))
+            },
+            label = "absencesState",
+        ) { current ->
+            when (current) {
+                AbsencesUiState.Loading -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
 
-            is AbsencesUiState.Failed -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.ErrorOutline,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(40.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = current.error.toUserMessage(context),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = viewModel::load) {
-                    Text(stringResource(R.string.action_retry))
+                is AbsencesUiState.Failed -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(40.dp),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = current.error.toUserMessage(context),
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = viewModel::load) {
+                        Text(stringResource(R.string.action_retry))
+                    }
+                }
+
+                is AbsencesUiState.Loaded -> HapticPullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = viewModel::load,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    AbsenceList(
+                        absences = current.absences,
+                        reasons = current.reasons,
+                        categories = categories,
+                        pagerState = pagerState,
+                        contentPadding = PaddingValues(0.dp),
+                        windows = windows,
+                    )
                 }
             }
-
-            is AbsencesUiState.Loaded -> AbsenceList(
-                absences = current.absences,
-                reasons = current.reasons,
-                categories = categories,
-                pagerState = pagerState,
-                contentPadding = innerPadding,
-                windows = windows,
-            )
         }
     }
 

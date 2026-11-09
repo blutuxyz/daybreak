@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.ui.theme
 
 import android.app.Activity
+import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -227,6 +228,17 @@ fun accentSwatchColors(accent: AccentColor, dark: Boolean): Pair<Color, Color> {
     return scheme.primary to scheme.onPrimary
 }
 
+/**
+ * The app's colour scheme for [settings] in light or [dark] mode: Material You when it is on and the
+ * phone supports it, else the chosen accent palette. The widget uses it too, so both match.
+ */
+fun daybreakColorScheme(context: Context, settings: AppSettings, dark: Boolean): ColorScheme = when {
+    settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+
+    else -> fixedScheme(settings.accent, dark)
+}.boostedContainers(dark)
+
 /** Resolves the user's theme choice against the system setting. */
 @Composable
 fun resolveDarkTheme(mode: ThemeMode): Boolean = when (mode) {
@@ -242,14 +254,8 @@ fun DaybreakTheme(
     content: @Composable () -> Unit,
 ) {
     val darkTheme = resolveDarkTheme(settings.themeMode)
-    val colorScheme = when {
-        settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        else -> fixedScheme(settings.accent, darkTheme)
-    }.boostedContainers(darkTheme)
+    val context = LocalContext.current
+    val colorScheme = daybreakColorScheme(context, settings, darkTheme)
 
     val view = LocalView.current
     if (!view.isInEditMode) {

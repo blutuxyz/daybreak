@@ -137,7 +137,7 @@ private enum class AppStage { TERMS, UPDATE_REQUIRED, APP }
 fun DaybreakApp(
     container: AppContainer,
     initialDate: LocalDate? = null,
-    openUpdates: Boolean = false,
+    openPage: SettingsPage? = null,
     startMode: Int? = null,
     openSearch: Boolean = false,
 ) {
@@ -199,7 +199,7 @@ fun DaybreakApp(
                     AppStage.APP -> DaybreakRoot(
                         container = container,
                         initialDate = initialDate,
-                        openUpdates = openUpdates,
+                        openPage = openPage,
                         startMode = startMode,
                         openSearch = openSearch,
                     )
@@ -215,7 +215,7 @@ fun DaybreakApp(
 fun DaybreakRoot(
     container: AppContainer,
     initialDate: LocalDate? = null,
-    openUpdates: Boolean = false,
+    openPage: SettingsPage? = null,
     startMode: Int? = null,
     openSearch: Boolean = false,
 ) {
@@ -261,7 +261,7 @@ fun DaybreakRoot(
                 container = container,
                 session = currentSession,
                 initialDate = initialDate,
-                openUpdates = openUpdates,
+                openPage = openPage,
                 startMode = startMode,
                 openSearch = openSearch,
             )
@@ -275,16 +275,16 @@ private fun LoggedInContent(
     container: AppContainer,
     session: DaybreakSession,
     initialDate: LocalDate?,
-    openUpdates: Boolean,
+    openPage: SettingsPage?,
     startMode: Int?,
     openSearch: Boolean,
 ) {
     // Tapping the "update available" notification lands on the Updates screen.
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (openUpdates) 2 else 0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (openPage != null) 2 else 0) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
     // The settings screen that is open over the list, if any. Debug has its own flag above.
     var settingsPage by rememberSaveable {
-        mutableStateOf<SettingsPage?>(if (openUpdates) SettingsPage.UPDATES else null)
+        mutableStateOf<SettingsPage?>(openPage)
     }
     // Kept after closing, so the screen can still be drawn while it slides out.
     var shownPage by remember { mutableStateOf(settingsPage) }

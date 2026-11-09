@@ -101,6 +101,8 @@ data class AppSettings(
     val morningLeadMinutes: Int = ReminderPlanner.DEFAULT_LEAD_MINUTES,
     /** An evening notification for exams and homework that are due the next day. */
     val examRemindersEnabled: Boolean = true,
+    /** How the home screen widget looks and what it shows. */
+    val widget: WidgetSettings = WidgetSettings(),
 )
 
 class SettingsRepository(private val preferences: KeyValueStore) {
@@ -222,6 +224,10 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         update(_settings.value.copy(haptics = transform(_settings.value.haptics)))
     }
 
+    fun updateWidget(transform: (WidgetSettings) -> WidgetSettings) {
+        update(_settings.value.copy(widget = transform(_settings.value.widget).normalized()))
+    }
+
     private fun update(value: AppSettings) {
         preferences.edit()
             .putString(KEY_LANGUAGE, value.language.tag)
@@ -249,6 +255,13 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             .putBoolean(KEY_MORNING_SUMMARY, value.morningSummaryEnabled)
             .putInt(KEY_MORNING_LEAD, value.morningLeadMinutes)
             .putBoolean(KEY_EXAM_REMINDERS, value.examRemindersEnabled)
+            .putString(KEY_WIDGET_THEME, value.widget.theme.name)
+            .putInt(KEY_WIDGET_OPACITY, value.widget.backgroundOpacity)
+            .putString(KEY_WIDGET_DETAIL, value.widget.detail.name)
+            .putBoolean(KEY_WIDGET_HEADLINE, value.widget.showHeadline)
+            .putBoolean(KEY_WIDGET_CANCELLED, value.widget.showCancelled)
+            .putBoolean(KEY_WIDGET_NEXT_DAY, value.widget.nextDayAfterSchool)
+            .putBoolean(KEY_WIDGET_SYNC_TIME, value.widget.showSyncTime)
             .apply()
         _settings.value = value
     }
@@ -284,6 +297,15 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         morningLeadMinutes = preferences.getInt(KEY_MORNING_LEAD, ReminderPlanner.DEFAULT_LEAD_MINUTES)
             .takeIf { it in ReminderPlanner.LEAD_MINUTES } ?: ReminderPlanner.DEFAULT_LEAD_MINUTES,
         examRemindersEnabled = preferences.getBoolean(KEY_EXAM_REMINDERS, true),
+        widget = WidgetSettings(
+            theme = enumOrDefault(preferences.getString(KEY_WIDGET_THEME, null), WidgetTheme.APP),
+            backgroundOpacity = preferences.getInt(KEY_WIDGET_OPACITY, 100),
+            detail = enumOrDefault(preferences.getString(KEY_WIDGET_DETAIL, null), WidgetDetail.ROOM),
+            showHeadline = preferences.getBoolean(KEY_WIDGET_HEADLINE, true),
+            showCancelled = preferences.getBoolean(KEY_WIDGET_CANCELLED, true),
+            nextDayAfterSchool = preferences.getBoolean(KEY_WIDGET_NEXT_DAY, true),
+            showSyncTime = preferences.getBoolean(KEY_WIDGET_SYNC_TIME, true),
+        ).normalized(),
     )
 
     private fun decodeFavoriteTargets(json: String?): List<FavoriteTarget> {
@@ -359,6 +381,13 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         private const val KEY_MORNING_SUMMARY = "morning_summary"
         private const val KEY_MORNING_LEAD = "morning_lead_minutes"
         private const val KEY_EXAM_REMINDERS = "exam_reminders"
+        private const val KEY_WIDGET_THEME = "widget_theme"
+        private const val KEY_WIDGET_OPACITY = "widget_background_opacity"
+        private const val KEY_WIDGET_DETAIL = "widget_detail"
+        private const val KEY_WIDGET_HEADLINE = "widget_headline"
+        private const val KEY_WIDGET_CANCELLED = "widget_show_cancelled"
+        private const val KEY_WIDGET_NEXT_DAY = "widget_next_day_after_school"
+        private const val KEY_WIDGET_SYNC_TIME = "widget_show_sync_time"
         private val gson = com.google.gson.Gson()
     }
 }

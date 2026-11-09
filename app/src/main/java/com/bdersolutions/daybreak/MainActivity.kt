@@ -1,5 +1,7 @@
 package com.bdersolutions.daybreak
 
+import android.appwidget.AppWidgetManager
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -7,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.bdersolutions.daybreak.ui.DaybreakApp
+import com.bdersolutions.daybreak.ui.settings.SettingsPage
 import java.time.LocalDate
 
 class MainActivity : AppCompatActivity() {
@@ -18,14 +21,25 @@ class MainActivity : AppCompatActivity() {
         val widgetDate = intent.getStringExtra(EXTRA_WIDGET_DATE)?.let { raw ->
             runCatching { LocalDate.parse(raw) }.getOrNull()
         }
-        val openUpdates = intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false)
+        // "Widget settings" on a placed widget (long press in the launcher) opens the widget page.
+        // The launcher waits for a result; there is nothing to confirm, the widget is already there.
+        val configureWidget = intent.action == AppWidgetManager.ACTION_APPWIDGET_CONFIGURE
+        if (configureWidget) {
+            val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+        }
+        val openPage = when {
+            configureWidget -> SettingsPage.WIDGET
+            intent.getBooleanExtra(EXTRA_OPEN_UPDATES, false) -> SettingsPage.UPDATES
+            else -> null
+        }
         // Long-pressing the app icon offers Today, Week and Search (res/xml/shortcuts.xml).
         val shortcut = intent.getStringExtra(EXTRA_SHORTCUT)
         setContent {
             DaybreakApp(
                 container = container,
                 initialDate = widgetDate,
-                openUpdates = openUpdates,
+                openPage = openPage,
                 startMode = when (shortcut) {
                     SHORTCUT_TODAY -> 0
                     SHORTCUT_WEEK -> 1

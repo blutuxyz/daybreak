@@ -1,5 +1,14 @@
 package com.bdersolutions.daybreak.ui.messages
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import android.content.ActivityNotFoundException
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -346,8 +355,11 @@ private fun MailSheetContent(
 
             else -> {
                 SelectionContainer {
+                    val linkColor = MaterialTheme.colorScheme.primary
+                    val body = mail.content.ifBlank { stringResource(R.string.messages_no_text) }
                     Text(
-                        text = mail.content.ifBlank { stringResource(R.string.messages_no_text) },
+                        // Web addresses in a message open in the browser when tapped.
+                        text = remember(body, linkColor) { linkified(body, linkColor) },
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
@@ -576,3 +588,23 @@ private fun shortTime(time: LocalDateTime, locale: Locale): String {
 
 private fun longTime(time: LocalDateTime, locale: Locale): String =
     DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy · HH:mm", locale).format(time)
+
+private val WEB_ADDRESS = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
+
+/** [text] with every http(s) address turned into a tappable link. Trailing punctuation stays text. */
+internal fun linkified(text: String, linkColor: Color): AnnotatedString = buildAnnotatedString {
+    var cursor = 0
+    for (match in WEB_ADDRESS.findAll(text)) {
+        val url = match.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '\'')
+        val start = match.range.first
+        append(text.substring(cursor, start))
+        withLink(
+            LinkAnnotation.Url(
+                url,
+                TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
+            ),
+        ) { append(url) }
+        cursor = start + url.length
+    }
+    append(text.substring(cursor))
+}

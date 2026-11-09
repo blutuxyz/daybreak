@@ -2,20 +2,18 @@ package com.bdersolutions.daybreak.widget
 
 import android.content.Context
 import android.content.res.Configuration
-import android.os.Build
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.glance.currentState
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
@@ -35,9 +33,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
@@ -48,110 +44,77 @@ import com.bdersolutions.daybreak.MainActivity
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.cache.CachedWeek
 import com.bdersolutions.daybreak.data.cache.TimetableCache
+import com.bdersolutions.daybreak.data.schedule.LessonRun
+import com.bdersolutions.daybreak.data.schedule.WidgetPlan
+import com.bdersolutions.daybreak.data.schedule.WidgetPlanner
 import com.bdersolutions.daybreak.data.settings.AppLanguage
-import com.bdersolutions.daybreak.untis.UntisLesson
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.time.Duration
+import com.bdersolutions.daybreak.data.settings.AppSettings
+import com.bdersolutions.daybreak.data.settings.ThemeMode
+import com.bdersolutions.daybreak.data.settings.WidgetDetail
+import com.bdersolutions.daybreak.data.settings.WidgetSettings
+import com.bdersolutions.daybreak.data.settings.WidgetTheme
+import com.bdersolutions.daybreak.ui.components.automaticSubjectColor
+import com.bdersolutions.daybreak.ui.theme.daybreakColorScheme
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import android.graphics.Color as AndroidColor
+import androidx.glance.color.ColorProvider as DayNightColor
 
-private val SMALL_SIZE = DpSize(180.dp, 110.dp)
-private val MEDIUM_SIZE = DpSize(250.dp, 160.dp)
-private val LARGE_SIZE = DpSize(320.dp, 280.dp)
-
+/**
+ * The home screen widget: the day's lessons with the one that is on now, in the app's colours.
+ *
+ * It is drawn for its exact size, so it lists as many lessons as fit. Times are written as clock
+ * times ("until 10:40"), never as a countdown: the widget is only redrawn at lesson boundaries and
+ * a countdown would go stale in between.
+ */
 class DaybreakWidget : GlanceAppWidget() {
-    override val sizeMode: SizeMode = SizeMode.Responsive(
-        setOf(SMALL_SIZE, MEDIUM_SIZE, LARGE_SIZE),
-    )
+    override val sizeMode: SizeMode = SizeMode.Exact
 
-    override suspend fun provideGlance(context: Context, id: androidx.glance.GlanceId) {
-        val app = context.applicationContext as? DaybreakApplication
-        val settings = app?.container?.settingsRepository?.current()
-        val loggedIn = app?.container?.sessionStore?.isLoggedIn() == true
-        val cache = withContext(Dispatchers.IO) {
-            app?.container?.timetableCacheStore?.load() ?: TimetableCache()
-        }
-        val language = settings?.language ?: AppLanguage.GERMAN
-        val localized = localizedContext(context, language)
-        val data = buildWidgetData(cache, loggedIn, LocalDate.now(), LocalTime.now())
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val container = (context.applicationContext as? DaybreakApplication)?.container
+        container?.timetableRepository?.awaitLoaded()
         val cornerRadius = widgetCornerRadius(context)
 
         provideContent {
-            WidgetTheme(context) { seedColor, dark ->
-                WidgetContent(
-                    data = data,
-                    localized = localized,
-                    cornerRadius = cornerRadius,
-                    seedColor = seedColor,
-                    dark = dark,
+            // Everything is read inside the composition. Glance keeps a session alive for a while
+            // and an update that reaches a live session only recomposes it, so data read before
+            // provideContent would stay stale. The repositories' flows recompose on their own; the
+            // refresh stamp (set by WidgetUpdater at lesson boundaries) brings in the new time.
+            val refresh = currentState(REFRESH_KEY) ?: 0L
+            val settings = container?.settingsRepository?.settings?.collectAsState()?.value ?: AppSettings()
+            val cache = container?.timetableRepository?.cache?.collectAsState()?.value ?: TimetableCache()
+            val loggedIn = container?.sessionStore?.isLoggedIn() == true
+            val today = LocalDate.now()
+            val now = LocalTime.now()
+            val widget = settings.widget
+            val data = remember(refresh, settings, cache, loggedIn, today, now.hour, now.minute) {
+                WidgetData(
+                    loggedIn = loggedIn,
+                    hasData = cache.weeks.isNotEmpty(),
+                    today = today,
+                    now = now,
+                    plan = WidgetPlanner.plan(
+                        lessons = cache.weeks.values.flatMap(CachedWeek::lessons),
+                        today = today,
+                        now = now,
+                        showCancelled = widget.showCancelled,
+                        nextDayAfterSchool = widget.nextDayAfterSchool,
+                    ),
+                    lastSyncAt = cache.lastSyncAt,
+                    settings = widget,
                 )
             }
-        }
-    }
-
-    private fun buildWidgetData(
-        cache: TimetableCache,
-        loggedIn: Boolean,
-        today: LocalDate,
-        now: LocalTime,
-    ): WidgetData {
-        val all = cache.weeks.values
-            .flatMap(CachedWeek::lessons)
-            .filter { it.date >= today }
-            .sortedWith(compareBy<UntisLesson> { it.date }.thenBy { it.start })
-        val todayLessons = all.filter { it.date == today }
-        val nextSchoolDay = all.asSequence().map { it.date }.firstOrNull { it > today }
-        val nextSchoolDayLessons = nextSchoolDay?.let { day ->
-            all.filter { it.date == day }
-        }.orEmpty()
-
-        val current = todayLessons.firstOrNull {
-            !it.start.isAfter(now) && it.end.isAfter(now)
-        }
-        val nextToday = todayLessons.firstOrNull { it.start.isAfter(now) }
-        val nextAfterCurrent = current?.let { active ->
-            todayLessons.firstOrNull { it.date == active.date && it.start >= active.end }
-                ?: nextSchoolDayLessons.firstOrNull()
-        } ?: nextToday ?: nextSchoolDayLessons.firstOrNull()
-
-        val isFree = todayLessons.isEmpty()
-        val displayDay = if (isFree) nextSchoolDay ?: today else today
-        val displayLessons = if (isFree) nextSchoolDayLessons else todayLessons
-
-        return WidgetData(
-            loggedIn = loggedIn,
-            today = today,
-            now = now,
-            todayLessons = todayLessons,
-            current = current,
-            next = nextToday ?: nextSchoolDayLessons.firstOrNull(),
-            nextAfterCurrent = nextAfterCurrent,
-            nextSchoolDay = nextSchoolDay,
-            nextSchoolDayLessons = nextSchoolDayLessons,
-            displayDay = displayDay,
-            displayLessons = displayLessons,
-            lastSyncAt = cache.lastSyncAt,
-        )
-    }
-
-    @Composable
-    private fun WidgetTheme(
-        context: Context,
-        content: @Composable (seedColor: Color, dark: Boolean) -> Unit,
-    ) {
-        val dark = (context.resources.configuration.uiMode and
-            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val dynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        val light = if (dynamic) dynamicLightColorScheme(context) else lightColorScheme()
-        val darkScheme = if (dynamic) dynamicDarkColorScheme(context) else darkColorScheme()
-        GlanceTheme(colors = ColorProviders(light = light, dark = darkScheme)) {
-            content(if (dark) darkScheme.primary else light.primary, dark)
+            val localized = remember(settings.language) { localizedContext(context, settings.language) }
+            val palette = remember(settings) { WidgetPalette.build(context, settings) }
+            WidgetContent(
+                data = data,
+                localized = localized,
+                palette = palette,
+                cornerRadius = cornerRadius,
+            )
         }
     }
 
@@ -159,85 +122,112 @@ class DaybreakWidget : GlanceAppWidget() {
     private fun WidgetContent(
         data: WidgetData,
         localized: Context,
+        palette: WidgetPalette,
         cornerRadius: Dp,
-        seedColor: Color,
-        dark: Boolean,
     ) {
-        val colors = GlanceTheme.colors
         val size = LocalSize.current
-        val layout = when {
-            size.width < 220.dp || size.height < 140.dp -> WidgetLayout.Small
-            size.height < 240.dp -> WidgetLayout.Medium
-            else -> WidgetLayout.Large
-        }
         val action = actionStartActivity<MainActivity>(
             actionParametersOf(
                 ActionParameters.Key<String>(MainActivity.EXTRA_WIDGET_DATE) to
-                    data.displayDay.toString(),
+                    (data.plan.day ?: data.today).toString(),
             ),
         )
+        val compact = size.height < 130.dp
+        val padding = if (compact) 12.dp else 16.dp
 
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(colors.widgetBackground)
+                .background(palette.background)
                 .appWidgetBackground()
                 .cornerRadius(cornerRadius)
-                .padding(16.dp)
+                .padding(padding)
                 .clickable(action),
             verticalAlignment = Alignment.Top,
         ) {
-            WidgetHeader(data = data, localized = localized)
-            Spacer(GlanceModifier.height(8.dp))
+            WidgetHeader(data = data, localized = localized, palette = palette)
+            Spacer(GlanceModifier.height(if (compact) 4.dp else 8.dp))
+            val plan = data.plan
             when {
-                !data.loggedIn -> EmptyWidgetState(
+                !data.loggedIn -> EmptyState(
                     title = localized.getString(R.string.widget_login_prompt),
                     subtitle = localized.getString(R.string.widget_open_app),
-                    titleColor = colors.onSurface,
-                    subtitleColor = colors.onSurfaceVariant,
+                    palette = palette,
                 )
 
-                data.displayLessons.isEmpty() -> EmptyWidgetState(
-                    title = localized.getString(
-                        if (data.todayLessons.isEmpty()) {
-                            R.string.widget_free_today
-                        } else {
-                            R.string.widget_no_lessons
-                        },
-                    ),
+                plan.day == null -> EmptyState(
+                    title = localized.getString(if (data.hasData) R.string.widget_no_lessons else R.string.widget_no_data),
                     subtitle = localized.getString(R.string.widget_open_app),
-                    titleColor = colors.onSurface,
-                    subtitleColor = colors.onSurfaceVariant,
+                    palette = palette,
                 )
 
-                layout == WidgetLayout.Small -> SmallWidget(
-                    data = data,
-                    localized = localized,
-                    seedColor = seedColor,
-                    dark = dark,
-                )
-
-                layout == WidgetLayout.Medium -> MediumWidget(
-                    data = data,
-                    localized = localized,
-                    seedColor = seedColor,
-                    dark = dark,
-                )
-
-                else -> LargeWidget(
-                    data = data,
-                    localized = localized,
-                    seedColor = seedColor,
-                    dark = dark,
-                )
+                else -> {
+                    val headline = headlineText(data, localized)
+                    if (headline != null) {
+                        Text(
+                            text = headline,
+                            style = TextStyle(
+                                color = palette.primary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            maxLines = 1,
+                        )
+                        Spacer(GlanceModifier.height(4.dp))
+                    }
+                    val rows = plan.remainingRows(data.now)
+                    if (rows.isEmpty()) {
+                        Text(
+                            text = localized.getString(R.string.widget_no_lessons),
+                            style = TextStyle(color = palette.onSurfaceVariant, fontSize = 12.sp),
+                            maxLines = 1,
+                        )
+                    } else {
+                        // Header, headline and padding take the top; the rest is filled with rows.
+                        val used = padding * 2 + HEADER_HEIGHT + (if (headline != null) HEADLINE_HEIGHT else 0.dp)
+                        val fit = ((size.height - used).value / ROW_HEIGHT.value).toInt().coerceIn(1, MAX_ROWS)
+                        LessonList(
+                            rows = rows,
+                            fit = fit,
+                            current = plan.current,
+                            localized = localized,
+                            palette = palette,
+                            detail = data.settings.detail,
+                        )
+                    }
+                }
             }
         }
     }
 
+    /** The line above the list: what is on now, what comes next, or why another day is shown. */
+    private fun headlineText(data: WidgetData, localized: Context): String? {
+        if (!data.settings.showHeadline) return null
+        val plan = data.plan
+        val current = plan.current
+        val next = plan.next
+        return when {
+            !plan.isToday && plan.freeToday -> localized.getString(R.string.widget_free_today)
+            !plan.isToday -> localized.getString(R.string.widget_school_over)
+            current != null -> localized.getString(
+                R.string.widget_now_until,
+                subjectOf(current, localized),
+                formatTime(current.end),
+            )
+            next != null && next.lesson.date == data.today -> localized.getString(
+                R.string.widget_next_at,
+                subjectOf(next, localized),
+                formatTime(next.start),
+            )
+            plan.schoolOverToday -> localized.getString(R.string.widget_school_over)
+            else -> null
+        }
+    }
+
     @Composable
-    private fun WidgetHeader(data: WidgetData, localized: Context) {
-        val colors = GlanceTheme.colors
+    private fun WidgetHeader(data: WidgetData, localized: Context, palette: WidgetPalette) {
         val locale = languageLocale(localized)
+        val day = data.plan.day
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -245,35 +235,22 @@ class DaybreakWidget : GlanceAppWidget() {
             Column(modifier = GlanceModifier.defaultWeight()) {
                 Text(
                     text = localized.getString(R.string.widget_app_name),
-                    style = TextStyle(
-                        color = colors.onSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    style = TextStyle(color = palette.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
                 )
                 Text(
-                    text = if (data.todayLessons.isEmpty()) {
-                        localized.getString(R.string.widget_free_today)
-                    } else {
-                        fullDayDate(data.today, locale)
+                    text = when {
+                        day == null || day == data.today -> fullDayDate(data.today, locale)
+                        else -> localized.getString(R.string.widget_next_school_day, fullDayDate(day, locale))
                     },
-                    style = TextStyle(
-                        color = colors.onSurfaceVariant,
-                        fontSize = 11.sp,
-                    ),
+                    style = TextStyle(color = palette.onSurfaceVariant, fontSize = 12.sp),
                     maxLines = 1,
                 )
             }
-            if (data.lastSyncAt > 0L) {
+            if (data.settings.showSyncTime && data.lastSyncAt > 0L) {
                 Text(
-                    text = localized.getString(
-                        R.string.widget_last_sync_short,
-                        formatSyncTime(data.lastSyncAt),
-                    ),
-                    style = TextStyle(
-                        color = colors.onSurfaceVariant,
-                        fontSize = 10.sp,
-                    ),
+                    text = localized.getString(R.string.widget_last_sync_short, formatSyncTime(data.lastSyncAt)),
+                    style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp),
                     maxLines = 1,
                 )
             }
@@ -281,335 +258,33 @@ class DaybreakWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun SmallWidget(
-        data: WidgetData,
+    private fun LessonList(
+        rows: List<LessonRun>,
+        fit: Int,
+        current: LessonRun?,
         localized: Context,
-        seedColor: Color,
-        dark: Boolean,
+        palette: WidgetPalette,
+        detail: WidgetDetail,
     ) {
-        val colors = GlanceTheme.colors
-        val locale = languageLocale(localized)
-        when {
-            data.todayLessons.isEmpty() -> {
-                Text(
-                    text = nextSchoolDayLabel(localized, data.displayDay, locale),
-                    style = TextStyle(
-                        color = colors.onSurfaceVariant,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                    maxLines = 2,
+        // When not everything fits, the last slot says how many are left out.
+        val shown = if (rows.size > fit) rows.take((fit - 1).coerceAtLeast(1)) else rows
+        val hidden = rows.size - shown.size
+        Column(modifier = GlanceModifier.fillMaxWidth()) {
+            shown.forEach { row ->
+                LessonRow(
+                    row = row,
+                    current = row == current,
+                    localized = localized,
+                    palette = palette,
+                    detail = detail,
                 )
-                Spacer(GlanceModifier.height(3.dp))
-                data.displayLessons.firstOrNull()?.let { lesson ->
-                    SmallLessonRow(
-                        lesson = lesson,
-                        localized = localized,
-                        seedColor = seedColor,
-                        dark = dark,
-                    )
-                }
             }
-
-            data.current != null -> {
-                val current = data.current
-                val cancelled = current.isCancelled
+            if (hidden > 0) {
                 Text(
-                    text = localized.getString(
-                        R.string.widget_now_remaining,
-                        current.subject.ifBlank {
-                            localized.getString(R.string.lesson_unknown_subject)
-                        },
-                        remainingMinutes(current, data.now),
-                    ),
-                    style = TextStyle(
-                        color = if (cancelled) colors.error else colors.primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        textDecoration = if (cancelled) {
-                            TextDecoration.LineThrough
-                        } else {
-                            TextDecoration.None
-                        },
-                    ),
+                    text = localized.getString(R.string.widget_more, hidden),
+                    modifier = GlanceModifier.padding(start = 10.dp, top = 2.dp),
+                    style = TextStyle(color = palette.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium),
                     maxLines = 1,
-                )
-                data.nextAfterCurrent?.let { next ->
-                    Text(
-                        text = localized.getString(
-                            R.string.widget_after,
-                            next.subject.ifBlank {
-                                localized.getString(R.string.lesson_unknown_subject)
-                            },
-                            formatTime(next.start),
-                        ),
-                        style = TextStyle(
-                            color = colors.onSurfaceVariant,
-                            fontSize = 10.sp,
-                        ),
-                        maxLines = 1,
-                    )
-                }
-                Text(
-                    text = "${formatTime(current.start)} – ${formatTime(current.end)}" +
-                        roomSuffix(current, localized),
-                    style = TextStyle(
-                        color = colors.onSurfaceVariant,
-                        fontSize = 9.sp,
-                    ),
-                    maxLines = 1,
-                )
-            }
-
-            else -> {
-                val next = data.next
-                if (next != null) {
-                    Text(
-                        text = if (next.date == data.today) {
-                            localized.getString(R.string.widget_next_lesson)
-                        } else {
-                            nextSchoolDayLabel(localized, next.date, locale)
-                        },
-                        style = TextStyle(
-                            color = colors.onSurfaceVariant,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                        ),
-                        maxLines = 2,
-                    )
-                    Spacer(GlanceModifier.height(2.dp))
-                    SmallLessonRow(
-                        lesson = next,
-                        localized = localized,
-                        seedColor = seedColor,
-                        dark = dark,
-                    )
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun MediumWidget(
-        data: WidgetData,
-        localized: Context,
-        seedColor: Color,
-        dark: Boolean,
-    ) {
-        val colors = GlanceTheme.colors
-        val locale = languageLocale(localized)
-        when {
-            data.todayLessons.isEmpty() -> {
-                Text(
-                    text = nextSchoolDayLabel(localized, data.displayDay, locale),
-                    style = TextStyle(
-                        color = colors.primary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    maxLines = 2,
-                )
-                Spacer(GlanceModifier.height(3.dp))
-                data.displayLessons.take(3).forEach { lesson ->
-                    LessonRow(
-                        lesson = lesson,
-                        localized = localized,
-                        seedColor = seedColor,
-                        dark = dark,
-                        dense = false,
-                        showBadges = true,
-                        current = false,
-                    )
-                }
-            }
-
-            data.current != null -> {
-                val current = data.current
-                Text(
-                    text = localized.getString(
-                        R.string.widget_now_remaining,
-                        current.subject.ifBlank {
-                            localized.getString(R.string.lesson_unknown_subject)
-                        },
-                        remainingMinutes(current, data.now),
-                    ),
-                    style = TextStyle(
-                        color = if (current.isCancelled) colors.error else colors.primary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    maxLines = 1,
-                )
-                data.nextAfterCurrent?.let { next ->
-                    Text(
-                        text = localized.getString(
-                            R.string.widget_after,
-                            next.subject.ifBlank {
-                                localized.getString(R.string.lesson_unknown_subject)
-                            },
-                            formatTime(next.start),
-                        ),
-                        style = TextStyle(
-                            color = colors.onSurfaceVariant,
-                            fontSize = 10.sp,
-                        ),
-                        maxLines = 1,
-                    )
-                }
-                Spacer(GlanceModifier.height(3.dp))
-                data.todayLessons
-                    .filter { it.date == current.date && it.start >= current.end }
-                    .take(2)
-                    .forEach { lesson ->
-                        LessonRow(
-                            lesson = lesson,
-                            localized = localized,
-                            seedColor = seedColor,
-                            dark = dark,
-                            dense = true,
-                            showBadges = true,
-                            current = false,
-                        )
-                    }
-            }
-
-            else -> {
-                val upcoming = data.todayLessons
-                    .filter { it.end > data.now }
-                    .take(4)
-                if (upcoming.isEmpty()) {
-                    Text(
-                        text = localized.getString(R.string.widget_no_lessons),
-                        style = TextStyle(color = colors.onSurfaceVariant, fontSize = 11.sp),
-                    )
-                    data.nextSchoolDay?.let { day ->
-                        Spacer(GlanceModifier.height(3.dp))
-                        Text(
-                            text = nextSchoolDayLabel(localized, day, locale),
-                            style = TextStyle(
-                                color = colors.primary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            maxLines = 2,
-                        )
-                        data.nextSchoolDayLessons.take(2).forEach { lesson ->
-                            LessonRow(
-                                lesson = lesson,
-                                localized = localized,
-                                seedColor = seedColor,
-                                dark = dark,
-                                dense = true,
-                                showBadges = false,
-                                current = false,
-                            )
-                        }
-                    }
-                } else {
-                    upcoming.forEach { lesson ->
-                        LessonRow(
-                            lesson = lesson,
-                            localized = localized,
-                            seedColor = seedColor,
-                            dark = dark,
-                            dense = true,
-                            showBadges = true,
-                            current = false,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun LargeWidget(
-        data: WidgetData,
-        localized: Context,
-        seedColor: Color,
-        dark: Boolean,
-    ) {
-        val colors = GlanceTheme.colors
-        val locale = languageLocale(localized)
-        if (data.todayLessons.isEmpty()) {
-            Text(
-                text = nextSchoolDayLabel(localized, data.displayDay, locale),
-                style = TextStyle(
-                    color = colors.primary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 2,
-            )
-            Spacer(GlanceModifier.height(3.dp))
-        }
-        val dense = data.displayLessons.size > 8
-        data.displayLessons.forEach { lesson ->
-            LessonRow(
-                lesson = lesson,
-                localized = localized,
-                seedColor = seedColor,
-                dark = dark,
-                dense = dense,
-                showBadges = true,
-                current = lesson == data.current,
-            )
-        }
-    }
-
-    @Composable
-    private fun SmallLessonRow(
-        lesson: UntisLesson,
-        localized: Context,
-        seedColor: Color,
-        dark: Boolean,
-    ) {
-        val colors = GlanceTheme.colors
-        val warning = !lesson.isCancelled && lesson.hasSubstitution
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SubjectStripe(lesson.subject, seedColor, dark)
-            Spacer(GlanceModifier.width(6.dp))
-            Text(
-                text = formatTime(lesson.start),
-                modifier = GlanceModifier.width(34.dp),
-                style = TextStyle(color = colors.onSurfaceVariant, fontSize = 9.sp),
-            )
-            Spacer(GlanceModifier.width(5.dp))
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                Text(
-                    text = lesson.subject.ifBlank {
-                        localized.getString(R.string.lesson_unknown_subject)
-                    },
-                    style = TextStyle(
-                        color = if (lesson.isCancelled) colors.error else colors.onSurface,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        textDecoration = if (lesson.isCancelled) {
-                            TextDecoration.LineThrough
-                        } else {
-                            TextDecoration.None
-                        },
-                    ),
-                    maxLines = 1,
-                )
-                Text(
-                    text = roomText(lesson, localized),
-                    style = TextStyle(
-                        color = colors.onSurfaceVariant,
-                        fontSize = 9.sp,
-                    ),
-                    maxLines = 1,
-                )
-            }
-            if (warning) {
-                Spacer(
-                    GlanceModifier
-                        .size(5.dp)
-                        .cornerRadius(3.dp)
-                        .background(ColorProvider(warningColor(dark))),
                 )
             }
         }
@@ -617,172 +292,113 @@ class DaybreakWidget : GlanceAppWidget() {
 
     @Composable
     private fun LessonRow(
-        lesson: UntisLesson,
-        localized: Context,
-        seedColor: Color,
-        dark: Boolean,
-        dense: Boolean,
-        showBadges: Boolean,
+        row: LessonRun,
         current: Boolean,
+        localized: Context,
+        palette: WidgetPalette,
+        detail: WidgetDetail,
     ) {
-        val colors = GlanceTheme.colors
+        val lesson = row.lesson
         val cancelled = lesson.isCancelled
-        val warning = !cancelled && lesson.hasSubstitution
+        val changed = !cancelled && lesson.hasSubstitution
+        val base = GlanceModifier.fillMaxWidth().height(ROW_HEIGHT)
         val rowModifier = if (current) {
-            GlanceModifier
-                .fillMaxWidth()
-                .background(colors.primaryContainer)
-                .cornerRadius(7.dp)
-                .padding(horizontal = 4.dp, vertical = 1.dp)
+            base.background(palette.primaryContainer).cornerRadius(10.dp).padding(horizontal = 6.dp)
         } else {
-            GlanceModifier
-                .fillMaxWidth()
-                .padding(vertical = if (dense) 1.dp else 2.dp)
+            base.padding(horizontal = 2.dp)
         }
-        Row(
-            modifier = rowModifier,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SubjectStripe(lesson.subject, seedColor, dark, if (dense) 18.dp else 22.dp)
-            Spacer(GlanceModifier.width(6.dp))
-            Text(
-                text = formatTime(lesson.start),
-                modifier = GlanceModifier.width(36.dp),
-                style = TextStyle(
-                    color = if (current) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                    fontSize = if (dense) 9.sp else 10.sp,
-                ),
+        val mainColor = when {
+            current -> palette.onPrimaryContainer
+            cancelled -> palette.error
+            else -> palette.onSurface
+        }
+        val subColor = if (current) palette.onPrimaryContainer else palette.onSurfaceVariant
+        Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
+            Spacer(
+                GlanceModifier
+                    .width(4.dp)
+                    .height(26.dp)
+                    .cornerRadius(2.dp)
+                    .background(if (cancelled) palette.error else palette.subject(lesson.subject)),
             )
-            Spacer(GlanceModifier.width(5.dp))
+            Spacer(GlanceModifier.width(8.dp))
+            Column(modifier = GlanceModifier.width(40.dp)) {
+                Text(
+                    text = formatTime(row.start),
+                    style = TextStyle(color = subColor, fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                )
+                Text(
+                    text = formatTime(row.end),
+                    style = TextStyle(color = subColor, fontSize = 10.sp),
+                    maxLines = 1,
+                )
+            }
+            Spacer(GlanceModifier.width(6.dp))
             Column(modifier = GlanceModifier.defaultWeight()) {
                 Text(
-                    text = lesson.subject.ifBlank {
-                        localized.getString(R.string.lesson_unknown_subject)
-                    },
+                    text = subjectOf(row, localized),
                     style = TextStyle(
-                        color = when {
-                            cancelled -> colors.error
-                            current -> colors.onPrimaryContainer
-                            else -> colors.onSurface
-                        },
-                        fontSize = if (dense) 10.sp else 11.sp,
+                        color = mainColor,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        textDecoration = if (cancelled) {
-                            TextDecoration.LineThrough
-                        } else {
-                            TextDecoration.None
-                        },
+                        textDecoration = if (cancelled) TextDecoration.LineThrough else TextDecoration.None,
                     ),
                     maxLines = 1,
                 )
-                Text(
-                    text = roomText(lesson, localized),
-                    style = TextStyle(
-                        color = if (current) {
-                            colors.onPrimaryContainer
-                        } else {
-                            colors.onSurfaceVariant
-                        },
-                        fontSize = if (dense) 8.sp else 9.sp,
-                    ),
-                    maxLines = 1,
-                )
-            }
-            if (showBadges) {
-                when {
-                    cancelled -> {
-                        Spacer(GlanceModifier.width(4.dp))
-                        Badge(
-                            text = localized.getString(R.string.lesson_cancelled),
-                            content = colors.onErrorContainer,
-                            container = colors.errorContainer,
-                        )
-                    }
-
-                    warning -> {
-                        Spacer(GlanceModifier.width(4.dp))
-                        Badge(
-                            text = localized.getString(
-                                if (lesson.hasRoomChange) {
-                                    R.string.lesson_room_short
-                                } else {
-                                    R.string.lesson_substitution_short
-                                },
-                            ),
-                            content = ColorProvider(warningColor(dark)),
-                            container = ColorProvider(warningContainerColor(dark)),
-                        )
-                    }
+                val second = detailText(row, detail, localized)
+                if (second.isNotBlank()) {
+                    Text(
+                        text = second,
+                        style = TextStyle(color = subColor, fontSize = 11.sp),
+                        maxLines = 1,
+                    )
                 }
-            } else if (warning) {
-                Spacer(
-                    GlanceModifier
-                        .size(5.dp)
-                        .cornerRadius(3.dp)
-                        .background(ColorProvider(warningColor(dark))),
+            }
+            when {
+                cancelled -> Badge(
+                    text = localized.getString(R.string.lesson_cancelled),
+                    content = palette.onErrorContainer,
+                    container = palette.errorContainer,
+                )
+
+                changed -> Badge(
+                    text = localized.getString(
+                        if (lesson.hasRoomChange) R.string.lesson_room_short else R.string.lesson_substitution_short,
+                    ),
+                    content = palette.warning,
+                    container = palette.warningContainer,
                 )
             }
         }
     }
 
     @Composable
-    private fun SubjectStripe(
-        subject: String,
-        seedColor: Color,
-        dark: Boolean,
-        height: Dp = 22.dp,
-    ) {
-        Spacer(
-            GlanceModifier
-                .width(4.dp)
-                .height(height)
-                .cornerRadius(2.dp)
-                .background(ColorProvider(subjectColor(subject, seedColor, dark))),
-        )
-    }
-
-    @Composable
-    private fun Badge(
-        text: String,
-        content: ColorProvider,
-        container: ColorProvider,
-    ) {
+    private fun Badge(text: String, content: ColorProvider, container: ColorProvider) {
+        Spacer(GlanceModifier.width(4.dp))
         Text(
             text = text,
             modifier = GlanceModifier
                 .background(container)
                 .cornerRadius(6.dp)
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-            style = TextStyle(
-                color = content,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
-            ),
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            style = TextStyle(color = content, fontSize = 10.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
         )
     }
 
     @Composable
-    private fun EmptyWidgetState(
-        title: String,
-        subtitle: String,
-        titleColor: ColorProvider,
-        subtitleColor: ColorProvider,
-    ) {
+    private fun EmptyState(title: String, subtitle: String, palette: WidgetPalette) {
         Column(modifier = GlanceModifier.fillMaxWidth()) {
             Text(
                 text = title,
-                style = TextStyle(
-                    color = titleColor,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
+                style = TextStyle(color = palette.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold),
                 maxLines = 2,
             )
             Spacer(GlanceModifier.height(3.dp))
             Text(
                 text = subtitle,
-                style = TextStyle(color = subtitleColor, fontSize = 11.sp),
+                style = TextStyle(color = palette.onSurfaceVariant, fontSize = 12.sp),
                 maxLines = 2,
             )
         }
@@ -790,23 +406,27 @@ class DaybreakWidget : GlanceAppWidget() {
 
     private data class WidgetData(
         val loggedIn: Boolean,
+        val hasData: Boolean,
         val today: LocalDate,
         val now: LocalTime,
-        val todayLessons: List<UntisLesson>,
-        val current: UntisLesson?,
-        val next: UntisLesson?,
-        val nextAfterCurrent: UntisLesson?,
-        val nextSchoolDay: LocalDate?,
-        val nextSchoolDayLessons: List<UntisLesson>,
-        val displayDay: LocalDate,
-        val displayLessons: List<UntisLesson>,
+        val plan: WidgetPlan,
         val lastSyncAt: Long,
+        val settings: WidgetSettings,
     )
 
-    private enum class WidgetLayout {
-        Small,
-        Medium,
-        Large,
+    private fun subjectOf(row: LessonRun, localized: Context): String =
+        row.lesson.subject.ifBlank { localized.getString(R.string.lesson_unknown_subject) }
+
+    private fun detailText(row: LessonRun, detail: WidgetDetail, localized: Context): String {
+        val lesson = row.lesson
+        val room = lesson.room.takeIf { it.isNotBlank() }?.let { localized.getString(R.string.widget_room, it) }
+        val teacher = lesson.teacher.takeIf { it.isNotBlank() }
+        return when (detail) {
+            // A lesson without a room still says something useful.
+            WidgetDetail.ROOM -> room ?: teacher
+            WidgetDetail.TEACHER -> teacher ?: room
+            WidgetDetail.ROOM_AND_TEACHER -> listOfNotNull(room, teacher).joinToString(" · ")
+        }.orEmpty()
     }
 
     private fun localizedContext(context: Context, language: AppLanguage): Context {
@@ -818,8 +438,7 @@ class DaybreakWidget : GlanceAppWidget() {
     private fun languageLocale(context: Context): Locale =
         context.resources.configuration.locales[0] ?: Locale.GERMAN
 
-    private fun formatTime(time: LocalTime): String =
-        time.format(DateTimeFormatter.ofPattern("HH:mm"))
+    private fun formatTime(time: LocalTime): String = time.format(DateTimeFormatter.ofPattern("HH:mm"))
 
     private fun fullDayDate(date: LocalDate, locale: Locale): String {
         val pattern = if (locale.language == "de") "EEEE, d. MMM" else "EEEE, MMM d"
@@ -827,67 +446,99 @@ class DaybreakWidget : GlanceAppWidget() {
             .replaceFirstChar { it.titlecase(locale) }
     }
 
-    private fun nextSchoolDayLabel(context: Context, date: LocalDate, locale: Locale): String =
-        context.getString(R.string.widget_next_school_day, fullDayDate(date, locale))
-
-    private fun roomText(lesson: UntisLesson, localized: Context): String {
-        val room = if (lesson.room.isNotBlank()) {
-            localized.getString(R.string.widget_room, lesson.room)
-        } else {
-            lesson.teacher
-        }
-        return room
-    }
-
-    private fun roomSuffix(lesson: UntisLesson, localized: Context): String {
-        val room = roomText(lesson, localized)
-        return if (room.isBlank()) "" else " · $room"
-    }
-
-    private fun remainingMinutes(lesson: UntisLesson, now: LocalTime): Int =
-        Duration.between(now, lesson.end).toMinutes().toInt().coerceAtLeast(1)
-
     private fun formatSyncTime(lastSyncAt: Long): String =
         Instant.ofEpochMilli(lastSyncAt)
             .atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("HH:mm"))
 
-    private fun warningColor(dark: Boolean): Color =
-        if (dark) Color(0xFFFFB35C) else Color(0xFFC45A00)
-
-    private fun warningContainerColor(dark: Boolean): Color =
-        if (dark) Color(0xFF5A3200) else Color(0xFFFFE0C2)
-
-    /**
-     * Mirrors the app's stable subject hue: seed from the current Material You
-     * primary, rotated by a fixed per-subject hash.
-     */
-    private fun subjectColor(subject: String, seedColor: Color, dark: Boolean): Color {
-        val hsv = FloatArray(3)
-        AndroidColor.colorToHSV(seedColor.toArgb(), hsv)
-        val seed = (stableSubjectHash(subject) % 12) * 30f
-        val hue = (hsv[0] + seed) % 360f
-        val saturation = if (dark) 0.52f else 0.7f
-        val value = if (dark) 0.92f else 0.52f
-        return Color(AndroidColor.HSVToColor(floatArrayOf(hue, saturation, value)))
-    }
-
-    private fun stableSubjectHash(value: String): Int {
-        var hash = 7
-        for (char in value.lowercase(Locale.ROOT)) {
-            hash = hash * 31 + char.code
-        }
-        return hash and 0x7fffffff
-    }
-
     private fun widgetCornerRadius(context: Context): Dp {
         val resources = context.resources
-        val id = resources.getIdentifier(
-            "system_app_widget_background_radius",
-            "dimen",
-            "android",
-        )
+        val id = resources.getIdentifier("system_app_widget_background_radius", "dimen", "android")
         if (id == 0) return 24.dp
         return (resources.getDimension(id) / resources.displayMetrics.density).dp
+    }
+
+    companion object {
+        /** Bumped by [WidgetUpdater] so a live widget session recomposes with the current time. */
+        val REFRESH_KEY = longPreferencesKey("refresh")
+
+        private val HEADER_HEIGHT = 44.dp
+        private val HEADLINE_HEIGHT = 24.dp
+        private val ROW_HEIGHT = 36.dp
+
+        /** Glance containers hold at most ten children; one slot is kept for the "+N more" line. */
+        private const val MAX_ROWS = 9
+    }
+}
+
+/**
+ * The widget's colours, taken from the app's own scheme (Material You or the accent palette) and
+ * its lesson colours. Each colour has a light and a dark value; whether the widget follows the
+ * phone or stays in one mode is decided by [WidgetSettings.theme].
+ */
+private class WidgetPalette(
+    private val light: ColorScheme,
+    private val dark: ColorScheme,
+    /** Null follows the phone's dark mode; true or false fixes it. */
+    private val forceDark: Boolean?,
+    private val opacity: Float,
+    private val subjectColor: (String, ColorScheme, Boolean) -> Color,
+) {
+    private fun pick(role: (ColorScheme) -> Color): ColorProvider = when (forceDark) {
+        null -> DayNightColor(day = role(light), night = role(dark))
+        true -> DayNightColor(day = role(dark), night = role(dark))
+        false -> DayNightColor(day = role(light), night = role(light))
+    }
+
+    private fun pickPair(lightColor: Color, darkColor: Color): ColorProvider = when (forceDark) {
+        null -> DayNightColor(day = lightColor, night = darkColor)
+        true -> DayNightColor(day = darkColor, night = darkColor)
+        false -> DayNightColor(day = lightColor, night = lightColor)
+    }
+
+    val background = pick { it.surfaceContainer.copy(alpha = opacity) }
+    val onSurface = pick { it.onSurface }
+    val onSurfaceVariant = pick { it.onSurfaceVariant }
+    val primary = pick { it.primary }
+    val primaryContainer = pick { it.primaryContainer }
+    val onPrimaryContainer = pick { it.onPrimaryContainer }
+    val error = pick { it.error }
+    val errorContainer = pick { it.errorContainer }
+    val onErrorContainer = pick { it.onErrorContainer }
+    val warning = pickPair(Color(0xFFC45A00), Color(0xFFFFB35C))
+    val warningContainer = pickPair(Color(0xFFFFE0C2), Color(0xFF5A3200))
+
+    private val subjects = mutableMapOf<String, ColorProvider>()
+
+    /** The stripe colour of [subject], the same as in the timetable. */
+    fun subject(subject: String): ColorProvider = subjects.getOrPut(subject) {
+        pickPair(subjectColor(subject, light, false), subjectColor(subject, dark, true))
+    }
+
+    companion object {
+        fun build(context: Context, settings: AppSettings): WidgetPalette {
+            val widget = settings.widget
+            val forceDark = when (widget.theme) {
+                WidgetTheme.SYSTEM -> null
+                WidgetTheme.LIGHT -> false
+                WidgetTheme.DARK -> true
+                WidgetTheme.APP -> when (settings.themeMode) {
+                    ThemeMode.SYSTEM -> null
+                    ThemeMode.LIGHT -> false
+                    ThemeMode.DARK -> true
+                }
+            }
+            val custom = settings.lessonColors.subjectColors
+            return WidgetPalette(
+                light = daybreakColorScheme(context, settings, dark = false),
+                dark = daybreakColorScheme(context, settings, dark = true),
+                forceDark = forceDark,
+                opacity = widget.backgroundOpacity / 100f,
+                subjectColor = { subject, scheme, dark ->
+                    custom[subject]?.let { Color(it.toInt()) }
+                        ?: automaticSubjectColor(subject, scheme, dark, settings.subjectColorMode)
+                },
+            )
+        }
     }
 }

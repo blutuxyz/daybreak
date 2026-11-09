@@ -35,6 +35,15 @@ import com.bdersolutions.daybreak.platform.SharedPreferencesStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import com.bdersolutions.daybreak.widget.WidgetUpdater
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -118,7 +127,21 @@ class AppContainer(context: Context) {
         serverNotices = serverNotices,
     )
 
+    /** Lives as long as the process, for work that follows settings in the background. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @OptIn(FlowPreview::class)
     fun start() {
+        // The widget draws with the app's colours, language and its own settings, so it is redrawn
+        // when any of them changes (a moment later, so a run of taps redraws it once).
+        appScope.launch {
+            settingsRepository.settings
+                .map { listOf(it.widget, it.themeMode, it.dynamicColor, it.accent, it.language, it.lessonColors, it.subjectColorMode) }
+                .distinctUntilChanged()
+                .drop(1)
+                .debounce(400)
+                .collect { widgetUpdater.update() }
+        }
         // The name under the icon follows the supporter extra: back to "Daybreak" without a payment.
         val chosen = settingsRepository.current()
         launcherNameSwitcher.apply(

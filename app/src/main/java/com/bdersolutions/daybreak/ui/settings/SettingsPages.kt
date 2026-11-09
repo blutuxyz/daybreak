@@ -93,6 +93,7 @@ enum class SettingsPage {
     LANGUAGE,
     SYNC,
     NOTIFICATIONS,
+    WIDGET,
     HAPTICS,
     APP_NAME,
     APP_ICON,
@@ -116,6 +117,7 @@ fun SettingsPageHost(
         SettingsPage.LANGUAGE -> LanguageScreen(viewModel, onBack)
         SettingsPage.SYNC -> SyncScreen(viewModel, onBack)
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
+        SettingsPage.WIDGET -> WidgetSettingsScreen(viewModel, onBack)
         SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
         SettingsPage.APP_NAME -> AppNameScreen(viewModel, onBack)
         SettingsPage.APP_ICON -> AppIconScreen(viewModel, onBack)

@@ -135,6 +135,7 @@ import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.outlined.Apps
@@ -362,6 +363,17 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_notifications),
                         subtitle = if (settings.notificationsEnabled) on else off,
                         onClick = { onOpenPage(SettingsPage.NOTIFICATIONS) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.Widgets,
+                        title = stringResource(R.string.settings_widget),
+                        subtitle = stringResource(
+                            R.string.settings_widget_summary,
+                            widgetThemeLabel(settings.widget.theme),
+                            settings.widget.backgroundOpacity,
+                        ),
+                        onClick = { onOpenPage(SettingsPage.WIDGET) },
                     )
                     SettingsDivider()
                     NavigationRow(
@@ -925,7 +937,7 @@ internal fun SettingsRow(
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
     destructive: Boolean = false,
-    subtitleMaxLines: Int = 2,
+    subtitleMaxLines: Int = 3,
     titleMaxLines: Int = 2,
     trailing: @Composable (() -> Unit)? = null,
 ) {

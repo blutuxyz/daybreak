@@ -192,4 +192,79 @@ class ShareTextTest {
         assertTrue(ShareText.day(DAY, listOf(holiday), labels).lines.isEmpty())
         assertNotNull(ShareText.format(listOf(ShareText.day(DAY, listOf(holiday), labels)), labels))
     }
+
+    @Test
+    fun aDoubleLessonIsOneHit() {
+        val double = listOf(
+            lesson("07:55", "08:45", "BESP", "Turnsaal", "Achl"),
+            lesson("08:45", "09:35", "BESP", "Turnsaal", "Achl"),
+        )
+        val hits = LessonSearch.search(double, emptyList(), "besp", at("07:00"))
+        assertEquals(1, hits.size)
+        assertEquals(LocalTime.of(7, 55), hits.single().lesson.start)
+        assertEquals(LocalTime.of(9, 35), hits.single().lesson.end)
+    }
+}
+
+class WidgetPlannerTest {
+    private val day = listOf(
+        lesson("07:55", "08:45", "M", "204"),
+        lesson("08:45", "09:35", "M", "204"),
+        lesson("09:50", "10:40", "PH", "301", status = LessonStatus.CANCELLED),
+        lesson("10:40", "11:30", "E", "105"),
+    )
+    private val tomorrow = listOf(lesson("08:00", "08:50", "D", "110", date = DAY.plusDays(1)))
+
+    private fun plan(time: String, showCancelled: Boolean = true, nextDay: Boolean = true) =
+        WidgetPlanner.plan(day + tomorrow, DAY, LocalTime.parse(time), showCancelled, nextDay)
+
+    @Test
+    fun doubleLessonsAreOneRowAndTheCurrentBlockIsFound() {
+        val plan = plan("08:50")
+        assertTrue(plan.isToday)
+        assertEquals(3, plan.rows.size)
+        assertEquals(LocalTime.of(9, 35), plan.current?.end)
+        // The cancelled PH is no lesson to go to, so English is next.
+        assertEquals("E", plan.next?.lesson?.subject)
+    }
+
+    @Test
+    fun cancelledLessonsCanBeHidden() {
+        assertEquals(2, plan("08:50", showCancelled = false).rows.size)
+    }
+
+    @Test
+    fun remainingRowsDropWhatIsOver() {
+        val plan = plan("10:45")
+        assertEquals(listOf("E"), plan.remainingRows(LocalTime.parse("10:45")).map { it.lesson.subject })
+    }
+
+    @Test
+    fun afterSchoolTheNextDayIsShownUnlessTurnedOff() {
+        val after = plan("12:00")
+        assertTrue(after.schoolOverToday)
+        assertTrue(!after.isToday)
+        assertEquals(DAY.plusDays(1), after.day)
+        assertEquals("D", after.next?.lesson?.subject)
+
+        val stay = plan("12:00", nextDay = false)
+        assertTrue(stay.isToday)
+        assertTrue(stay.remainingRows(LocalTime.parse("12:00")).isEmpty())
+        assertEquals("D", stay.next?.lesson?.subject)
+    }
+
+    @Test
+    fun aFreeDayShowsTheNextSchoolDay() {
+        val plan = WidgetPlanner.plan(tomorrow, DAY, LocalTime.parse("09:00"))
+        assertTrue(plan.freeToday)
+        assertEquals(DAY.plusDays(1), plan.day)
+        assertNull(plan.current)
+    }
+
+    @Test
+    fun nothingKnownGivesNoDay() {
+        val plan = WidgetPlanner.plan(emptyList(), DAY, LocalTime.parse("09:00"))
+        assertNull(plan.day)
+        assertTrue(plan.rows.isEmpty())
+    }
 }

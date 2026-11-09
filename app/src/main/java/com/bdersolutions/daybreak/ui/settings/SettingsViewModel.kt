@@ -24,6 +24,7 @@ import com.bdersolutions.daybreak.data.settings.AccentColor
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.LessonColorSettings
+import com.bdersolutions.daybreak.data.settings.WidgetSettings
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.schedule.IcsExport
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
@@ -253,6 +254,9 @@ class SettingsViewModel(
     }
 
     fun setShowNowNext(show: Boolean) = settingsRepository.setShowNowNext(show)
+
+    /** Changes the widget settings; the widget is redrawn by [com.bdersolutions.daybreak.AppContainer]. */
+    fun updateWidget(transform: (WidgetSettings) -> WidgetSettings) = settingsRepository.updateWidget(transform)
 
     fun setMorningSummaryEnabled(enabled: Boolean) {
         settingsRepository.setMorningSummaryEnabled(enabled)

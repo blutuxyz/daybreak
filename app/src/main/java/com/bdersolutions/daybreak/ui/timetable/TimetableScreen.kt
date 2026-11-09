@@ -82,6 +82,8 @@ import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -205,18 +207,24 @@ fun TimetableScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
 
-    val today = remember { LocalDate.now() }
-    val initialDayPage = remember(initialDate, today) {
+    // The pages are counted from the day the screen opened. "Today" itself follows the clock, so a
+    // screen left open overnight moves its today marker, Now card and Today button to the new day.
+    val startDay = remember { LocalDate.now() }
+    val now = rememberNow()
+    val today = now.toLocalDate()
+    val initialDayPage = remember(initialDate, startDay) {
         initialDate?.let { date ->
-            (DAY_START_OFFSET + ChronoUnit.DAYS.between(today, date).toInt())
+            (DAY_START_OFFSET + ChronoUnit.DAYS.between(startDay, date).toInt())
                 .coerceIn(0, DAY_PAGE_COUNT - 1)
         } ?: DAY_START_OFFSET
     }
-    val dayOrigin = remember { today.minusDays(DAY_START_OFFSET.toLong()) }
+    val dayOrigin = remember { startDay.minusDays(DAY_START_OFFSET.toLong()) }
     val weekOrigin = remember {
-        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        startDay.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .minusWeeks(WEEK_START_OFFSET.toLong())
     }
+    val todayDayPage = (ChronoUnit.DAYS.between(dayOrigin, today).toInt()).coerceIn(0, DAY_PAGE_COUNT - 1)
+    val todayWeekPage = (ChronoUnit.WEEKS.between(weekOrigin, today).toInt()).coerceIn(0, WEEK_PAGE_COUNT - 1)
     val dayPager = rememberPagerState(
         initialPage = initialDayPage,
         pageCount = { DAY_PAGE_COUNT },
@@ -235,7 +243,6 @@ fun TimetableScreen(
     LaunchedEffect(weekPager) {
         snapshotFlow { weekPager.settledPage }.drop(1).collect { haptics.perform(HapticEvent.PAGE_SNAP) }
     }
-    val now = rememberNow()
     val selectedDate = if (mode == 0) {
         dayOrigin.plusDays(pagerState.currentPage.toLong())
     } else {
@@ -287,6 +294,16 @@ fun TimetableScreen(
         }
     }
     val openElement: (UntisElement) -> Unit = { viewModel.setTarget(TimetableTarget.Element(it)) }
+    val examDates = remember(cache.exams) { cache.exams.map { it.date }.toSet() }
+    val selectDay: (LocalDate) -> Unit = { targetDate ->
+        scope.launch {
+            dayPager.animateScrollToPage(
+                page = ChronoUnit.DAYS.between(dayOrigin, targetDate).toInt().coerceIn(0, DAY_PAGE_COUNT - 1),
+                animationSpec = motion.defaultSpatialSpec(),
+            )
+        }
+    }
+    val targetType = (target as? TimetableTarget.Element)?.element?.type
     // Read the date at the time of the tap, not the date from when this effect started.
     val latestDate by rememberUpdatedState(selectedDate)
     LaunchedEffect(viewModel) {
@@ -316,197 +333,204 @@ fun TimetableScreen(
         viewModel.ensureWeek(activeDate)
     }
 
-    Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        text = LocalAppTitle.current,
-                        maxLines = 1,
-                    )
-                },
-                subtitle = {
-                    Text(
-                        text = "$weekLabel · $targetName",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { showSearch = true }) {
-                        Icon(
-                            Icons.Outlined.Search,
-                            contentDescription = stringResource(R.string.timetable_search),
+    CompositionLocalProvider(LocalTimetableTargetType provides targetType) {
+        Scaffold(
+            modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                LargeFlexibleTopAppBar(
+                    title = {
+                        Text(
+                            text = LocalAppTitle.current,
+                            maxLines = 1,
                         )
-                    }
-                    Box {
-                        IconButton(onClick = { showShareMenu = true }) {
+                    },
+                    subtitle = {
+                        Text(
+                            text = "$weekLabel · $targetName",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { showSearch = true }) {
                             Icon(
-                                Icons.Outlined.Share,
-                                contentDescription = stringResource(R.string.timetable_share),
+                                Icons.Outlined.Search,
+                                contentDescription = stringResource(R.string.timetable_search),
                             )
                         }
-                        DropdownMenu(expanded = showShareMenu, onDismissRequest = { showShareMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.share_as_text)) },
-                                onClick = {
-                                    showShareMenu = false
-                                    shareTimetable(false)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.share_as_image)) },
-                                onClick = {
-                                    showShareMenu = false
-                                    shareTimetable(true)
-                                },
+                        Box {
+                            IconButton(onClick = { showShareMenu = true }) {
+                                Icon(
+                                    Icons.Outlined.Share,
+                                    contentDescription = stringResource(R.string.timetable_share),
+                                )
+                            }
+                            DropdownMenu(expanded = showShareMenu, onDismissRequest = { showShareMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.share_as_text)) },
+                                    onClick = {
+                                        showShareMenu = false
+                                        shareTimetable(false)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.share_as_image)) },
+                                    onClick = {
+                                        showShareMenu = false
+                                        shareTimetable(true)
+                                    },
+                                )
+                            }
+                        }
+                        IconButton(onClick = onOpenUpcoming) {
+                            Icon(
+                                Icons.Outlined.Checklist,
+                                contentDescription = stringResource(R.string.timetable_upcoming),
                             )
                         }
-                    }
-                    IconButton(onClick = onOpenUpcoming) {
-                        Icon(
-                            Icons.Outlined.Checklist,
-                            contentDescription = stringResource(R.string.timetable_upcoming),
-                        )
-                    }
-                    IconButton(onClick = { showTargetPicker = true }) {
-                        Icon(
-                            Icons.Outlined.SwapHoriz,
-                            contentDescription = stringResource(R.string.target_picker_title),
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-            )
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = !isOnToday,
-                enter = scaleIn(
-                    animationSpec = motion.defaultSpatialSpec(),
-                    initialScale = 0.8f,
-                ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
-                exit = scaleOut(
-                    animationSpec = motion.fastSpatialSpec(),
-                    targetScale = 0.8f,
-                ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
-                label = "todayFab",
-            ) {
-                val todayInteraction = remember { MutableInteractionSource() }
-                val todayScale by rememberPressScale(todayInteraction)
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(
-                                if (mode == 0) DAY_START_OFFSET else WEEK_START_OFFSET,
-                                animationSpec = motion.defaultSpatialSpec(),
+                        IconButton(onClick = { showTargetPicker = true }) {
+                            Icon(
+                                Icons.Outlined.SwapHoriz,
+                                contentDescription = stringResource(R.string.target_picker_title),
                             )
                         }
                     },
-                    interactionSource = todayInteraction,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = todayScale
-                        scaleY = todayScale
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    icon = { Icon(Icons.Outlined.Today, contentDescription = null) },
-                    text = { Text(stringResource(R.string.action_today)) },
-                )
-            }
-        },
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            ViewModeSwitcher(
-                mode = mode,
-                onModeChange = { mode = it },
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
-            )
-            AnimatedContent(
-                targetState = mode,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                transitionSpec = {
-                    val direction = if (targetState > initialState) 1 else -1
-                    val slide = motion.defaultSpatialSpec<IntOffset>()
-                    val scale = motion.defaultSpatialSpec<Float>()
-                    val fade = motion.fastEffectsSpec<Float>()
-                    (
-                        slideInHorizontally(slide) { width -> direction * width / 5 } +
-                            fadeIn(fade) +
-                            scaleIn(scale, initialScale = 0.97f)
-                        )
-                        .togetherWith(
-                            slideOutHorizontally(slide) { width -> -direction * width / 5 } +
-                                fadeOut(fade) +
-                                scaleOut(scale, targetScale = 0.99f),
-                        )
-                        .using(SizeTransform(clip = false))
-                },
-                label = "timetableMode",
-            ) { targetMode ->
-                val targetPager = if (targetMode == 0) dayPager else weekPager
-                HorizontalPager(
-                    state = targetPager,
-                    modifier = Modifier.fillMaxSize(),
-                    flingBehavior = PagerDefaults.flingBehavior(
-                        state = targetPager,
-                        pagerSnapDistance = PagerSnapDistance.atMost(1),
-                        snapAnimationSpec = motion.defaultSpatialSpec(),
-                        snapPositionalThreshold = 0.35f,
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     ),
-                ) { page ->
-                    val pageDate = if (targetMode == 0) {
-                        dayOrigin.plusDays(page.toLong())
-                    } else {
-                        weekOrigin.plusWeeks(page.toLong())
-                    }
-                    if (targetMode == 0) {
-                        DayPage(
-                            date = pageDate,
-                            today = today,
-                            now = now,
-                            cache = cache,
-                            status = status,
-                            showNowNext = appSettings.showNowNext,
-                            onRetry = { viewModel.refresh(pageDate) },
-                            findElement = findElement,
-                            onOpenElement = openElement,
-                            onSelectDate = { targetDate ->
-                                scope.launch {
-                                    dayPager.animateScrollToPage(
-                                        page =
-                                            DAY_START_OFFSET +
-                                                ChronoUnit.DAYS.between(today, targetDate).toInt(),
-                                        animationSpec = motion.defaultSpatialSpec(),
-                                    )
-                                }
-                            },
-                        )
-                    } else {
-                        WeekPage(
-                            weekStart = pageDate,
-                            today = today,
-                            now = now,
-                            cache = cache,
-                            status = status,
-                            onRetry = { viewModel.refresh(pageDate) },
-                            findElement = findElement,
-                            onOpenElement = openElement,
-                        )
+                )
+            },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = !isOnToday,
+                    enter = scaleIn(
+                        animationSpec = motion.defaultSpatialSpec(),
+                        initialScale = 0.8f,
+                    ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
+                    exit = scaleOut(
+                        animationSpec = motion.fastSpatialSpec(),
+                        targetScale = 0.8f,
+                    ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
+                    label = "todayFab",
+                ) {
+                    val todayInteraction = remember { MutableInteractionSource() }
+                    val todayScale by rememberPressScale(todayInteraction)
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    if (mode == 0) todayDayPage else todayWeekPage,
+                                    animationSpec = motion.defaultSpatialSpec(),
+                                )
+                            }
+                        },
+                        interactionSource = todayInteraction,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = todayScale
+                            scaleY = todayScale
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        icon = { Icon(Icons.Outlined.Today, contentDescription = null) },
+                        text = { Text(stringResource(R.string.action_today)) },
+                    )
+                }
+            },
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                ViewModeSwitcher(
+                    mode = mode,
+                    onModeChange = { mode = it },
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                )
+                AnimatedContent(
+                    targetState = mode,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    transitionSpec = {
+                        val direction = if (targetState > initialState) 1 else -1
+                        val slide = motion.defaultSpatialSpec<IntOffset>()
+                        val scale = motion.defaultSpatialSpec<Float>()
+                        val fade = motion.fastEffectsSpec<Float>()
+                        (
+                            slideInHorizontally(slide) { width -> direction * width / 5 } +
+                                fadeIn(fade) +
+                                scaleIn(scale, initialScale = 0.97f)
+                            )
+                            .togetherWith(
+                                slideOutHorizontally(slide) { width -> -direction * width / 5 } +
+                                    fadeOut(fade) +
+                                    scaleOut(scale, targetScale = 0.99f),
+                            )
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "timetableMode",
+                ) { targetMode ->
+                    val targetPager = if (targetMode == 0) dayPager else weekPager
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (targetMode == 0) {
+                            DayStrip(
+                                date = dayOrigin.plusDays(dayPager.currentPage.toLong()),
+                                today = today,
+                                onSelectDate = selectDay,
+                                examDates = examDates,
+                            )
+                        }
+                        HorizontalPager(
+                            state = targetPager,
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            flingBehavior = PagerDefaults.flingBehavior(
+                                state = targetPager,
+                                pagerSnapDistance = PagerSnapDistance.atMost(1),
+                                snapAnimationSpec = motion.defaultSpatialSpec(),
+                                snapPositionalThreshold = 0.35f,
+                            ),
+                        ) { page ->
+                            // Pages that arrive by swiping are already in motion; only a page that appears in
+                            // place (start, switching day/week) plays the reveal.
+                            val animateReveal = remember { !targetPager.isScrollInProgress }
+                            val pageDate = if (targetMode == 0) {
+                                dayOrigin.plusDays(page.toLong())
+                            } else {
+                                weekOrigin.plusWeeks(page.toLong())
+                            }
+                            if (targetMode == 0) {
+                                DayPage(
+                                    date = pageDate,
+                                    today = today,
+                                    now = now,
+                                    cache = cache,
+                                    status = status,
+                                    showNowNext = appSettings.showNowNext,
+                                    animateReveal = animateReveal,
+                                    onRetry = { viewModel.refresh(pageDate) },
+                                    findElement = findElement,
+                                    onOpenElement = openElement,
+                                )
+                            } else {
+                                WeekPage(
+                                    weekStart = pageDate,
+                                    today = today,
+                                    now = now,
+                                    cache = cache,
+                                    status = status,
+                                    onRetry = { viewModel.refresh(pageDate) },
+                                    animateReveal = animateReveal,
+                                    findElement = findElement,
+                                    onOpenElement = openElement,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -521,8 +545,7 @@ fun TimetableScreen(
                 mode = 0
                 scope.launch {
                     dayPager.scrollToPage(
-                        (DAY_START_OFFSET + ChronoUnit.DAYS.between(today, date).toInt())
-                            .coerceIn(0, DAY_PAGE_COUNT - 1),
+                        ChronoUnit.DAYS.between(dayOrigin, date).toInt().coerceIn(0, DAY_PAGE_COUNT - 1),
                     )
                 }
             },
@@ -542,6 +565,20 @@ fun TimetableScreen(
         )
     }
 }
+
+/**
+ * The kind of timetable on screen: null for the student's own, else class, teacher or room. The
+ * lesson blocks use it to leave out what is the same on every block (the teacher in a teacher's
+ * timetable) and show what differs instead.
+ */
+private val LocalTimetableTargetType = staticCompositionLocalOf<ElementType?> { null }
+
+/** The short detail line of a block: room and teacher, or what fits the kind of timetable. */
+private fun lessonDetailParts(lesson: UntisLesson, targetType: ElementType?): List<String> = when (targetType) {
+    ElementType.TEACHER -> listOf(lesson.room, lesson.className)
+    ElementType.ROOM -> listOf(lesson.teacher, lesson.className)
+    ElementType.CLASS, null -> listOf(lesson.room, lesson.teacher)
+}.filter { it.isNotBlank() }
 
 // The newer overflow-aware ButtonGroup overload takes a non-composable scope
 // and cannot host ToggleButtons directly. Keep the expressive composable-child
@@ -600,10 +637,10 @@ private fun DayPage(
     cache: TimetableCache,
     status: TimetableSyncStatus,
     showNowNext: Boolean,
+    animateReveal: Boolean,
     onRetry: () -> Unit,
     findElement: (ElementType, String) -> UntisElement?,
     onOpenElement: (UntisElement) -> Unit,
-    onSelectDate: (LocalDate) -> Unit,
 ) {
     val context = LocalContext.current
     val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -626,7 +663,6 @@ private fun DayPage(
     val isToday = date == today
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
     var overflowShown by remember { mutableStateOf<TimelineOverflow?>(null) }
-    val examDates = remember(cache.exams) { cache.exams.map { it.date }.toSet() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -645,12 +681,6 @@ private fun DayPage(
                     periodStartsFor(week?.lessons.orEmpty())
                 }
                 Column(modifier = Modifier.fillMaxSize()) {
-                    DayStrip(
-                        date = date,
-                        today = today,
-                        onSelectDate = onSelectDate,
-                        examDates = examDates,
-                    )
                     if (status.lastError != null) {
                         OfflineBanner(
                             status = status,
@@ -701,6 +731,7 @@ private fun DayPage(
                                     isToday = isToday,
                                     now = now,
                                     revealKey = weekStart,
+                                    animateReveal = animateReveal,
                                     exams = cache.exams,
                                     absences = cache.absences,
                                     onLessonClick = { selectedLesson = it },
@@ -752,8 +783,49 @@ private fun DayStrip(
     val weekStart = remember(date) {
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     }
+    // The strip stays in place while the days swipe underneath; only the indicator glides. Moving
+    // to another week slides the whole row in the direction of travel.
+    val motion = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = weekStart,
+        modifier = Modifier.fillMaxWidth(),
+        transitionSpec = {
+            val direction = if (targetState > initialState) 1 else -1
+            (
+                slideInHorizontally(motion.defaultSpatialSpec()) { width -> direction * width / 3 } +
+                    fadeIn(motion.defaultEffectsSpec())
+                ).togetherWith(
+                slideOutHorizontally(motion.defaultSpatialSpec()) { width -> -direction * width / 3 } +
+                    fadeOut(motion.fastEffectsSpec()),
+            ).using(SizeTransform(clip = false))
+        },
+        label = "dayStripWeek",
+    ) { shownWeek ->
+        DayStripRow(
+            weekStart = shownWeek,
+            date = date,
+            today = today,
+            onSelectDate = onSelectDate,
+            examDates = examDates,
+            locale = locale,
+        )
+    }
+}
+
+@Composable
+private fun DayStripRow(
+    weekStart: LocalDate,
+    date: LocalDate,
+    today: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+    examDates: Set<LocalDate>,
+    locale: Locale,
+) {
     val days = remember(weekStart) { (0L..6L).map { weekStart.plusDays(it) } }
-    val selectedIndex = days.indexOf(date).coerceAtLeast(0)
+    // The outgoing week of a week change has no selected day any more; its indicator stays put.
+    val selectedIndex = days.indexOf(date)
+    var lastIndex by remember { mutableIntStateOf(selectedIndex.coerceAtLeast(0)) }
+    if (selectedIndex >= 0) lastIndex = selectedIndex
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -761,7 +833,7 @@ private fun DayStrip(
     ) {
         val chipWidth = maxWidth / days.size
         val indicatorWidth = chipWidth * 0.34f
-        val targetX = chipWidth * selectedIndex + (chipWidth - indicatorWidth) / 2f
+        val targetX = chipWidth * lastIndex + (chipWidth - indicatorWidth) / 2f
         val indicatorSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Dp>()
         val animatedX by animateDpAsState(
             targetValue = targetX,
@@ -946,6 +1018,7 @@ private fun DayTimeline(
     isToday: Boolean,
     now: LocalDateTime,
     revealKey: Any?,
+    animateReveal: Boolean,
     exams: List<UntisExam>,
     absences: List<UntisAbsence>,
     onLessonClick: (UntisLesson) -> Unit,
@@ -1008,7 +1081,7 @@ private fun DayTimeline(
                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "lessonHeight",
                     )
-                    val reveal by rememberStaggeredReveal(revealKey, index)
+                    val reveal by rememberStaggeredReveal(revealKey, index, enabled = animateReveal)
                     val columnWidth = maxWidth / block.columnCount
                     val current = block == currentBlock
                     DayLessonBlock(
@@ -1016,7 +1089,7 @@ private fun DayTimeline(
                         current = current,
                         exam = examFor(block.lesson, exams),
                         absent = remember(block, absences) { absentParts(block, absences) },
-                        onClick = { onLessonClick(block.lesson) },
+                        onClick = { onLessonClick(block.detailLesson) },
                         modifier = Modifier
                             .width(columnWidth - 4.dp)
                             .height(animatedHeight)
@@ -1079,14 +1152,22 @@ private fun TimelineAxis(
                 }
             }
         }
-        Text(
-            text = formatTime(range.end),
-            modifier = Modifier.align(Alignment.BottomEnd),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
+        // The end of the range sits at the very bottom. When the last period starts just above it,
+        // the two labels would print over each other, so the end time is left out then.
+        val lastStart = periodStarts.lastOrNull { it >= range.start && it < range.end }
+        if (lastStart == null || minutesBetween(lastStart, range.end) >= AXIS_END_LABEL_GAP_MINUTES) {
+            Text(
+                text = formatTime(range.end),
+                modifier = Modifier.align(Alignment.BottomEnd),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
     }
 }
+
+/** Minutes between the last period label and the end label needed for both to fit. */
+private const val AXIS_END_LABEL_GAP_MINUTES = 30
 
 @Composable
 private fun TimelineGrid(
@@ -1319,14 +1400,11 @@ private fun DayLessonBlock(
                     }
                 }
                 if (block.durationMinutes >= 35) {
-                    // Room and teacher share one line so the block reads at a glance.
-                    val details = buildList {
-                        if (lesson.room.isNotBlank()) {
-                            add(context.getString(R.string.room_value, lesson.room))
-                        }
-                        if (lesson.teacher.isNotBlank()) {
-                            add(lesson.teacher)
-                        }
+                    // Room and teacher share one line so the block reads at a glance. In a teacher's
+                    // or room's timetable the class replaces what is the same on every block.
+                    val targetType = LocalTimetableTargetType.current
+                    val details = lessonDetailParts(lesson, targetType).map { part ->
+                        if (part == lesson.room) context.getString(R.string.room_value, part) else part
                     }.joinToString(" · ")
                     if (details.isNotBlank()) {
                         Text(
@@ -1351,6 +1429,7 @@ private fun WeekPage(
     cache: TimetableCache,
     status: TimetableSyncStatus,
     onRetry: () -> Unit,
+    animateReveal: Boolean,
     findElement: (ElementType, String) -> UntisElement?,
     onOpenElement: (UntisElement) -> Unit,
 ) {
@@ -1378,8 +1457,9 @@ private fun WeekPage(
         days.associateWith { day -> allLessons.filter { it.date == day } }
     }
     val pxPerMinute = 1.05.dp
-    // One fade for the whole week when it is shown, instead of an animation per lesson.
-    val gridReveal = remember(weekStart) { Animatable(0f) }
+    // One fade for the whole week when it is shown, instead of an animation per lesson. A week that
+    // is swiped in is already moving, so it comes in fully drawn instead of fading mid-swipe.
+    val gridReveal = remember(weekStart) { Animatable(if (animateReveal) 0f else 1f) }
     LaunchedEffect(weekStart) {
         gridReveal.animateTo(1f, animationSpec = tween(durationMillis = 220))
     }
@@ -1635,7 +1715,7 @@ private fun WeekDayColumn(
                         current = current,
                         exam = examFor(block.lesson, exams),
                         absent = remember(block, absences) { absentParts(block, absences) },
-                        onClick = { onLessonClick(block.lesson) },
+                        onClick = { onLessonClick(block.detailLesson) },
                         modifier = Modifier
                             .width(maxOf(columnWidth - 2.dp, 14.dp))
                             .height(height)
@@ -1752,7 +1832,7 @@ private fun OverflowSheet(
             )
             Spacer(Modifier.height(4.dp))
             overflow.concurrent.forEach { block ->
-                OverflowRow(block = block, onClick = { onLessonClick(block.lesson) })
+                OverflowRow(block = block, onClick = { onLessonClick(block.detailLesson) })
             }
         }
     }
@@ -1902,7 +1982,7 @@ private fun WeekLessonBlock(
                     }
                     // A status line and a room line only fit in a longer block, or with larger
                     // text they clip. Status wins when the block is short.
-                    val detail = lesson.room.ifBlank { lesson.teacher }
+                    val detail = lessonDetailParts(lesson, LocalTimetableTargetType.current).firstOrNull().orEmpty()
                     val roomFits = status == null || block.durationMinutes >= 60
                     if (detail.isNotBlank() && roomFits) {
                         Text(
@@ -2127,18 +2207,21 @@ private fun periodStartsFor(lessons: List<UntisLesson>): List<LocalTime> {
     return collapsed
 }
 
+/**
+ * The gaps between two lessons of the day. The time before the first and after the last lesson is
+ * not a free period, so it gets no band (it used to read "Frei" before school and all afternoon).
+ */
 private fun freeGaps(blocks: List<TimelineBlock>, range: TimelineRange): List<FreeGap> {
-    var cursor = range.start
+    var cursor: LocalTime? = null
     val gaps = mutableListOf<FreeGap>()
     for (block in blocks.sortedBy { it.start }) {
-        if (block.start > cursor) {
+        val last = cursor
+        if (last != null && block.start > last) {
+            val start = maxOf(last, range.start)
             val end = minOf(block.start, range.end)
-            if (minutesBetween(cursor, end) >= 10) gaps += FreeGap(cursor, end)
+            if (minutesBetween(start, end) >= 10) gaps += FreeGap(start, end)
         }
-        if (block.end > cursor) cursor = block.end
-    }
-    if (cursor < range.end && minutesBetween(cursor, range.end) >= 10) {
-        gaps += FreeGap(cursor, range.end)
+        if (last == null || block.end > last) cursor = block.end
     }
     return gaps
 }
