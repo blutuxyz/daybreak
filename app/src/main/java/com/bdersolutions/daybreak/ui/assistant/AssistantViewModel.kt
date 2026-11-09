@@ -83,6 +83,13 @@ data class AssistantUiState(
 }
 
 /**
+ * The turn is over: the typing dots and the streaming cursor go away, whatever the last event was.
+ * A provider may finish a round with "done" but without any text, and the newest answer may already
+ * have been shown, so neither the dots nor a stale streaming id may be left behind.
+ */
+internal fun AssistantUiState.turnFinished(): AssistantUiState = copy(waiting = false, streamingId = null)
+
+/**
  * The assistant chat. The conversation lives only in this ViewModel: it is never written to disk and is
  * gone when the page is closed for good.
  *
@@ -286,13 +293,15 @@ class AssistantViewModel(
             repeat(MAX_ROUNDS) {
                 val calls = streamOneTurn(api, context, language, unlockCode) ?: return@launch
                 if (calls.isEmpty()) {
+                    // The round is over, even when the model sent no text at all: the dots must go.
+                    _state.update { it.turnFinished() }
                     nameChatIfNew(language)
                     return@launch
                 }
                 runTools(calls)
                 _state.update { it.copy(waiting = true) }
             }
-            _state.update { it.copy(waiting = false) }
+            _state.update { it.turnFinished() }
         }
     }
 
@@ -319,7 +328,7 @@ class AssistantViewModel(
                     }
                 }
 
-                AssistantEvent.Done -> _state.update { it.copy(streamingId = null) }
+                AssistantEvent.Done -> _state.update { it.turnFinished() }
                 is AssistantEvent.Failure -> {
                     failed = true
                     // A half answer stays with the failure under it.
@@ -327,7 +336,7 @@ class AssistantViewModel(
                 }
             }
         }
-        _state.update { it.copy(streamingId = null) }
+        _state.update { it.turnFinished() }
         return if (failed) null else calls
     }
 
