@@ -14,6 +14,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -93,6 +96,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
@@ -142,6 +146,16 @@ fun LoginScreen(
             (!state.requiresSecondFactor || state.secondFactor.isNotBlank())
     } && !state.loading
     val motion = MaterialTheme.motionScheme
+    // Every height change on this screen (method switcher, sign-in button, the fields of each
+    // method) uses this one spring. With separate, bouncy springs the parts moved at different
+    // speeds and overshot, so the content below them jumped in steps.
+    val layoutSpring = remember {
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+            visibilityThreshold = IntSize.VisibilityThreshold,
+        )
+    }
     val revealSun by rememberStaggeredReveal(
         key = "loginEntrance",
         index = 0,
@@ -198,8 +212,12 @@ fun LoginScreen(
                 .padding(horizontal = 24.dp)
                 .padding(top = 4.dp, bottom = 28.dp),
         ) {
+            // Every part of the screen joins the staggered entrance; a part left out would stand
+            // there alone while the rest is still fading in.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = revealSun },
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = { viewModel.setLanguage(switchLanguage) }) {
@@ -278,25 +296,21 @@ fun LoginScreen(
                 AnimatedVisibility(
                     visible = alternativesVisible,
                     enter = expandVertically(
-                        animationSpec = motion.defaultSpatialSpec(),
+                        animationSpec = layoutSpring,
                     ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
                     exit = shrinkVertically(
-                        animationSpec = motion.fastSpatialSpec(),
+                        animationSpec = layoutSpring,
                     ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
                     label = "loginAlternatives",
                 ) {
-                    Column {
-                        LoginModeSwitcher(
-                            mode = state.mode,
-                            onModeChange = viewModel::onModeChange,
-                        )
-                        Spacer(Modifier.height(18.dp))
-                    }
+                    LoginModeSwitcher(
+                        mode = state.mode,
+                        onModeChange = viewModel::onModeChange,
+                    )
                 }
-
-                if (!alternativesVisible) {
-                    Spacer(Modifier.height(18.dp))
-                }
+                // One gap that is always there. A stand-in spacer for the hidden switcher used to
+                // vanish at the tap, so everything jumped up before the switcher grew in.
+                Spacer(Modifier.height(18.dp))
                 AnimatedContent(
                     targetState = state.mode,
                     modifier = Modifier.fillMaxWidth(),
@@ -312,7 +326,7 @@ fun LoginScreen(
                                 slideOutHorizontally(slide) { width -> -direction * width / 6 } +
                                     fadeOut(fade),
                             )
-                            .using(SizeTransform(clip = false))
+                            .using(SizeTransform(clip = false) { _, _ -> layoutSpring })
                     },
                     label = "loginMode",
                 ) { mode ->
@@ -337,11 +351,19 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = state.mode != LoginMode.QR || state.qrPayload.isNotBlank(),
-                enter = scaleIn(
+                // The button's space grows and shrinks with it. Scale and fade alone left the space
+                // to appear or vanish in one step, which made everything below jump.
+                enter = expandVertically(
+                    animationSpec = layoutSpring,
+                    expandFrom = Alignment.Top,
+                ) + scaleIn(
                     animationSpec = motion.defaultSpatialSpec(),
                     initialScale = 0.86f,
                 ) + fadeIn(animationSpec = motion.fastEffectsSpec()),
-                exit = scaleOut(
+                exit = shrinkVertically(
+                    animationSpec = layoutSpring,
+                    shrinkTowards = Alignment.Top,
+                ) + scaleOut(
                     animationSpec = motion.fastSpatialSpec(),
                     targetScale = 0.86f,
                 ) + fadeOut(animationSpec = motion.fastEffectsSpec()),
@@ -412,9 +434,14 @@ fun LoginScreen(
                 }
             }
 
-        Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(4.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = revealForm
+                        translationY = (1f - revealForm) * 20f
+                    },
                 horizontalArrangement = Arrangement.Center,
             ) {
                 TextButton(

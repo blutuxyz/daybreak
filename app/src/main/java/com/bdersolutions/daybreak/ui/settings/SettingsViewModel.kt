@@ -25,6 +25,7 @@ import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.AppSettings
 import com.bdersolutions.daybreak.data.settings.LessonColorSettings
 import com.bdersolutions.daybreak.data.settings.WidgetSettings
+import com.bdersolutions.daybreak.data.settings.TimetableDisplay
 import com.bdersolutions.daybreak.data.settings.MotionStyle
 import com.bdersolutions.daybreak.data.schedule.IcsExport
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
@@ -106,6 +107,9 @@ class SettingsViewModel(
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
     val syncStatus: StateFlow<TimetableSyncStatus> = repository.status
+
+    /** The student's cached timetable, for previews such as the widget's. */
+    val timetableCache: StateFlow<com.bdersolutions.daybreak.data.cache.TimetableCache> = repository.cache
 
     private val _events = MutableSharedFlow<Throwable>(extraBufferCapacity = 4)
     val events: SharedFlow<Throwable> = _events
@@ -257,6 +261,8 @@ class SettingsViewModel(
 
     /** Changes the widget settings; the widget is redrawn by [com.bdersolutions.daybreak.AppContainer]. */
     fun updateWidget(transform: (WidgetSettings) -> WidgetSettings) = settingsRepository.updateWidget(transform)
+
+    fun updateDisplay(transform: (TimetableDisplay) -> TimetableDisplay) = settingsRepository.updateDisplay(transform)
 
     fun setMorningSummaryEnabled(enabled: Boolean) {
         settingsRepository.setMorningSummaryEnabled(enabled)

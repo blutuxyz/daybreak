@@ -1,5 +1,19 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import com.bdersolutions.daybreak.data.schedule.WeekRollover
+import com.bdersolutions.daybreak.data.settings.ConcurrentLessons
+import com.bdersolutions.daybreak.data.settings.TimetableDisplay
+import com.bdersolutions.daybreak.data.settings.WeekDetail
+import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -223,8 +237,13 @@ fun TimetableScreen(
         startDay.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .minusWeeks(WEEK_START_OFFSET.toLong())
     }
-    val todayDayPage = (ChronoUnit.DAYS.between(dayOrigin, today).toInt()).coerceIn(0, DAY_PAGE_COUNT - 1)
-    val todayWeekPage = (ChronoUnit.WEEKS.between(weekOrigin, today).toInt()).coerceIn(0, WEEK_PAGE_COUNT - 1)
+    val display = appSettings.display
+    // Once the week's last lesson is over, "today" for the timetable is the next Monday (setting).
+    val startDate = remember(cache, today, now.hour, now.minute, display.autoNextWeek) {
+        if (display.autoNextWeek) WeekRollover.startDate(cache.weeks.values.flatMap { it.lessons }, now) else today
+    }
+    val todayDayPage = (ChronoUnit.DAYS.between(dayOrigin, startDate).toInt()).coerceIn(0, DAY_PAGE_COUNT - 1)
+    val todayWeekPage = (ChronoUnit.WEEKS.between(weekOrigin, startDate).toInt()).coerceIn(0, WEEK_PAGE_COUNT - 1)
     val dayPager = rememberPagerState(
         initialPage = initialDayPage,
         pageCount = { DAY_PAGE_COUNT },
@@ -248,14 +267,50 @@ fun TimetableScreen(
     } else {
         weekOrigin.plusWeeks(pagerState.currentPage.toLong())
     }
-    val todayWeekStart = remember(today) {
-        today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val startWeek = remember(startDate) {
+        startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     }
     val isOnToday = if (mode == 0) {
-        selectedDate == today
+        selectedDate == startDate
     } else {
-        selectedDate == todayWeekStart
+        selectedDate == startWeek
     }
+    // The screen opens on today; when the week turns out to be over (known once the cache is
+    // there), it moves to next week once. Later it never jumps on its own.
+    var rolloverChecked by rememberSaveable { mutableStateOf(false) }
+    val cacheReady = cache.weeks.isNotEmpty()
+    LaunchedEffect(cacheReady, startDate) {
+        if (rolloverChecked || !cacheReady) return@LaunchedEffect
+        rolloverChecked = true
+        if (initialDate == null && startDate != today) {
+            if (dayPager.currentPage == DAY_START_OFFSET) dayPager.scrollToPage(todayDayPage)
+            if (weekPager.currentPage == WEEK_START_OFFSET) weekPager.scrollToPage(todayWeekPage)
+        }
+    }
+    // Zoom of the day and week view. A pinch changes it live; the settings get it when the pinch ends.
+    val zoom = remember { TimetableZoom(display.dayScale / 100f, display.weekScale / 100f) }
+    var pinching by remember { mutableStateOf(false) }
+    LaunchedEffect(display.dayScale, display.weekScale) {
+        if (!pinching) {
+            zoom.day = display.dayScale / 100f
+            zoom.week = display.weekScale / 100f
+        }
+    }
+    val pinchModifier = Modifier.pinchToZoom(
+        enabled = mode == 0 || !display.weekFitsScreen,
+        onZoom = { factor ->
+            pinching = true
+            val min = TimetableDisplay.MIN_SCALE / 100f
+            val max = TimetableDisplay.MAX_SCALE / 100f
+            if (mode == 0) zoom.day = (zoom.day * factor).coerceIn(min, max) else zoom.week = (zoom.week * factor).coerceIn(min, max)
+        },
+        onEnd = {
+            pinching = false
+            viewModel.updateDisplay {
+                it.copy(dayScale = (zoom.day * 100).roundToInt(), weekScale = (zoom.week * 100).roundToInt())
+            }
+        },
+    )
     val motion = MaterialTheme.motionScheme
     val locale = currentLocale(context)
     val weekNumber = remember(selectedDate, locale) {
@@ -333,7 +388,11 @@ fun TimetableScreen(
         viewModel.ensureWeek(activeDate)
     }
 
-    CompositionLocalProvider(LocalTimetableTargetType provides targetType) {
+    CompositionLocalProvider(
+        LocalTimetableTargetType provides targetType,
+        LocalTimetableDisplay provides display,
+        LocalTimetableZoom provides zoom,
+    ) {
         Scaffold(
             modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.surface,
@@ -456,7 +515,8 @@ fun TimetableScreen(
                     targetState = mode,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .then(pinchModifier),
                     transitionSpec = {
                         val direction = if (targetState > initialState) 1 else -1
                         val slide = motion.defaultSpatialSpec<IntOffset>()
@@ -573,6 +633,28 @@ fun TimetableScreen(
  */
 private val LocalTimetableTargetType = staticCompositionLocalOf<ElementType?> { null }
 
+/** The user's layout choices for the timetable (zoom, overlapping lessons, cancelled lessons). */
+private val LocalTimetableDisplay = staticCompositionLocalOf { TimetableDisplay() }
+
+/**
+ * The zoom of the day and week view as a factor of the standard height. It follows a pinch while
+ * the fingers move, so it is a state of its own and only saved when the pinch ends.
+ */
+private class TimetableZoom(day: Float, week: Float) {
+    var day by mutableFloatStateOf(day)
+    var week by mutableFloatStateOf(week)
+}
+
+private val LocalTimetableZoom = compositionLocalOf { TimetableZoom(1f, 1f) }
+
+/** The detail line of a narrow week block, as chosen in the settings. */
+private fun weekDetailText(lesson: UntisLesson, targetType: ElementType?, detail: WeekDetail): String = when (detail) {
+    WeekDetail.NONE -> ""
+    // In a room's timetable the room is the same everywhere, so the teacher stands in for it.
+    WeekDetail.ROOM -> if (targetType == ElementType.ROOM) lesson.teacher else lesson.room.ifBlank { lesson.teacher }
+    WeekDetail.TEACHER -> if (targetType == ElementType.TEACHER) lesson.className else lesson.teacher.ifBlank { lesson.room }
+}
+
 /** The short detail line of a block: room and teacher, or what fits the kind of timetable. */
 private fun lessonDetailParts(lesson: UntisLesson, targetType: ElementType?): List<String> = when (targetType) {
     ElementType.TEACHER -> listOf(lesson.room, lesson.className)
@@ -646,18 +728,19 @@ private fun DayPage(
     val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val week = cache.weeks[weekStart]
     val genericHoliday = stringResource(R.string.holiday_generic)
+    val display = LocalTimetableDisplay.current
     val realLessons = remember(week, date) {
         week?.lessons?.filter { it.date == date }?.sortedBy { it.start }.orEmpty()
     }
     // A day without lessons inside a holiday shows the holiday as one block that fills the day,
     // like a subject, instead of a blank screen.
-    val lessons = remember(realLessons, cache.holidays, date, week, genericHoliday) {
+    val lessons = remember(realLessons, cache.holidays, date, week, genericHoliday, display.showCancelled) {
         val holiday = holidayOn(cache.holidays, date)
         if (realLessons.isEmpty() && holiday != null) {
             val range = timelineRange(week?.lessons.orEmpty())
             listOf(holidayLesson(holiday, date, range, genericHoliday))
         } else {
-            realLessons
+            realLessons.filter { display.showCancelled || !it.isCancelled }
         }
     }
     val isToday = date == today
@@ -666,7 +749,8 @@ private fun DayPage(
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            week == null && status.isLoading -> LoadingPane()
+            // A week that is not loaded yet is never "free": it is loading, or it failed.
+            week == null && (status.isLoading || status.lastError == null) -> LoadingPane()
             week == null && status.lastError != null -> ErrorPane(
                 message = status.lastError!!.toUserMessage(context),
                 isRefreshing = status.isLoading,
@@ -1025,7 +1109,7 @@ private fun DayTimeline(
     onOverflowClick: (TimelineOverflow) -> Unit,
 ) {
     val blocks = layout.visible
-    val pxPerMinute = 1.5.dp
+    val pxPerMinute = DAY_PX_PER_MINUTE * LocalTimetableZoom.current.day
     val contentHeight = (pxPerMinute.value * range.minutes).dp
     Row(
         modifier = Modifier
@@ -1051,11 +1135,13 @@ private fun DayTimeline(
                 periodStarts = periodStarts,
                 pxPerMinute = pxPerMinute,
             )
-            FreeGapBands(
-                blocks = layout.all,
-                range = range,
-                pxPerMinute = pxPerMinute,
-            )
+            if (LocalTimetableDisplay.current.showFreeBands) {
+                FreeGapBands(
+                    blocks = layout.all,
+                    range = range,
+                    pxPerMinute = pxPerMinute,
+                )
+            }
             val nowTime = now.toLocalTime()
             val currentBlock = if (isToday) {
                 blocks.filter {
@@ -1066,21 +1152,20 @@ private fun DayTimeline(
             }
             blocks.forEachIndexed { index, block ->
                 key(block.lesson.id, block.start, block.end) {
-                    val targetTop = pxPerMinute * minutesBetween(range.start, block.start)
-                    val targetHeight = max(
-                        34f,
-                        pxPerMinute.value * minutesBetween(block.start, block.end) - 3f,
-                    ).dp
-                    val animatedTop by animateDpAsState(
-                        targetValue = targetTop,
+                    // Position and length glide in minutes; the zoom multiplies afterwards, so a
+                    // pinch moves the blocks with the fingers instead of trailing behind on a spring.
+                    val startMinutes by animateFloatAsState(
+                        targetValue = minutesBetween(range.start, block.start).toFloat(),
                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "lessonTop",
                     )
-                    val animatedHeight by animateDpAsState(
-                        targetValue = targetHeight,
+                    val lengthMinutes by animateFloatAsState(
+                        targetValue = minutesBetween(block.start, block.end).toFloat(),
                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "lessonHeight",
                     )
+                    val animatedTop = pxPerMinute * startMinutes
+                    val animatedHeight = max(34f, pxPerMinute.value * lengthMinutes - 3f).dp
                     val reveal by rememberStaggeredReveal(revealKey, index, enabled = animateReveal)
                     val columnWidth = maxWidth / block.columnCount
                     val current = block == currentBlock
@@ -1434,9 +1519,13 @@ private fun WeekPage(
     onOpenElement: (UntisElement) -> Unit,
 ) {
     val context = LocalContext.current
+    val display = LocalTimetableDisplay.current
+    val zoom = LocalTimetableZoom.current
     val week = cache.weeks[weekStart]
     val genericHoliday = stringResource(R.string.holiday_generic)
-    val realLessons = remember(week) { week?.lessons.orEmpty() }
+    val realLessons = remember(week, display.showCancelled) {
+        week?.lessons.orEmpty().filter { display.showCancelled || !it.isCancelled }
+    }
     val days = remember(weekStart) { (0L..4L).map { weekStart.plusDays(it) } }
     val range = remember(realLessons) { timelineRange(realLessons) }
     val periodStarts = remember(realLessons) {
@@ -1456,20 +1545,20 @@ private fun WeekPage(
     val gridLessonsByDay = remember(allLessons, days) {
         days.associateWith { day -> allLessons.filter { it.date == day } }
     }
-    val pxPerMinute = 1.05.dp
     // One fade for the whole week when it is shown, instead of an animation per lesson. A week that
     // is swiped in is already moving, so it comes in fully drawn instead of fading mid-swipe.
     val gridReveal = remember(weekStart) { Animatable(if (animateReveal) 0f else 1f) }
     LaunchedEffect(weekStart) {
         gridReveal.animateTo(1f, animationSpec = tween(durationMillis = 220))
     }
-    val contentHeight = (pxPerMinute.value * range.minutes).dp
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
     var overflowShown by remember { mutableStateOf<TimelineOverflow?>(null) }
+    val combined = display.concurrent == ConcurrentLessons.COMBINED
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            week == null && status.isLoading -> LoadingPane()
+            // A week that is not loaded yet is never "free": it is loading, or it failed.
+            week == null && (status.isLoading || status.lastError == null) -> LoadingPane()
             week == null && status.lastError != null -> ErrorPane(
                 message = status.lastError!!.toUserMessage(context),
                 isRefreshing = status.isLoading,
@@ -1511,10 +1600,19 @@ private fun WeekPage(
                                 .fillMaxWidth()
                                 .weight(1f),
                         ) {
+                          BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            // Fitted, the school day fills the visible height; else the zoom decides.
+                            val pxPerMinute = if (display.weekFitsScreen) {
+                                ((maxHeight - 12.dp) / range.minutes.coerceAtLeast(1)).coerceAtLeast(0.3.dp)
+                            } else {
+                                WEEK_PX_PER_MINUTE * zoom.week
+                            }
+                            val contentHeight = pxPerMinute * range.minutes
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .verticalScroll(rememberScrollState())
+                                    .padding(start = WEEK_GRID_START_PADDING, end = WEEK_GRID_END_PADDING)
                                     .graphicsLayer { alpha = gridReveal.value },
                             ) {
                                 TimelineAxis(
@@ -1522,10 +1620,10 @@ private fun WeekPage(
                                     periodStarts = periodStarts,
                                     pxPerMinute = pxPerMinute,
                                     modifier = Modifier
-                                        .width(52.dp)
+                                        .width(WEEK_AXIS_WIDTH)
                                         .height(contentHeight),
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(WEEK_AXIS_GAP))
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -1544,6 +1642,7 @@ private fun WeekPage(
                                                 revealKey = weekStart,
                                                 exams = cache.exams,
                                                 absences = cache.absences,
+                                                combined = combined,
                                                 onLessonClick = { selectedLesson = it },
                                                 onOverflowClick = { overflowShown = it },
                                                 modifier = Modifier.weight(1f),
@@ -1559,6 +1658,7 @@ private fun WeekPage(
                                     }
                                 }
                             }
+                          }
                         }
                     }
                 }
@@ -1592,6 +1692,16 @@ private fun WeekPage(
     }
 }
 
+/** Height of one minute in the day and week view at 100 % zoom. */
+private val DAY_PX_PER_MINUTE = 1.5.dp
+private val WEEK_PX_PER_MINUTE = 1.05.dp
+
+// The week header and the grid under it share these, so each date sits centred over its column.
+private val WEEK_GRID_START_PADDING = 4.dp
+private val WEEK_GRID_END_PADDING = 8.dp
+private val WEEK_AXIS_WIDTH = 48.dp
+private val WEEK_AXIS_GAP = 6.dp
+
 @Composable
 private fun WeekDayHeaderRow(
     weekStart: LocalDate,
@@ -1601,11 +1711,11 @@ private fun WeekDayHeaderRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 14.dp, bottom = 4.dp),
+            .padding(start = WEEK_GRID_START_PADDING, end = WEEK_GRID_END_PADDING, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(Modifier.width(52.dp))
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(WEEK_AXIS_WIDTH))
+        Spacer(Modifier.width(WEEK_AXIS_GAP))
         Row(modifier = Modifier.weight(1f)) {
             (0L..4L).forEach { offset ->
                 val date = weekStart.plusDays(offset)
@@ -1665,13 +1775,20 @@ private fun WeekDayColumn(
     revealKey: Any?,
     exams: List<UntisExam>,
     absences: List<UntisAbsence>,
+    combined: Boolean,
     onLessonClick: (UntisLesson) -> Unit,
     onOverflowClick: (TimelineOverflow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isToday = date == today
-    val layout = remember(lessons, exams) {
-        layoutTimeline(mergeLessons(lessons), priority = { blockPriority(it, exams) })
+    // Combined, one full-width block stands for lessons that run at once (narrow halves are hard to
+    // read in a week column); the others are behind the "+N" chip.
+    val layout = remember(lessons, exams, combined) {
+        if (combined) {
+            layoutTimeline(mergeLessons(lessons), maxColumns = 1, priority = { combinedPriority(it, exams) })
+        } else {
+            layoutTimeline(mergeLessons(lessons), priority = { blockPriority(it, exams) })
+        }
     }
     val blocks = layout.visible
     val nowTime = now.toLocalTime()
@@ -1748,6 +1865,17 @@ private fun WeekDayColumn(
  * Which lessons to keep when more run at once than fit beside each other: exams first, then
  * substitutions, then cancelled lessons, then the rest.
  */
+/**
+ * Which lesson stands for a group that runs at once when they are combined: the one that takes
+ * place wins over a cancelled one, an exam over everything, a long event over a single period.
+ */
+private fun combinedPriority(block: TimelineBlock, exams: List<UntisExam>): Int = when {
+    examFor(block.lesson, exams) != null -> 40
+    block.isCancelled -> 0
+    block.hasSubstitution -> 30
+    else -> 20
+} + (block.durationMinutes / 60).coerceAtMost(9)
+
 private fun blockPriority(block: TimelineBlock, exams: List<UntisExam>): Int = when {
     examFor(block.lesson, exams) != null -> 4
     block.hasSubstitution && !block.isCancelled -> 3
@@ -1982,7 +2110,7 @@ private fun WeekLessonBlock(
                     }
                     // A status line and a room line only fit in a longer block, or with larger
                     // text they clip. Status wins when the block is short.
-                    val detail = lessonDetailParts(lesson, LocalTimetableTargetType.current).firstOrNull().orEmpty()
+                    val detail = weekDetailText(lesson, LocalTimetableTargetType.current, LocalTimetableDisplay.current.weekDetail)
                     val roomFits = status == null || block.durationMinutes >= 60
                     if (detail.isNotBlank() && roomFits) {
                         Text(

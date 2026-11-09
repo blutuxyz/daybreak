@@ -685,7 +685,6 @@
         <item quantity="one">%d widget is on your home screen. Changes apply right away.</item>
         <item quantity="other">%d widgets are on your home screen. Changes apply right away.</item>
     </plurals>
-    <string name="widget_settings_add">Add to home screen</string>
     <string name="widget_settings_look">Look</string>
     <string name="widget_settings_theme">Theme</string>
     <string name="widget_theme_app">Like app</string>
@@ -714,4 +713,26 @@
     <string name="widget_preview_room_1">Room 204</string>
     <string name="widget_preview_room_2">Room 105</string>
     <string name="widget_preview_room_3">Room 301</string>
+    <string name="settings_next_week">Next week after the weekend</string>
+    <string name="settings_next_week_desc">Once the last lesson of the week is over, the timetable opens the next week</string>
+    <string name="settings_timetable_size">Size</string>
+    <string name="settings_day_scale">Day view</string>
+    <string name="settings_week_scale">Week view</string>
+    <string name="settings_week_fits">Fit week to screen</string>
+    <string name="settings_week_fits_desc">The whole school day fits on the screen without scrolling</string>
+    <string name="settings_pinch_hint">You can also zoom the timetable with two fingers.</string>
+    <string name="settings_timetable_lessons">Lessons</string>
+    <string name="settings_concurrent">Lessons at the same time (week)</string>
+    <string name="settings_concurrent_combined">Combine</string>
+    <string name="settings_concurrent_side">Side by side</string>
+    <string name="settings_concurrent_combined_hint">One wide lesson, the one that takes place before a cancelled one. "+1" shows the others.</string>
+    <string name="settings_concurrent_side_hint">Up to two narrow lessons side by side, more behind "+1".</string>
+    <string name="settings_week_detail">Second line in the week</string>
+    <string name="settings_week_detail_none">Nothing</string>
+    <string name="settings_show_cancelled">Cancelled lessons</string>
+    <string name="settings_show_cancelled_desc">Stay in the timetable, struck through</string>
+    <string name="settings_free_bands">Mark free periods</string>
+    <string name="settings_free_bands_desc">Gaps between lessons get a band saying "Free"</string>
+    <string name="widget_settings_add_short">Add</string>
+    <string name="messages_detail_title">Message</string>
 </resources>

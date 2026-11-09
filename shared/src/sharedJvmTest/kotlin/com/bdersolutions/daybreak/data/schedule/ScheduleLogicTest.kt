@@ -268,3 +268,37 @@ class WidgetPlannerTest {
         assertTrue(plan.rows.isEmpty())
     }
 }
+
+class WeekRolloverTest {
+    // DAY is Thursday 5 November 2026.
+    private val friday = DAY.plusDays(1)
+    private val nextMonday = DAY.plusDays(4)
+    private val week = listOf(
+        lesson("07:55", "08:45", "M"),
+        lesson("11:35", "13:15", "E", date = friday),
+    )
+
+    @Test
+    fun duringTheWeekItIsToday() {
+        assertEquals(DAY, WeekRollover.startDate(week, at("10:00")))
+        assertEquals(friday, WeekRollover.startDate(week, LocalDateTime.of(friday, LocalTime.of(12, 0))))
+    }
+
+    @Test
+    fun afterTheLastLessonOfTheWeekItIsNextMonday() {
+        assertEquals(nextMonday, WeekRollover.startDate(week, LocalDateTime.of(friday, LocalTime.of(13, 15))))
+        assertEquals(nextMonday, WeekRollover.startDate(week, LocalDateTime.of(friday.plusDays(1), LocalTime.NOON)))
+    }
+
+    @Test
+    fun withoutLessonsOnlyTheWeekendRollsOver() {
+        assertEquals(DAY, WeekRollover.startDate(emptyList(), at("15:00")))
+        assertEquals(nextMonday, WeekRollover.startDate(emptyList(), LocalDateTime.of(DAY.plusDays(3), LocalTime.NOON)))
+    }
+
+    @Test
+    fun holidayBlocksDoNotCount() {
+        val holiday = lesson("07:00", "18:00", "Ferien", date = friday).copy(isHoliday = true)
+        assertEquals(nextMonday, WeekRollover.startDate(listOf(lesson("07:55", "08:45", "M"), holiday), at("09:00")))
+    }
+}

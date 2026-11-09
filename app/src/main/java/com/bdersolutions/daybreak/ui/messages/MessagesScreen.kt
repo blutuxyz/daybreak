@@ -1,14 +1,9 @@
 package com.bdersolutions.daybreak.ui.messages
 
-import androidx.compose.ui.graphics.Color
+import com.bdersolutions.daybreak.ui.components.PushHost
+import com.bdersolutions.daybreak.ui.components.schoolPlainText
+import com.bdersolutions.daybreak.ui.components.schoolRichText
 import androidx.compose.runtime.remember
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withLink
 import android.content.ActivityNotFoundException
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -83,7 +78,10 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The message box of WebUntis: inbox, sent and drafts. A tap opens the whole message in a sheet. */
+/**
+ * The message box of WebUntis: inbox, sent and drafts. A tap pushes the whole message as a page of
+ * its own, like every other full screen; writing a message stays a sheet.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(
@@ -93,13 +91,21 @@ fun MessagesScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = LocalHaptics.current
     val locale = LocalConfiguration.current.locales[0]
     val folders = MailFolder.entries
 
+    PushHost(
+        page = state.open,
+        onBack = {
+            haptics.perform(HapticEvent.BACK)
+            viewModel.close()
+        },
+        modifier = modifier,
+        base = {
     SettingsPageScaffold(
         title = stringResource(R.string.messages_title),
         onBack = onBack,
-        modifier = modifier,
     ) {
         if (viewModel.sendEnabled) item(key = "new") {
             FilledTonalButton(
@@ -153,6 +159,27 @@ fun MessagesScreen(
         }
     }
 
+        },
+    ) { open ->
+        SettingsPageScaffold(
+            title = stringResource(R.string.messages_detail_title),
+            onBack = {
+                haptics.perform(HapticEvent.BACK)
+                viewModel.close()
+            },
+        ) {
+            item(key = "mail") {
+                MailPageContent(
+                    open = open,
+                    folder = state.folder,
+                    locale = locale,
+                    downloading = state.downloading,
+                    onDownload = viewModel::downloadAttachment,
+                )
+            }
+        }
+    }
+
     state.compose?.let { form ->
         ComposeSheet(
             form = form,
@@ -167,7 +194,6 @@ fun MessagesScreen(
         )
     }
 
-    val haptics = LocalHaptics.current
     LaunchedEffect(viewModel) {
         viewModel.sentEvents.collect { haptics.perform(HapticEvent.MESSAGE_SENT) }
     }
@@ -205,20 +231,6 @@ fun MessagesScreen(
         }
     }
 
-    state.open?.let { open ->
-        ModalBottomSheet(
-            onDismissRequest = viewModel::close,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            MailSheetContent(
-                open = open,
-                folder = state.folder,
-                locale = locale,
-                downloading = state.downloading,
-                onDownload = viewModel::downloadAttachment,
-            )
-        }
-    }
 }
 
 private val MailFolder.label: Int
@@ -293,7 +305,7 @@ private fun MailCard(mail: UntisMail, folder: MailFolder, locale: Locale, onClic
             if (mail.preview.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = mail.preview,
+                    text = remember(mail.preview) { schoolPlainText(mail.preview) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -305,7 +317,7 @@ private fun MailCard(mail: UntisMail, folder: MailFolder, locale: Locale, onClic
 }
 
 @Composable
-private fun MailSheetContent(
+private fun MailPageContent(
     open: OpenMail,
     folder: MailFolder,
     locale: Locale,
@@ -317,9 +329,8 @@ private fun MailSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 22.dp)
-            .padding(bottom = 28.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = 6.dp)
+            .padding(top = 4.dp, bottom = 28.dp),
     ) {
         Text(
             text = mail.subject.ifBlank { stringResource(R.string.messages_no_subject) },
@@ -359,7 +370,7 @@ private fun MailSheetContent(
                     val body = mail.content.ifBlank { stringResource(R.string.messages_no_text) }
                     Text(
                         // Web addresses in a message open in the browser when tapped.
-                        text = remember(body, linkColor) { linkified(body, linkColor) },
+                        text = remember(body, linkColor) { schoolRichText(body, linkColor) },
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
@@ -588,23 +599,3 @@ private fun shortTime(time: LocalDateTime, locale: Locale): String {
 
 private fun longTime(time: LocalDateTime, locale: Locale): String =
     DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy · HH:mm", locale).format(time)
-
-private val WEB_ADDRESS = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
-
-/** [text] with every http(s) address turned into a tappable link. Trailing punctuation stays text. */
-internal fun linkified(text: String, linkColor: Color): AnnotatedString = buildAnnotatedString {
-    var cursor = 0
-    for (match in WEB_ADDRESS.findAll(text)) {
-        val url = match.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '\'')
-        val start = match.range.first
-        append(text.substring(cursor, start))
-        withLink(
-            LinkAnnotation.Url(
-                url,
-                TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
-            ),
-        ) { append(url) }
-        cursor = start + url.length
-    }
-    append(text.substring(cursor))
-}

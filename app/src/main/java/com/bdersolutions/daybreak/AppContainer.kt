@@ -1,6 +1,8 @@
 package com.bdersolutions.daybreak
 
+import android.app.UiModeManager
 import android.content.Context
+import android.os.Build
 import com.bdersolutions.daybreak.data.attachments.AttachmentDownloader
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
@@ -17,6 +19,7 @@ import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.security.SecretVault
 import com.bdersolutions.daybreak.data.session.SessionStore
 import com.bdersolutions.daybreak.data.settings.SettingsRepository
+import com.bdersolutions.daybreak.data.settings.ThemeMode
 import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.reminders.ReminderNotificationManager
 import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
@@ -134,6 +137,24 @@ class AppContainer(context: Context) {
     fun start() {
         // The widget draws with the app's colours, language and its own settings, so it is redrawn
         // when any of them changes (a moment later, so a run of taps redraws it once).
+        // Android 12+ draws the splash screen before any app code runs, from the night mode it
+        // knows for the app. Telling it the app's own choice keeps a dark app from opening with a
+        // white splash (and the other way round). The activity handles the uiMode change itself.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            appScope.launch {
+                settingsRepository.settings
+                    .map { it.themeMode }
+                    .distinctUntilChanged()
+                    .collect { mode ->
+                        val night = when (mode) {
+                            ThemeMode.SYSTEM -> UiModeManager.MODE_NIGHT_AUTO
+                            ThemeMode.LIGHT -> UiModeManager.MODE_NIGHT_NO
+                            ThemeMode.DARK -> UiModeManager.MODE_NIGHT_YES
+                        }
+                        runCatching { appContext.getSystemService(UiModeManager::class.java)?.setApplicationNightMode(night) }
+                    }
+            }
+        }
         appScope.launch {
             settingsRepository.settings
                 .map { listOf(it.widget, it.themeMode, it.dynamicColor, it.accent, it.language, it.lessonColors, it.subjectColorMode) }

@@ -20,7 +20,7 @@ enum class WidgetDetail { ROOM, TEACHER, ROOM_AND_TEACHER }
  */
 data class WidgetSettings(
     val theme: WidgetTheme = WidgetTheme.APP,
-    /** Opacity of the widget background in percent, one of [BACKGROUND_OPACITIES]. */
+    /** Opacity of the widget background in percent, 0 to 100. */
     val backgroundOpacity: Int = 100,
     val detail: WidgetDetail = WidgetDetail.ROOM,
     /** The "Now: … until …" line above the list. */
@@ -32,15 +32,11 @@ data class WidgetSettings(
     /** The time of the last sync in the corner. */
     val showSyncTime: Boolean = true,
 ) {
-    /** Snaps values that came from an older or broken store onto the allowed choices. */
-    fun normalized(): WidgetSettings =
-        if (backgroundOpacity in BACKGROUND_OPACITIES) {
-            this
-        } else {
-            copy(backgroundOpacity = BACKGROUND_OPACITIES.minBy { kotlin.math.abs(it - backgroundOpacity) })
-        }
+    /** Keeps values from an older or broken store in range. */
+    fun normalized(): WidgetSettings = copy(backgroundOpacity = backgroundOpacity.coerceIn(0, 100))
 
     companion object {
-        val BACKGROUND_OPACITIES = listOf(0, 25, 50, 75, 100)
+        /** The opacity slider moves in steps of this many percent. */
+        const val OPACITY_STEP = 10
     }
 }

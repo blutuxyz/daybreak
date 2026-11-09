@@ -44,12 +44,37 @@ class TimetableViewModel(
     private val widgetUpdater: WidgetUpdater,
     private val schoolData: SchoolDataRepository,
 ) : ViewModel() {
-    val status: StateFlow<TimetableSyncStatus> = repository.status
-    val settings: StateFlow<AppSettings> = settingsRepository.settings
-    val session: StateFlow<DaybreakSession?> = sessionStore.session
-
     private val _target = MutableStateFlow<TimetableTarget>(TimetableTarget.Own)
     val target: StateFlow<TimetableTarget> = _target.asStateFlow()
+
+    /** Cache keys of class, teacher and room weeks being loaded right now. */
+    private val elementLoading = MutableStateFlow<Set<String>>(emptySet())
+
+    /** The last failed load of a class, teacher or room week, cleared when one succeeds. */
+    private val elementError = MutableStateFlow<Throwable?>(null)
+
+    /**
+     * Loading and error state of the timetable on screen. The student's own timetable has the
+     * repository's sync status; a class, teacher or room has its own, so a week that is still
+     * loading shows the spinner instead of "free today".
+     */
+    val status: StateFlow<TimetableSyncStatus> = combine(
+        repository.status,
+        _target,
+        elementLoading,
+        elementError,
+    ) { own, target, loading, error ->
+        when (target) {
+            TimetableTarget.Own -> own
+            is TimetableTarget.Element -> TimetableSyncStatus(
+                isLoading = loading.any { it.startsWith(target.cachePrefix) },
+                lastSyncAt = own.lastSyncAt,
+                lastError = error,
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.status.value)
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
+    val session: StateFlow<DaybreakSession?> = sessionStore.session
 
     val directory: StateFlow<UntisDirectory?> = schoolData.directory
 
@@ -97,7 +122,13 @@ class TimetableViewModel(
         }
     }
 
+    /** Saves a change of the timetable layout, e.g. the zoom after a pinch. */
+    fun updateDisplay(transform: (com.bdersolutions.daybreak.data.settings.TimetableDisplay) -> com.bdersolutions.daybreak.data.settings.TimetableDisplay) {
+        settingsRepository.updateDisplay(transform)
+    }
+
     fun setTarget(target: TimetableTarget) {
+        if (target != _target.value) elementError.value = null
         _target.value = target
     }
 
@@ -178,15 +209,21 @@ class TimetableViewModel(
         val week = repository.weekStartFor(date)
         val key = target.cacheKey(week)
         elementRequests += key
+        elementLoading.update { it + key }
         return try {
             val lessons = schoolData.elementWeek(target.element, week)
             elementWeeks.update { it + (key to CachedWeek(week, lessons, System.currentTimeMillis())) }
+            elementError.value = null
             true
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: Throwable) {
+            elementError.value = error
             _events.tryEmit(error)
             false
         } finally {
             elementRequests -= key
+            elementLoading.update { it - key }
         }
     }
 

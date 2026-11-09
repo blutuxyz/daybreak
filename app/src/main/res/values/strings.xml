@@ -692,7 +692,6 @@
         <item quantity="one">%d Widget ist auf dem Startbildschirm. Änderungen gelten sofort.</item>
         <item quantity="other">%d Widgets sind auf dem Startbildschirm. Änderungen gelten sofort.</item>
     </plurals>
-    <string name="widget_settings_add">Zum Startbildschirm hinzufügen</string>
     <string name="widget_settings_look">Aussehen</string>
     <string name="widget_settings_theme">Design</string>
     <string name="widget_theme_app">Wie App</string>
@@ -721,4 +720,26 @@
     <string name="widget_preview_room_1">Raum 204</string>
     <string name="widget_preview_room_2">Raum 105</string>
     <string name="widget_preview_room_3">Raum 301</string>
+    <string name="settings_next_week">Nach Wochenende nächste Woche</string>
+    <string name="settings_next_week_desc">Ist die letzte Stunde der Woche vorbei, öffnet der Stundenplan die nächste Woche</string>
+    <string name="settings_timetable_size">Größe</string>
+    <string name="settings_day_scale">Tagesansicht</string>
+    <string name="settings_week_scale">Wochenansicht</string>
+    <string name="settings_week_fits">Woche an Bildschirm anpassen</string>
+    <string name="settings_week_fits_desc">Der ganze Schultag passt ohne Scrollen auf den Bildschirm</string>
+    <string name="settings_pinch_hint">Im Stundenplan kannst du auch mit zwei Fingern zoomen.</string>
+    <string name="settings_timetable_lessons">Stunden</string>
+    <string name="settings_concurrent">Gleichzeitige Stunden in der Woche</string>
+    <string name="settings_concurrent_combined">Zusammenfassen</string>
+    <string name="settings_concurrent_side">Nebeneinander</string>
+    <string name="settings_concurrent_combined_hint">Eine breite Stunde, die stattfindende vor der entfallenen. „+1“ zeigt die übrigen.</string>
+    <string name="settings_concurrent_side_hint">Bis zu zwei schmale Stunden nebeneinander, weitere hinter „+1“.</string>
+    <string name="settings_week_detail">Zweite Zeile in der Woche</string>
+    <string name="settings_week_detail_none">Nichts</string>
+    <string name="settings_show_cancelled">Entfallene Stunden</string>
+    <string name="settings_show_cancelled_desc">Bleiben durchgestrichen im Stundenplan</string>
+    <string name="settings_free_bands">Freistunden markieren</string>
+    <string name="settings_free_bands_desc">Lücken zwischen Stunden bekommen ein Band mit „Frei“</string>
+    <string name="widget_settings_add_short">Hinzufügen</string>
+    <string name="messages_detail_title">Nachricht</string>
 </resources>

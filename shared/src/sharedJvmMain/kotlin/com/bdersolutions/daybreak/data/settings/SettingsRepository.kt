@@ -103,6 +103,8 @@ data class AppSettings(
     val examRemindersEnabled: Boolean = true,
     /** How the home screen widget looks and what it shows. */
     val widget: WidgetSettings = WidgetSettings(),
+    /** Layout of the timetable screen: zoom, overlapping lessons, rolling over to next week. */
+    val display: TimetableDisplay = TimetableDisplay(),
 )
 
 class SettingsRepository(private val preferences: KeyValueStore) {
@@ -224,6 +226,10 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         update(_settings.value.copy(haptics = transform(_settings.value.haptics)))
     }
 
+    fun updateDisplay(transform: (TimetableDisplay) -> TimetableDisplay) {
+        update(_settings.value.copy(display = transform(_settings.value.display).normalized()))
+    }
+
     fun updateWidget(transform: (WidgetSettings) -> WidgetSettings) {
         update(_settings.value.copy(widget = transform(_settings.value.widget).normalized()))
     }
@@ -262,6 +268,14 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             .putBoolean(KEY_WIDGET_CANCELLED, value.widget.showCancelled)
             .putBoolean(KEY_WIDGET_NEXT_DAY, value.widget.nextDayAfterSchool)
             .putBoolean(KEY_WIDGET_SYNC_TIME, value.widget.showSyncTime)
+            .putBoolean(KEY_DISPLAY_NEXT_WEEK, value.display.autoNextWeek)
+            .putInt(KEY_DISPLAY_DAY_SCALE, value.display.dayScale)
+            .putInt(KEY_DISPLAY_WEEK_SCALE, value.display.weekScale)
+            .putBoolean(KEY_DISPLAY_WEEK_FITS, value.display.weekFitsScreen)
+            .putString(KEY_DISPLAY_CONCURRENT, value.display.concurrent.name)
+            .putBoolean(KEY_DISPLAY_CANCELLED, value.display.showCancelled)
+            .putBoolean(KEY_DISPLAY_FREE_BANDS, value.display.showFreeBands)
+            .putString(KEY_DISPLAY_WEEK_DETAIL, value.display.weekDetail.name)
             .apply()
         _settings.value = value
     }
@@ -305,6 +319,16 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             showCancelled = preferences.getBoolean(KEY_WIDGET_CANCELLED, true),
             nextDayAfterSchool = preferences.getBoolean(KEY_WIDGET_NEXT_DAY, true),
             showSyncTime = preferences.getBoolean(KEY_WIDGET_SYNC_TIME, true),
+        ).normalized(),
+        display = TimetableDisplay(
+            autoNextWeek = preferences.getBoolean(KEY_DISPLAY_NEXT_WEEK, true),
+            dayScale = preferences.getInt(KEY_DISPLAY_DAY_SCALE, 100),
+            weekScale = preferences.getInt(KEY_DISPLAY_WEEK_SCALE, 100),
+            weekFitsScreen = preferences.getBoolean(KEY_DISPLAY_WEEK_FITS, false),
+            concurrent = enumOrDefault(preferences.getString(KEY_DISPLAY_CONCURRENT, null), ConcurrentLessons.COMBINED),
+            showCancelled = preferences.getBoolean(KEY_DISPLAY_CANCELLED, true),
+            showFreeBands = preferences.getBoolean(KEY_DISPLAY_FREE_BANDS, true),
+            weekDetail = enumOrDefault(preferences.getString(KEY_DISPLAY_WEEK_DETAIL, null), WeekDetail.ROOM),
         ).normalized(),
     )
 
@@ -388,6 +412,14 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         private const val KEY_WIDGET_CANCELLED = "widget_show_cancelled"
         private const val KEY_WIDGET_NEXT_DAY = "widget_next_day_after_school"
         private const val KEY_WIDGET_SYNC_TIME = "widget_show_sync_time"
+        private const val KEY_DISPLAY_NEXT_WEEK = "display_auto_next_week"
+        private const val KEY_DISPLAY_DAY_SCALE = "display_day_scale"
+        private const val KEY_DISPLAY_WEEK_SCALE = "display_week_scale"
+        private const val KEY_DISPLAY_WEEK_FITS = "display_week_fits_screen"
+        private const val KEY_DISPLAY_CONCURRENT = "display_concurrent"
+        private const val KEY_DISPLAY_CANCELLED = "display_show_cancelled"
+        private const val KEY_DISPLAY_FREE_BANDS = "display_free_bands"
+        private const val KEY_DISPLAY_WEEK_DETAIL = "display_week_detail"
         private val gson = com.google.gson.Gson()
     }
 }
