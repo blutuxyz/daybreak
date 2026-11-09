@@ -1,17 +1,15 @@
 package com.bdersolutions.daybreak.ui
 
+import androidx.compose.runtime.saveable.Saver
+import com.bdersolutions.daybreak.ui.components.PushHost
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -137,7 +135,7 @@ private enum class AppStage { TERMS, UPDATE_REQUIRED, APP }
 fun DaybreakApp(
     container: AppContainer,
     initialDate: LocalDate? = null,
-    openUpdates: Boolean = false,
+    openPage: SettingsPage? = null,
     startMode: Int? = null,
     openSearch: Boolean = false,
 ) {
@@ -199,7 +197,7 @@ fun DaybreakApp(
                     AppStage.APP -> DaybreakRoot(
                         container = container,
                         initialDate = initialDate,
-                        openUpdates = openUpdates,
+                        openPage = openPage,
                         startMode = startMode,
                         openSearch = openSearch,
                     )
@@ -215,7 +213,7 @@ fun DaybreakApp(
 fun DaybreakRoot(
     container: AppContainer,
     initialDate: LocalDate? = null,
-    openUpdates: Boolean = false,
+    openPage: SettingsPage? = null,
     startMode: Int? = null,
     openSearch: Boolean = false,
 ) {
@@ -261,7 +259,7 @@ fun DaybreakRoot(
                 container = container,
                 session = currentSession,
                 initialDate = initialDate,
-                openUpdates = openUpdates,
+                openPage = openPage,
                 startMode = startMode,
                 openSearch = openSearch,
             )
@@ -275,24 +273,17 @@ private fun LoggedInContent(
     container: AppContainer,
     session: DaybreakSession,
     initialDate: LocalDate?,
-    openUpdates: Boolean,
+    openPage: SettingsPage?,
     startMode: Int?,
     openSearch: Boolean,
 ) {
     // Tapping the "update available" notification lands on the Updates screen.
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (openUpdates) 2 else 0) }
-    var showDebug by rememberSaveable { mutableStateOf(false) }
-    // The settings screen that is open over the list, if any. Debug has its own flag above.
-    var settingsPage by rememberSaveable {
-        mutableStateOf<SettingsPage?>(if (openUpdates) SettingsPage.UPDATES else null)
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (openPage != null) 2 else 0) }
+    // The full-screen page pushed over the tabs (a settings page, Upcoming, Account, Messages or
+    // the debug log), if any. All of them slide in alike through one PushHost.
+    var destination by rememberSaveable(stateSaver = DestinationSaver) {
+        mutableStateOf<Destination?>(openPage?.let { Destination.Settings(it) })
     }
-    // Kept after closing, so the screen can still be drawn while it slides out.
-    var shownPage by remember { mutableStateOf(settingsPage) }
-    if (settingsPage != null) shownPage = settingsPage
-    // Pages that open from the timetable and the settings list, with the same slide.
-    var mainPage by rememberSaveable { mutableStateOf<MainPage?>(null) }
-    var shownMainPage by remember { mutableStateOf(mainPage) }
-    if (mainPage != null) shownMainPage = mainPage
     val context = LocalContext.current
     val haptics = LocalHaptics.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
@@ -342,23 +333,6 @@ private fun LoggedInContent(
         }
     }
 
-    BackHandler(enabled = showDebug) {
-        haptics.perform(HapticEvent.BACK)
-        showDebug = false
-    }
-
-    if (showDebug) {
-        val debugViewModel: DebugViewModel = viewModel(factory = DebugViewModel.Factory(container))
-        DebugScreen(
-            viewModel = debugViewModel,
-            onBack = {
-                haptics.perform(HapticEvent.BACK)
-                showDebug = false
-            },
-        )
-        return
-    }
-
     val timetableViewModel: TimetableViewModel = viewModel(
         key = "timetable_${session.studentId}",
         factory = TimetableViewModel.Factory(container),
@@ -368,17 +342,16 @@ private fun LoggedInContent(
         factory = SettingsViewModel.Factory(container),
     )
 
-    BackHandler(enabled = settingsPage != null) {
-        haptics.perform(HapticEvent.BACK)
-        settingsPage = null
-    }
-    BackHandler(enabled = mainPage != null) {
-        haptics.perform(HapticEvent.BACK)
-        mainPage = null
-    }
-
     val motion = MaterialTheme.motionScheme
+    val closePage = {
+        haptics.perform(HapticEvent.BACK)
+        destination = null
+    }
     Box(modifier = Modifier.fillMaxSize()) {
+      PushHost(
+        page = destination,
+        onBack = closePage,
+        base = {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.surface,
@@ -423,7 +396,7 @@ private fun LoggedInContent(
                         initialMode = startMode
                             ?: if (initialDate == null && settings.startView == StartView.WEEK) 1 else 0,
                         openSearchOnStart = openSearch,
-                        onOpenUpcoming = { mainPage = MainPage.UPCOMING },
+                        onOpenUpcoming = { destination = Destination.Main(MainPage.UPCOMING) },
                     )
 
                     1 -> {
@@ -436,50 +409,36 @@ private fun LoggedInContent(
 
                     else -> SettingsScreen(
                         viewModel = settingsViewModel,
-                        onOpenDebug = { showDebug = true },
-                        onOpenPage = { settingsPage = it },
-                        onOpenAccount = { mainPage = MainPage.ACCOUNT },
-                        onOpenMessages = { mainPage = MainPage.MESSAGES },
+                        onOpenDebug = { destination = Destination.Debug },
+                        onOpenPage = { destination = Destination.Settings(it) },
+                        onOpenAccount = { destination = Destination.Main(MainPage.ACCOUNT) },
+                        onOpenMessages = { destination = Destination.Main(MainPage.MESSAGES) },
                     )
                 }
             }
         }
 
-        // Settings sub-screens slide in from the right, stock style, with no scaling.
-        AnimatedVisibility(
-            visible = settingsPage != null,
-            modifier = Modifier.fillMaxSize(),
-            enter = subScreenEnter,
-            exit = subScreenExit,
-        ) {
-            shownPage?.let { page ->
-                SettingsPageHost(
-                    page = page,
-                    viewModel = settingsViewModel,
-                    onBack = {
-                        haptics.perform(HapticEvent.BACK)
-                        settingsPage = null
-                    },
-                )
-            }
-        }
+        },
+      ) { page ->
+        when (page) {
+            is Destination.Settings -> SettingsPageHost(
+                page = page.page,
+                viewModel = settingsViewModel,
+                onBack = closePage,
+            )
 
-        AnimatedVisibility(
-            visible = mainPage != null,
-            modifier = Modifier.fillMaxSize(),
-            enter = subScreenEnter,
-            exit = subScreenExit,
-        ) {
-            when (shownMainPage) {
+            Destination.Debug -> DebugScreen(
+                viewModel = viewModel(factory = DebugViewModel.Factory(container)),
+                onBack = closePage,
+            )
+
+            is Destination.Main -> when (page.page) {
                 MainPage.UPCOMING -> UpcomingScreen(
                     viewModel = viewModel(
                         key = "upcoming_${session.studentId}",
                         factory = UpcomingViewModel.Factory(container),
                     ),
-                    onBack = {
-                        haptics.perform(HapticEvent.BACK)
-                        mainPage = null
-                    },
+                    onBack = closePage,
                 )
 
                 MainPage.ACCOUNT -> AccountScreen(
@@ -488,10 +447,7 @@ private fun LoggedInContent(
                         key = "account_${session.studentId}",
                         factory = AccountViewModel.Factory(container),
                     ),
-                    onBack = {
-                        haptics.perform(HapticEvent.BACK)
-                        mainPage = null
-                    },
+                    onBack = closePage,
                 )
 
                 MainPage.MESSAGES -> MessagesScreen(
@@ -499,15 +455,11 @@ private fun LoggedInContent(
                         key = "messages_${session.studentId}",
                         factory = MessagesViewModel.Factory(container),
                     ),
-                    onBack = {
-                        haptics.perform(HapticEvent.BACK)
-                        mainPage = null
-                    },
+                    onBack = closePage,
                 )
-
-                null -> Unit
             }
         }
+      }
 
         if (showSupport) {
             val supportApi = container.supportApi
@@ -546,14 +498,32 @@ private fun LoggedInContent(
 /** Pages that are not settings but open over the tabs the same way. */
 private enum class MainPage { UPCOMING, ACCOUNT, MESSAGES }
 
-/** Stock slide used by the settings sub-screens. Plain tweens, so there is no spring overshoot. */
-private val subScreenEnter = slideInHorizontally(
-    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-) { width -> width }
+/** A full-screen page pushed over the tabs. */
+private sealed interface Destination {
+    data class Settings(val page: SettingsPage) : Destination
+    data class Main(val page: MainPage) : Destination
+    data object Debug : Destination
+}
 
-private val subScreenExit = slideOutHorizontally(
-    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-) { width -> width }
+/** Keeps the open page across configuration changes and process death, as a short text. */
+private val DestinationSaver = Saver<Destination?, String>(
+    save = { destination ->
+        when (destination) {
+            is Destination.Settings -> "S:${destination.page.name}"
+            is Destination.Main -> "M:${destination.page.name}"
+            Destination.Debug -> "D"
+            null -> ""
+        }
+    },
+    restore = { saved ->
+        when {
+            saved == "D" -> Destination.Debug
+            saved.startsWith("S:") -> SettingsPage.entries.firstOrNull { it.name == saved.drop(2) }?.let { Destination.Settings(it) }
+            saved.startsWith("M:") -> MainPage.entries.firstOrNull { it.name == saved.drop(2) }?.let { Destination.Main(it) }
+            else -> null
+        }
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable

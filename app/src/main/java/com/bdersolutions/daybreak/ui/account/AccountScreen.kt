@@ -1,5 +1,8 @@
 package com.bdersolutions.daybreak.ui.account
 
+import androidx.compose.runtime.remember
+import com.bdersolutions.daybreak.ui.components.schoolPlainText
+import com.bdersolutions.daybreak.ui.components.schoolRichText
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -100,14 +103,19 @@ fun AccountScreen(
                 ItemCard {
                     if (message.subject.isNotBlank()) {
                         Text(
-                            text = message.subject,
+                            // Notices are sometimes written in HTML; the subject stays one plain line.
+                            text = remember(message.subject) { schoolPlainText(message.subject) },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
                     if (message.text.isNotBlank()) {
                         if (message.subject.isNotBlank()) Spacer(Modifier.height(6.dp))
-                        Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                        val linkColor = MaterialTheme.colorScheme.primary
+                        Text(
+                            text = remember(message.text, linkColor) { schoolRichText(message.text, linkColor) },
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
                     }
                 }
             }

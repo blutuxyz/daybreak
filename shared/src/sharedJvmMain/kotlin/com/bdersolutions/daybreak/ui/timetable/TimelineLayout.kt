@@ -159,6 +159,13 @@ data class TimelineBlock(
     val columnCount: Int = 1,
 ) {
     val lesson: UntisLesson get() = lessons.first()
+
+    /**
+     * The lesson to show in the details sheet: the first period with the block's whole time, so a
+     * double lesson says 11:35 – 13:15 instead of only its first period.
+     */
+    val detailLesson: UntisLesson
+        get() = if (lesson.start == start && lesson.end == end) lesson else lesson.copy(start = start, end = end)
     val isCancelled: Boolean get() = lessons.any { it.isCancelled }
     val hasRoomChange: Boolean get() = lessons.any { it.hasRoomChange }
     val hasSubstitution: Boolean get() = lessons.any { it.hasSubstitution }

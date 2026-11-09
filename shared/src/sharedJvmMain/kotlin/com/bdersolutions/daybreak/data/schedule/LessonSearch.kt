@@ -16,7 +16,7 @@ data class SearchHit(
 /**
  * Searches the lessons the app has cached ("When is my next Maths lesson?"). Every word of the query
  * has to appear in the subject, its long name, the teacher, the room, the class, an exam's name or a
- * substitution note. Upcoming lessons come first, soonest first; past ones follow, newest first.
+ * substitution note. Double lessons are one hit. Upcoming lessons come first, soonest first; past ones follow, newest first.
  */
 object LessonSearch {
     const val MAX_HITS = 60
@@ -30,9 +30,8 @@ object LessonSearch {
         val words = query.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (words.isEmpty()) return emptyList()
 
-        val hits = lessons
+        val hits = mergedBlocks(lessons)
             .asSequence()
-            .filter { !it.isHoliday }
             .map { lesson -> lesson to examOn(lesson, exams) }
             .filter { (lesson, exam) ->
                 val text = haystack(lesson, exam)
@@ -45,6 +44,20 @@ object LessonSearch {
         val past = hits.filter { !it.upcoming }.sortedByDescending { it.lesson.startsAt }
         return (upcoming + past).take(MAX_HITS)
     }
+
+    /**
+     * A double lesson is one hit, as in the timetable: consecutive matching periods of a day become
+     * one lesson spanning them (the first period's data, the run's start and end).
+     */
+    private fun mergedBlocks(lessons: List<UntisLesson>): List<UntisLesson> =
+        lessons.filter { !it.isHoliday }
+            .groupBy { it.date }
+            .values
+            .flatMap { day ->
+                NowAndNext.runs(day, includeCancelled = true).map { run ->
+                    if (run.periods == 1) run.lesson else run.lesson.copy(start = run.start, end = run.end)
+                }
+            }
 
     private fun haystack(lesson: UntisLesson, exam: UntisExam?): String =
         listOf(

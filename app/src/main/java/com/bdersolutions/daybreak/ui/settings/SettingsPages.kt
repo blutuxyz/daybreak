@@ -1,5 +1,15 @@
 package com.bdersolutions.daybreak.ui.settings
 
+import androidx.compose.material.icons.automirrored.outlined.Notes
+import androidx.compose.material.icons.outlined.FitScreen
+import androidx.compose.material.icons.outlined.FreeBreakfast
+import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.ViewColumn
+import androidx.compose.material.icons.outlined.ViewDay
+import androidx.compose.material.icons.outlined.ViewWeek
+import com.bdersolutions.daybreak.data.settings.ConcurrentLessons
+import com.bdersolutions.daybreak.data.settings.TimetableDisplay
+import com.bdersolutions.daybreak.data.settings.WeekDetail
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -93,6 +103,7 @@ enum class SettingsPage {
     LANGUAGE,
     SYNC,
     NOTIFICATIONS,
+    WIDGET,
     HAPTICS,
     APP_NAME,
     APP_ICON,
@@ -116,6 +127,7 @@ fun SettingsPageHost(
         SettingsPage.LANGUAGE -> LanguageScreen(viewModel, onBack)
         SettingsPage.SYNC -> SyncScreen(viewModel, onBack)
         SettingsPage.NOTIFICATIONS -> NotificationsScreen(viewModel, onBack)
+        SettingsPage.WIDGET -> WidgetSettingsScreen(viewModel, onBack)
         SettingsPage.HAPTICS -> HapticsScreen(viewModel, onBack)
         SettingsPage.APP_NAME -> AppNameScreen(viewModel, onBack)
         SettingsPage.APP_ICON -> AppIconScreen(viewModel, onBack)
@@ -340,6 +352,7 @@ fun AppearanceScreen(
                         selected = settings.motionStyle,
                         onSelect = viewModel::setMotionStyle,
                     )
+                    MotionPreview(style = settings.motionStyle)
                 }
             }
         }
@@ -355,7 +368,8 @@ fun TimetableSettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     SettingsPageScaffold(title = stringResource(R.string.settings_timetable), onBack = onBack) {
-        item {
+        val display = settings.display
+        item(key = "view") {
             SettingsGroup {
                 SettingsRow(
                     icon = Icons.Outlined.Schedule,
@@ -365,6 +379,18 @@ fun TimetableSettingsScreen(
                         SpringSwitch(
                             checked = settings.showNowNext,
                             onCheckedChange = viewModel::setShowNowNext,
+                        )
+                    },
+                )
+                AppearanceDivider()
+                SettingsRow(
+                    icon = Icons.Outlined.SkipNext,
+                    title = stringResource(R.string.settings_next_week),
+                    subtitle = stringResource(R.string.settings_next_week_desc),
+                    trailing = {
+                        SpringSwitch(
+                            checked = display.autoNextWeek,
+                            onCheckedChange = { value -> viewModel.updateDisplay { it.copy(autoNextWeek = value) } },
                         )
                     },
                 )
@@ -407,6 +433,124 @@ fun TimetableSettingsScreen(
                         onSelect = viewModel::setSubjectColorMode,
                     )
                 }
+            }
+        }
+
+        item(key = "size_label") { SectionLabel(stringResource(R.string.settings_timetable_size)) }
+        item(key = "size") {
+            SettingsGroup {
+                AppearanceOption(
+                    icon = Icons.Outlined.ViewDay,
+                    title = stringResource(R.string.settings_day_scale),
+                ) {
+                    PercentSlider(
+                        value = display.dayScale,
+                        range = TimetableDisplay.MIN_SCALE..TimetableDisplay.MAX_SCALE,
+                        step = TimetableDisplay.SCALE_STEP,
+                        onValueChange = { value -> viewModel.updateDisplay { it.copy(dayScale = value) } },
+                    )
+                }
+                AppearanceDivider()
+                AppearanceOption(
+                    icon = Icons.Outlined.ViewWeek,
+                    title = stringResource(R.string.settings_week_scale),
+                ) {
+                    PercentSlider(
+                        value = display.weekScale,
+                        range = TimetableDisplay.MIN_SCALE..TimetableDisplay.MAX_SCALE,
+                        step = TimetableDisplay.SCALE_STEP,
+                        enabled = !display.weekFitsScreen,
+                        onValueChange = { value -> viewModel.updateDisplay { it.copy(weekScale = value) } },
+                    )
+                }
+                AppearanceDivider()
+                SettingsRow(
+                    icon = Icons.Outlined.FitScreen,
+                    title = stringResource(R.string.settings_week_fits),
+                    subtitle = stringResource(R.string.settings_week_fits_desc),
+                    trailing = {
+                        SpringSwitch(
+                            checked = display.weekFitsScreen,
+                            onCheckedChange = { value -> viewModel.updateDisplay { it.copy(weekFitsScreen = value) } },
+                        )
+                    },
+                )
+                Text(
+                    text = stringResource(R.string.settings_pinch_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                )
+            }
+        }
+
+        item(key = "lessons_label") { SectionLabel(stringResource(R.string.settings_timetable_lessons)) }
+        item(key = "lessons") {
+            SettingsGroup {
+                AppearanceOption(
+                    icon = Icons.Outlined.ViewColumn,
+                    title = stringResource(R.string.settings_concurrent),
+                ) {
+                    SegmentChoice(
+                        options = listOf(
+                            ConcurrentLessons.COMBINED to stringResource(R.string.settings_concurrent_combined),
+                            ConcurrentLessons.SIDE_BY_SIDE to stringResource(R.string.settings_concurrent_side),
+                        ),
+                        selected = display.concurrent,
+                        onSelect = { value -> viewModel.updateDisplay { it.copy(concurrent = value) } },
+                    )
+                    Text(
+                        text = stringResource(
+                            if (display.concurrent == ConcurrentLessons.COMBINED) {
+                                R.string.settings_concurrent_combined_hint
+                            } else {
+                                R.string.settings_concurrent_side_hint
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                AppearanceDivider()
+                AppearanceOption(
+                    icon = Icons.AutoMirrored.Outlined.Notes,
+                    title = stringResource(R.string.settings_week_detail),
+                ) {
+                    SegmentChoice(
+                        options = listOf(
+                            WeekDetail.ROOM to stringResource(R.string.widget_detail_room),
+                            WeekDetail.TEACHER to stringResource(R.string.widget_detail_teacher),
+                            WeekDetail.NONE to stringResource(R.string.settings_week_detail_none),
+                        ),
+                        selected = display.weekDetail,
+                        onSelect = { value -> viewModel.updateDisplay { it.copy(weekDetail = value) } },
+                    )
+                }
+                AppearanceDivider()
+                SettingsRow(
+                    icon = Icons.Outlined.EventBusy,
+                    title = stringResource(R.string.settings_show_cancelled),
+                    subtitle = stringResource(R.string.settings_show_cancelled_desc),
+                    trailing = {
+                        SpringSwitch(
+                            checked = display.showCancelled,
+                            onCheckedChange = { value -> viewModel.updateDisplay { it.copy(showCancelled = value) } },
+                        )
+                    },
+                )
+                AppearanceDivider()
+                SettingsRow(
+                    icon = Icons.Outlined.FreeBreakfast,
+                    title = stringResource(R.string.settings_free_bands),
+                    subtitle = stringResource(R.string.settings_free_bands_desc),
+                    trailing = {
+                        SpringSwitch(
+                            checked = display.showFreeBands,
+                            onCheckedChange = { value -> viewModel.updateDisplay { it.copy(showFreeBands = value) } },
+                        )
+                    },
+                )
             }
         }
     }

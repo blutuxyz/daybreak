@@ -1,5 +1,8 @@
 package com.bdersolutions.daybreak.ui.settings
 
+import com.bdersolutions.daybreak.ui.haptics.HapticSlider
+import kotlin.math.roundToInt
+import androidx.compose.ui.text.style.TextAlign
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -135,6 +138,7 @@ import com.bdersolutions.daybreak.ui.components.rememberPressScale
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.outlined.Apps
@@ -362,6 +366,17 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_notifications),
                         subtitle = if (settings.notificationsEnabled) on else off,
                         onClick = { onOpenPage(SettingsPage.NOTIFICATIONS) },
+                    )
+                    SettingsDivider()
+                    NavigationRow(
+                        icon = Icons.Outlined.Widgets,
+                        title = stringResource(R.string.settings_widget),
+                        subtitle = stringResource(
+                            R.string.settings_widget_summary,
+                            widgetThemeLabel(settings.widget.theme),
+                            settings.widget.backgroundOpacity,
+                        ),
+                        onClick = { onOpenPage(SettingsPage.WIDGET) },
                     )
                     SettingsDivider()
                     NavigationRow(
@@ -925,7 +940,7 @@ internal fun SettingsRow(
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
     destructive: Boolean = false,
-    subtitleMaxLines: Int = 2,
+    subtitleMaxLines: Int = 3,
     titleMaxLines: Int = 2,
     trailing: @Composable (() -> Unit)? = null,
 ) {
@@ -1010,6 +1025,43 @@ internal fun SettingsRow(
         trailingContent = trailing,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
+}
+
+/**
+ * A slider for a percentage with its value on the right. It follows the finger locally and hands
+ * the value over when the finger lifts, so dragging does not write the settings on every move.
+ */
+@Composable
+internal fun PercentSlider(
+    value: Int,
+    range: IntRange,
+    step: Int,
+    onValueChange: (Int) -> Unit,
+    enabled: Boolean = true,
+) {
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val shown = dragging ?: value.toFloat()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        HapticSlider(
+            value = shown.coerceIn(range.first.toFloat(), range.last.toFloat()),
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let { onValueChange(((it / step).roundToInt() * step).coerceIn(range.first, range.last)) }
+                dragging = null
+            },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = (range.last - range.first) / step - 1,
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "${shown.roundToInt()} %",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(56.dp),
+        )
+    }
 }
 
 internal val ThemeOptions = listOf(

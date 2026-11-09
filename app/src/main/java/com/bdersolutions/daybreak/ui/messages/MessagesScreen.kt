@@ -1,5 +1,9 @@
 package com.bdersolutions.daybreak.ui.messages
 
+import com.bdersolutions.daybreak.ui.components.PushHost
+import com.bdersolutions.daybreak.ui.components.schoolPlainText
+import com.bdersolutions.daybreak.ui.components.schoolRichText
+import androidx.compose.runtime.remember
 import android.content.ActivityNotFoundException
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -74,7 +78,10 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The message box of WebUntis: inbox, sent and drafts. A tap opens the whole message in a sheet. */
+/**
+ * The message box of WebUntis: inbox, sent and drafts. A tap pushes the whole message as a page of
+ * its own, like every other full screen; writing a message stays a sheet.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(
@@ -84,13 +91,21 @@ fun MessagesScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = LocalHaptics.current
     val locale = LocalConfiguration.current.locales[0]
     val folders = MailFolder.entries
 
+    PushHost(
+        page = state.open,
+        onBack = {
+            haptics.perform(HapticEvent.BACK)
+            viewModel.close()
+        },
+        modifier = modifier,
+        base = {
     SettingsPageScaffold(
         title = stringResource(R.string.messages_title),
         onBack = onBack,
-        modifier = modifier,
     ) {
         if (viewModel.sendEnabled) item(key = "new") {
             FilledTonalButton(
@@ -144,6 +159,27 @@ fun MessagesScreen(
         }
     }
 
+        },
+    ) { open ->
+        SettingsPageScaffold(
+            title = stringResource(R.string.messages_detail_title),
+            onBack = {
+                haptics.perform(HapticEvent.BACK)
+                viewModel.close()
+            },
+        ) {
+            item(key = "mail") {
+                MailPageContent(
+                    open = open,
+                    folder = state.folder,
+                    locale = locale,
+                    downloading = state.downloading,
+                    onDownload = viewModel::downloadAttachment,
+                )
+            }
+        }
+    }
+
     state.compose?.let { form ->
         ComposeSheet(
             form = form,
@@ -158,7 +194,6 @@ fun MessagesScreen(
         )
     }
 
-    val haptics = LocalHaptics.current
     LaunchedEffect(viewModel) {
         viewModel.sentEvents.collect { haptics.perform(HapticEvent.MESSAGE_SENT) }
     }
@@ -196,20 +231,6 @@ fun MessagesScreen(
         }
     }
 
-    state.open?.let { open ->
-        ModalBottomSheet(
-            onDismissRequest = viewModel::close,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            MailSheetContent(
-                open = open,
-                folder = state.folder,
-                locale = locale,
-                downloading = state.downloading,
-                onDownload = viewModel::downloadAttachment,
-            )
-        }
-    }
 }
 
 private val MailFolder.label: Int
@@ -284,7 +305,7 @@ private fun MailCard(mail: UntisMail, folder: MailFolder, locale: Locale, onClic
             if (mail.preview.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = mail.preview,
+                    text = remember(mail.preview) { schoolPlainText(mail.preview) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -296,7 +317,7 @@ private fun MailCard(mail: UntisMail, folder: MailFolder, locale: Locale, onClic
 }
 
 @Composable
-private fun MailSheetContent(
+private fun MailPageContent(
     open: OpenMail,
     folder: MailFolder,
     locale: Locale,
@@ -308,9 +329,8 @@ private fun MailSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 22.dp)
-            .padding(bottom = 28.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = 6.dp)
+            .padding(top = 4.dp, bottom = 28.dp),
     ) {
         Text(
             text = mail.subject.ifBlank { stringResource(R.string.messages_no_subject) },
@@ -346,8 +366,11 @@ private fun MailSheetContent(
 
             else -> {
                 SelectionContainer {
+                    val linkColor = MaterialTheme.colorScheme.primary
+                    val body = mail.content.ifBlank { stringResource(R.string.messages_no_text) }
                     Text(
-                        text = mail.content.ifBlank { stringResource(R.string.messages_no_text) },
+                        // Web addresses in a message open in the browser when tapped.
+                        text = remember(body, linkColor) { schoolRichText(body, linkColor) },
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }

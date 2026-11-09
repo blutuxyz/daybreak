@@ -13,7 +13,10 @@ import com.bdersolutions.daybreak.untis.UntisAbsence
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,18 +130,38 @@ class AbsencesViewModel(
         load()
     }
 
+    private val _refreshing = MutableStateFlow(false)
+
+    /** True while a pull to refresh reloads absences that are already shown. */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _refreshErrors = MutableSharedFlow<Throwable>(extraBufferCapacity = 1)
+
+    /** A refresh that failed while absences were already shown; they stay on screen. */
+    val refreshErrors: SharedFlow<Throwable> = _refreshErrors.asSharedFlow()
+
+    private var loadJob: Job? = null
+
     fun load() {
-        viewModelScope.launch {
-            _state.value = AbsencesUiState.Loading
-            _state.value = try {
+        if (loadJob?.isActive == true) return
+        // Absences that are already on screen stay there while they reload, instead of giving way
+        // to a spinner; a failed reload then keeps them and only reports the error.
+        val shown = _state.value as? AbsencesUiState.Loaded
+        loadJob = viewModelScope.launch {
+            if (shown == null) _state.value = AbsencesUiState.Loading else _refreshing.value = true
+            try {
                 val directory = schoolData.loadDirectory()
                 val loaded = schoolData.absences(schoolYearStart, LocalDate.now())
                 absences.value = loaded
                 loadWindows(loaded)
                 loadHistory(force = true)
-                AbsencesUiState.Loaded(loaded, directory.absenceReasons)
+                _state.value = AbsencesUiState.Loaded(loaded, directory.absenceReasons)
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                AbsencesUiState.Failed(error)
+                if (shown == null) _state.value = AbsencesUiState.Failed(error) else _refreshErrors.tryEmit(error)
+            } finally {
+                _refreshing.value = false
             }
         }
     }
