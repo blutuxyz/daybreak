@@ -121,6 +121,7 @@ object ChatArchive {
         addProperty("id", message.id)
         addProperty("role", message.role.name)
         addProperty("text", message.text)
+        if (message.reasoning.isNotBlank()) addProperty("reasoning", message.reasoning)
         message.toolCallId?.let { addProperty("toolCallId", it) }
         if (message.toolCalls.isNotEmpty()) {
             add(
@@ -163,6 +164,7 @@ object ChatArchive {
         id = o.get("id").asLong,
         role = ChatRole.valueOf(o.get("role").asString),
         text = o.get("text")?.asString.orEmpty(),
+        reasoning = o.get("reasoning")?.asString.orEmpty(),
         toolCallId = o.get("toolCallId")?.asString,
         toolCalls = o.getAsJsonArray("toolCalls")?.map { element ->
             val call = element.asJsonObject

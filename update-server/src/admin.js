@@ -127,7 +127,7 @@ export function renderLogEntry({ app, entry }) {
         .join('\n')
     : '<p>The text was not logged (logging of content is off).</p>';
   const details = content
-    ? `<h2>Answer</h2><pre style="white-space: pre-wrap">${escapeHtml(content.answer || '(no text)')}</pre>
+    ? `${content.reasoning ? `<h2>Reasoning</h2><pre style="white-space: pre-wrap">${escapeHtml(content.reasoning)}</pre>` : ''}<h2>Answer</h2><pre style="white-space: pre-wrap">${escapeHtml(content.answer || '(no text)')}</pre>
 ${content.toolCalls?.length ? `<h2>Tool calls</h2><pre style="white-space: pre-wrap">${escapeHtml(content.toolCalls.join('\n'))}</pre>` : ''}
 <h2>Chat sent</h2>${messages}
 <h2>Timetable summary sent</h2><pre style="white-space: pre-wrap">${escapeHtml(content.context)}</pre>`

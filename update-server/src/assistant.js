@@ -380,6 +380,8 @@ export async function* streamOpenRouter({ fetchImpl = fetch, apiKey, baseUrl, re
     if (choice.finish_reason) finishReason = choice.finish_reason;
     if (choice.finish_reason === 'error') throw new UpstreamError('provider ended the answer with an error');
     const delta = choice.delta ?? {};
+    // Models that reason stream it as delta.reasoning before the answer (OpenRouter's format).
+    if (typeof delta.reasoning === 'string' && delta.reasoning) yield { type: 'reasoning', text: delta.reasoning };
     if (typeof delta.content === 'string' && delta.content) yield { type: 'text', text: delta.content };
     for (const call of delta.tool_calls ?? []) {
       const key = call.index ?? 0;
@@ -613,6 +615,7 @@ Answer: ${request.answer}` },
     entry.effort = pickEffort(settings, request.effort);
 
     let answer = '';
+    let reasoning = '';
     let toolCalls = [];
     try {
       const body = buildOpenRouterBody({ model: allowed.id, request, settings });
@@ -626,6 +629,9 @@ Answer: ${request.answer}` },
       })) {
         if (event.type === 'text') {
           answer += event.text;
+          send(event);
+        } else if (event.type === 'reasoning') {
+          reasoning += event.text;
           send(event);
         } else {
           toolCalls = event.toolCalls;
@@ -641,7 +647,7 @@ Answer: ${request.answer}` },
       await this.store.addSpend(user, entry.costCents);
       if (toolCalls.length > 0) send({ type: 'tool_calls', calls: toolCalls });
       send({ type: 'done' });
-      entry.content = logContent(request, answer, toolCalls);
+      entry.content = { ...logContent(request, answer, toolCalls), reasoning: reasoning.slice(0, 8000) };
       return finish({ status: toolCalls.length > 0 ? 'tool_calls' : 'ok' });
     } catch (error) {
       entry.content = logContent(request, answer, toolCalls);

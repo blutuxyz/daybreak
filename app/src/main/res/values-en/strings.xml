@@ -859,4 +859,7 @@
     <string name="assistant_rename_title">Rename chat</string>
     <string name="assistant_rename_save">Save</string>
     <string name="assistant_rename_cancel">Cancel</string>
+    <string name="assistant_thinking">Thinking…</string>
+    <string name="assistant_thoughts_show">Show thoughts</string>
+    <string name="assistant_thoughts_hide">Hide thoughts</string>
 </resources>

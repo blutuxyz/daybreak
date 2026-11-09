@@ -44,4 +44,14 @@ class ChatArchiveTest {
         assertNull(AssistantProtocol.parseTitle("""{"title":"  "}"""))
         assertNull(AssistantProtocol.parseTitle(null))
     }
+
+    @Test
+    fun reasoningIsReadAndKeptButNeverSent() {
+        assertEquals(AssistantEvent.Reasoning("Erst"), AssistantProtocol.parseEvent("""data: {"type":"reasoning","text":"Erst"}"""))
+        val answer = ChatMessage(2, ChatRole.ASSISTANT, "Antwort", reasoning = "Gedanken")
+        val chat = SavedChat(1, "t", 1, listOf(ChatMessage(1, ChatRole.USER, "Frage"), answer))
+        assertEquals("Gedanken", ChatArchive.decode(ChatArchive.encode(chat))!!.messages[1].reasoning)
+        val body = AssistantProtocol.requestBody(chat.messages + ChatMessage(3, ChatRole.USER, "Noch was"), "", "de", java.time.LocalDate.of(2026, 11, 9))
+        assert(!body.contains("Gedanken"))
+    }
 }

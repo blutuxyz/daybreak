@@ -106,7 +106,7 @@ class AssistantApi(
                         val line = source.readUtf8Line() ?: break
                         val event = AssistantProtocol.parseEvent(line) ?: continue
                         send(event)
-                        finished = event !is AssistantEvent.Text
+                        finished = event is AssistantEvent.Done || event is AssistantEvent.Failure
                     }
                     // The stream ended without saying so: the connection broke off.
                     if (!finished) send(AssistantEvent.Failure(AssistantFailure.OFFLINE))

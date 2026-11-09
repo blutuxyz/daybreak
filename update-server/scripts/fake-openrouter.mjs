@@ -69,11 +69,13 @@ export function startFakeOpenRouter(port = 4000) {
       if (last.role === 'user') {
         if (hasImage) return sse(res, textChunks(lang === 'de' ? `Ich sehe ein Bild (${Math.round(firstUser.content.find((p) => p.type === 'image_url').image_url.url.length / 1024)} KB). Auf dem Foto steht ein Arbeitsblatt – frag mich gern etwas dazu.` : 'I can see a picture. Ask me anything about it.'));
         if (/löse|rechne|solve|gleichung/i.test(question)) {
-          return sse(res, textChunks(String.raw`(Testantwort) Für $x^2 - 5x + 6 = 0$ nimmst du die Mitternachtsformel:
+          const thoughts = 'Die Gleichung ist quadratisch: a = 1, b = -5, c = 6. Diskriminante: 25 - 24 = 1, also zwei Lösungen. Mitternachtsformel einsetzen: (5 ± 1) / 2 ergibt 3 und 2. Kurz die Schritte erklären.';
+          const reasoningChunks = thoughts.split(/(?<= )/).map((w) => ({ choices: [{ delta: { reasoning: w } }] }));
+          return sse(res, [...reasoningChunks, ...textChunks(String.raw`(Testantwort) Für $x^2 - 5x + 6 = 0$ nimmst du die Mitternachtsformel:
 
 $$x_{1,2} = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} = \frac{5 \pm \sqrt{25 - 24}}{2}$$
 
-Also **$x_1 = 3$** und **$x_2 = 2$**.`));
+Also **$x_1 = 3$** und **$x_2 = 2$**.`)]);
         }
         if (/prüfung|exam/i.test(question)) return sse(res, toolChunks('get_exams', {}));
         if (/lernen|study/i.test(question)) return sse(res, toolChunks('get_exams', {}));

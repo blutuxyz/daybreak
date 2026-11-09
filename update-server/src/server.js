@@ -394,6 +394,7 @@ export function buildServer({
 
   /**
    * The assistant. The answer streams as server-sent events, one JSON object per event:
+   *   {"type":"reasoning","text":"…"}               a piece of the model's reasoning (models that show it)
    *   {"type":"text","text":"…"}                    a piece of the answer
    *   {"type":"tool_calls","calls":[{id,name,arguments}]}  tools the app has to run, then post again
    *   {"type":"done"}                               the turn is complete

@@ -202,7 +202,7 @@ fun AssistantScreen(
     val shown = state.messages.filter { message ->
         when (message.role) {
             ChatRole.USER -> true
-            ChatRole.ASSISTANT -> message.text.isNotBlank() || message.toolCalls.isNotEmpty()
+            ChatRole.ASSISTANT -> message.text.isNotBlank() || message.toolCalls.isNotEmpty() || message.reasoning.isNotBlank()
             ChatRole.TOOL -> false
         }
     }
@@ -289,6 +289,12 @@ fun AssistantScreen(
                     ) {
                         items(shown, key = { "${state.chatId}-${it.id}" }) { message ->
                             Column(modifier = Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (message.role == ChatRole.ASSISTANT && message.reasoning.isNotBlank()) {
+                                    ThinkingSection(
+                                        reasoning = message.reasoning,
+                                        thinking = message.id == state.streamingId && message.text.isBlank() && message.toolCalls.isEmpty(),
+                                    )
+                                }
                                 if (message.role == ChatRole.ASSISTANT && message.toolCalls.isNotEmpty()) {
                                     ToolActivity(names = message.toolCalls.map { it.name }, running = false)
                                 }
@@ -1070,6 +1076,88 @@ private fun HistorySheet(
                         Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/**
+ * The model's reasoning above its answer. While it reasons, a pulsing "Denkt nach…" line shows the
+ * newest thoughts; afterwards it collapses to "Gedanken anzeigen", which opens the whole text.
+ */
+@Composable
+private fun ThinkingSection(reasoning: String, thinking: Boolean) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "thinkingPulse",
+    )
+    Column(modifier = Modifier.padding(start = 36.dp).fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(enabled = !thinking) { open = !open }
+                .padding(vertical = 4.dp, horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Psychology,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(16.dp)
+                    .graphicsLayer { alpha = if (thinking) pulse else 1f },
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.size(6.dp))
+            Text(
+                text = stringResource(
+                    when {
+                        thinking -> R.string.assistant_thinking
+                        open -> R.string.assistant_thoughts_hide
+                        else -> R.string.assistant_thoughts_show
+                    },
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (!thinking) {
+                Icon(
+                    Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = if (open) 180f else 0f },
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        // While thinking: the last lines, so the reasoning can be watched without taking over the chat.
+        AnimatedVisibility(visible = thinking, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Text(
+                text = reasoning.takeLast(280).trimStart(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
+            )
+        }
+        AnimatedVisibility(visible = !thinking && open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text(
+                    text = reasoning.trim(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(12.dp),
+                )
             }
         }
     }

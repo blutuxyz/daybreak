@@ -307,6 +307,11 @@ class AssistantViewModel(
                     current.copy(messages = current.messages.upsert(answerId) { it.copy(text = it.text + event.text) }, waiting = false, streamingId = answerId)
                 }
 
+                // The model's reasoning arrives before the answer: it fills the "thinking" section.
+                is AssistantEvent.Reasoning -> _state.update { current ->
+                    current.copy(messages = current.messages.upsert(answerId) { it.copy(reasoning = it.reasoning + event.text) }, waiting = false, streamingId = answerId)
+                }
+
                 is AssistantEvent.ToolCalls -> {
                     calls = event.calls
                     _state.update { current ->

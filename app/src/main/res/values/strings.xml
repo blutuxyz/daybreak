@@ -867,4 +867,7 @@
     <string name="assistant_rename_title">Chat umbenennen</string>
     <string name="assistant_rename_save">Speichern</string>
     <string name="assistant_rename_cancel">Abbrechen</string>
+    <string name="assistant_thinking">Denkt nach …</string>
+    <string name="assistant_thoughts_show">Gedanken anzeigen</string>
+    <string name="assistant_thoughts_hide">Gedanken ausblenden</string>
 </resources>

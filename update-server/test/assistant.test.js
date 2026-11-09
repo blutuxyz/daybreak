@@ -365,3 +365,20 @@ test('AI titles: a short clean title, none when switched off, and the cost is co
   const none = await off.app.inject({ method: 'POST', url: '/v1/assistant/title', headers: { 'x-daybreak-install': INSTALL }, payload: { question: 'x' } });
   assert.equal(none.statusCode, 204);
 });
+
+test('reasoning is streamed to the app as its own event and logged', async () => {
+  const chunks = [
+    { choices: [{ delta: { reasoning: 'Erst die ' } }] },
+    { choices: [{ delta: { reasoning: 'Prüfungen.' } }] },
+    { choices: [{ delta: { content: 'Morgen.' } }] },
+    { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { cost: 0.001 } },
+  ];
+  const { app, store } = await setup({ fetchImpl: fakeOpenRouter({ chunks }) });
+  const list = events((await post(app, validBody)).body);
+  assert.deepEqual(list.slice(0, 3), [
+    { type: 'reasoning', text: 'Erst die ' },
+    { type: 'reasoning', text: 'Prüfungen.' },
+    { type: 'text', text: 'Morgen.' },
+  ]);
+  assert.equal((await store.logs())[0].content.reasoning, 'Erst die Prüfungen.');
+});

@@ -46,6 +46,8 @@ data class ChatMessage(
     val toolCalls: List<ToolCall> = emptyList(),
     /** For [ChatRole.TOOL]: the call this is the result of. */
     val toolCallId: String? = null,
+    /** For [ChatRole.ASSISTANT]: what the model reasoned before answering, when it shows that. Never sent back. */
+    val reasoning: String = "",
 )
 
 /** A model the admin allows, as the app shows it in the picker. */
@@ -65,6 +67,7 @@ data class AssistantModels(
 /** What the server streams back, one event at a time. */
 sealed interface AssistantEvent {
     data class Text(val text: String) : AssistantEvent
+    data class Reasoning(val text: String) : AssistantEvent
     data class ToolCalls(val calls: List<ToolCall>) : AssistantEvent
     data object Done : AssistantEvent
     data class Failure(val reason: AssistantFailure) : AssistantEvent
@@ -234,6 +237,7 @@ object AssistantProtocol {
             ?: return null
         return when (json.string("type")) {
             "text" -> json.string("text")?.let { AssistantEvent.Text(it) }
+            "reasoning" -> json.string("text")?.let { AssistantEvent.Reasoning(it) }
             "tool_calls" -> {
                 val calls = (json.get("calls") as? JsonArray)?.mapNotNull { element ->
                     val call = element as? JsonObject ?: return@mapNotNull null
