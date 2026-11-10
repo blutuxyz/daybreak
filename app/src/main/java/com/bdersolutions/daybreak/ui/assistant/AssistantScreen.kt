@@ -12,6 +12,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
@@ -424,6 +425,9 @@ private val barIconExit =
     shrinkHorizontally(spring(dampingRatio = 1f, stiffness = 500f), shrinkTowards = Alignment.Start) +
         fadeOut(tween(120)) +
         scaleOut(tween(160), targetScale = 0.5f)
+
+/** The gap between the rename field and the pill-shaped row around it, the same on every side. */
+private val RENAME_GAP = 6.dp
 
 /** How the history row and its buttons change between showing a chat and renaming it. */
 private val renameSpring = spring<IntSize>(dampingRatio = 0.85f, stiffness = 420f, visibilityThreshold = IntSize.VisibilityThreshold)
@@ -1164,14 +1168,19 @@ private fun HistoryRow(
         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(chat.title, androidx.compose.ui.text.TextRange(0, chat.title.length)))
     }
     val canSave = field.text.isNotBlank()
+    // A pill around a pill: with the same 6 dp gap on every side of the field (the save button's 40 dp
+    // circle sits 4 dp inside its 48 dp touch area, hence 2 dp at the end), the outer corners run
+    // parallel to the field's. The pill shape follows the row's height while it animates.
+    val start by animateDpAsState(if (editing) RENAME_GAP else 16.dp, spring(dampingRatio = 0.85f, stiffness = 420f), label = "rowStart")
+    val end by animateDpAsState(if (editing) RENAME_GAP - 4.dp else 4.dp, spring(dampingRatio = 0.85f, stiffness = 420f), label = "rowEnd")
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(CircleShape)
             .background(background)
             .clickable(enabled = !editing, onClick = onOpen)
-            .padding(start = if (editing) 8.dp else 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = start, end = end, top = RENAME_GAP, bottom = RENAME_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AnimatedContent(
@@ -1245,9 +1254,10 @@ private fun RenameField(
         textStyle = MaterialTheme.typography.bodyLarge,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
+        // The lowest surface, so the field stands out from the tinted row around it in light and dark.
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
         ),
