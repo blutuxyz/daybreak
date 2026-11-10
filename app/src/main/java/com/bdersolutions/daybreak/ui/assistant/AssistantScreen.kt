@@ -147,6 +147,7 @@ import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
+import com.bdersolutions.daybreak.ui.timetable.LessonFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -157,6 +158,8 @@ fun AssistantScreen(
     viewModel: AssistantViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Shows a lesson from a card (an exam, a lesson of a day) in the timetable. */
+    onOpenLesson: ((LessonFocus) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptics = LocalHaptics.current
@@ -353,7 +356,7 @@ fun AssistantScreen(
                                     MessageBubble(message = message, streaming = message.id == state.streamingId)
                                 }
                                 message.toolCalls.forEach { call ->
-                                    state.cards[call.id]?.let { card -> AssistantCardView(card) }
+                                    state.cards[call.id]?.let { card -> AssistantCardView(card, onOpenLesson) }
                                     state.drafts[call.id]?.let { draft ->
                                         DraftCard(
                                             state = draft,

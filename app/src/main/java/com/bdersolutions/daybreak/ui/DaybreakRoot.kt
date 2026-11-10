@@ -116,6 +116,7 @@ import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
 import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
+import com.bdersolutions.daybreak.ui.timetable.LessonFocus
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
 import com.bdersolutions.daybreak.ui.components.LocalAppTitle
 import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
@@ -371,6 +372,15 @@ private fun LoggedInContent(
         haptics.perform(HapticEvent.BACK)
         destination = null
     }
+    // A lesson to show in the timetable, asked for from a card in the assistant: the page slides away,
+    // the Timetable tab comes up at that day and opens the lesson.
+    var lessonFocus by remember { mutableStateOf<LessonFocus?>(null) }
+    val openLesson = { focus: LessonFocus ->
+        haptics.perform(HapticEvent.TAP)
+        lessonFocus = focus
+        if (selectedTab != 0) selectedTab = 0
+        destination = null
+    }
     Box(modifier = Modifier.fillMaxSize()) {
       PushHost(
         page = destination,
@@ -422,6 +432,8 @@ private fun LoggedInContent(
                         openSearchOnStart = openSearch,
                         onOpenUpcoming = { destination = Destination.Main(MainPage.UPCOMING) },
                         onOpenAssistant = openAssistant,
+                        focus = lessonFocus,
+                        onFocusHandled = { lessonFocus = null },
                     )
 
                     1 -> {
@@ -489,6 +501,7 @@ private fun LoggedInContent(
                         factory = AssistantViewModel.Factory(container),
                     ),
                     onBack = closePage,
+                    onOpenLesson = openLesson,
                 )
 
                 MainPage.MESSAGES -> MessagesScreen(

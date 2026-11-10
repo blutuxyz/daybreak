@@ -52,6 +52,9 @@ import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.components.substitutionAccent
 import com.bdersolutions.daybreak.ui.components.warningContainer
 import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
+import com.bdersolutions.daybreak.ui.timetable.LessonFocus
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -71,7 +74,7 @@ private const val MAX_INSTEAD_CHARS = 48
  * are dimmed. Everything on it comes from the student's own data (show_timetable), not from the model.
  */
 @Composable
-internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier) {
+internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier, onOpenLesson: ((LessonFocus) -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     val locale = if (currentAppLanguage() == AppLanguage.GERMAN) Locale.GERMAN else Locale.ENGLISH
     val now = remember { LocalDateTime.now() }
@@ -125,6 +128,7 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier) {
                         busyUntil = if (until == null || entry.end > until) entry.end else until
                         val isToday = card.date == today
                         LessonRow(
+                            onClick = onOpenLesson?.let { open -> { open(LessonFocus(card.date, entry.start, entry.end, entry.subject)) } },
                             entry = entry,
                             current = isToday && !entry.cancelled && entry.start <= now.toLocalTime() && now.toLocalTime() < entry.end,
                             past = isToday && entry.end <= now.toLocalTime(),
@@ -160,7 +164,7 @@ private fun EmptyDay(holiday: String?) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LessonRow(entry: DayCard.Entry, current: Boolean, past: Boolean) {
+private fun LessonRow(entry: DayCard.Entry, current: Boolean, past: Boolean, onClick: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     val tone = rememberSubjectTone(entry.subject)
     val cancelled = cancelledAccent()
@@ -169,7 +173,9 @@ private fun LessonRow(entry: DayCard.Entry, current: Boolean, past: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .background(if (current) colors.primaryContainer.copy(alpha = 0.45f) else Color.Transparent, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (current) colors.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .alpha(if (past && !current) 0.55f else 1f)
             .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {

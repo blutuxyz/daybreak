@@ -203,6 +203,9 @@ fun TimetableScreen(
     openSearchOnStart: Boolean = false,
     onOpenUpcoming: () -> Unit = {},
     onOpenAssistant: (() -> Unit)? = null,
+    /** A lesson to show: the screen goes to its day in the own timetable and opens its details. */
+    focus: LessonFocus? = null,
+    onFocusHandled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val cache by viewModel.displayCache.collectAsStateWithLifecycle()
@@ -256,6 +259,15 @@ fun TimetableScreen(
     )
     val pagerState = if (mode == 0) dayPager else weekPager
     val scope = rememberCoroutineScope()
+    // A lesson opened from elsewhere (the assistant's cards): the own timetable, day view, that day.
+    // Near days slide over; far ones are jumped to. The day page then opens the lesson's details.
+    LaunchedEffect(focus) {
+        val wanted = focus ?: return@LaunchedEffect
+        if (viewModel.target.value != TimetableTarget.Own) viewModel.setTarget(TimetableTarget.Own)
+        mode = 0
+        val page = ChronoUnit.DAYS.between(dayOrigin, wanted.date).toInt().coerceIn(0, DAY_PAGE_COUNT - 1)
+        if (kotlin.math.abs(page - dayPager.currentPage) <= 7) dayPager.animateScrollToPage(page) else dayPager.scrollToPage(page)
+    }
     // A detent tick each time a day or week settles into place, not while the finger drags.
     val haptics = LocalHaptics.current
     LaunchedEffect(dayPager) {
@@ -587,6 +599,8 @@ fun TimetableScreen(
                                     onRetry = { viewModel.refresh(pageDate) },
                                     findElement = findElement,
                                     onOpenElement = openElement,
+                                    focus = focus?.takeIf { it.date == pageDate },
+                                    onFocusHandled = onFocusHandled,
                                 )
                             } else {
                                 WeekPage(
@@ -734,6 +748,8 @@ private fun DayPage(
     onRetry: () -> Unit,
     findElement: (ElementType, String) -> UntisElement?,
     onOpenElement: (UntisElement) -> Unit,
+    focus: LessonFocus? = null,
+    onFocusHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -757,6 +773,13 @@ private fun DayPage(
     val isToday = date == today
     var selectedLesson by remember { mutableStateOf<UntisLesson?>(null) }
     var overflowShown by remember { mutableStateOf<TimelineOverflow?>(null) }
+    // Once the day is loaded, the lesson asked for opens; if it is not there, the request is dropped.
+    LaunchedEffect(focus, week) {
+        val wanted = focus ?: return@LaunchedEffect
+        if (week == null) return@LaunchedEffect
+        wanted.match(realLessons)?.let { selectedLesson = it }
+        onFocusHandled()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {

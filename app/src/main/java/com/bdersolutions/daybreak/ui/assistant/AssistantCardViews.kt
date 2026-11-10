@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -53,6 +54,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import com.bdersolutions.daybreak.ui.timetable.LessonFocus
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.assistant.AbsenceCard
 import com.bdersolutions.daybreak.data.assistant.AssistantCard
@@ -79,10 +83,10 @@ private const val COLLAPSED_ROWS = 4
 
 /** Any card the assistant showed, by kind. */
 @Composable
-internal fun AssistantCardView(card: AssistantCard) {
+internal fun AssistantCardView(card: AssistantCard, onOpenLesson: ((LessonFocus) -> Unit)? = null) {
     when (card) {
-        is DayCard -> DayCardView(card)
-        is ExamCard -> ExamCardView(card)
+        is DayCard -> DayCardView(card, onOpenLesson = onOpenLesson)
+        is ExamCard -> ExamCardView(card, onOpenLesson)
         is AbsenceCard -> AbsenceCardView(card)
     }
 }
@@ -192,7 +196,7 @@ private fun relativeDay(date: LocalDate, today: LocalDate): String {
  * far away each one is.
  */
 @Composable
-internal fun ExamCardView(card: ExamCard) {
+internal fun ExamCardView(card: ExamCard, onOpenLesson: ((LessonFocus) -> Unit)? = null) {
     val locale = appLocale()
     val range = remember(card.from, card.to, locale) {
         val pattern = DateTimeFormatter.ofPattern(if (locale == Locale.GERMAN) "d. MMM" else "MMM d", locale)
@@ -208,13 +212,13 @@ internal fun ExamCardView(card: ExamCard) {
             )
         } else {
             val today = remember { LocalDate.now() }
-            CollapsibleRows(card.exams) { exam -> ExamRow(exam, today, locale) }
+            CollapsibleRows(card.exams) { exam -> ExamRow(exam, today, locale, onOpenLesson) }
         }
     }
 }
 
 @Composable
-private fun ExamRow(exam: ExamCard.Exam, today: LocalDate, locale: Locale) {
+private fun ExamRow(exam: ExamCard.Exam, today: LocalDate, locale: Locale, onOpenLesson: ((LessonFocus) -> Unit)?) {
     val colors = MaterialTheme.colorScheme
     val tone = rememberSubjectTone(exam.subject)
     val past = exam.date.isBefore(today)
@@ -225,7 +229,10 @@ private fun ExamRow(exam: ExamCard.Exam, today: LocalDate, locale: Locale) {
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(enabled = exam.text.isNotBlank()) { open = !open }
+            // The row opens the exam's lesson in the timetable; its topic text expands on its own.
+            .clickable(enabled = onOpenLesson != null) {
+                onOpenLesson?.invoke(LessonFocus(exam.date, exam.start, exam.end, exam.subject))
+            }
             .alpha(if (past) 0.6f else 1f)
             .padding(horizontal = 8.dp, vertical = 8.dp)
             .animateContentSize(spring(dampingRatio = 0.9f, stiffness = 400f)),
@@ -293,8 +300,19 @@ private fun ExamRow(exam: ExamCard.Exam, today: LocalDate, locale: Locale) {
                     color = colors.onSurfaceVariant,
                     maxLines = if (open) Int.MAX_VALUE else 3,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { open = !open },
                 )
             }
+        }
+        if (onOpenLesson != null) {
+            Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = colors.outline,
+                modifier = Modifier.align(Alignment.CenterVertically).size(20.dp),
+            )
         }
     }
 }
@@ -342,7 +360,8 @@ internal fun AbsenceCardView(card: AbsenceCard) {
 private fun AbsenceTotals(card: AbsenceCard) {
     val colors = MaterialTheme.colorScheme
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Equal tiles: each value stays on one line (shrinking a little if it must), all as tall as the tallest.
+        Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(stringResource(R.string.absences_total), formatAbsenceDuration(Duration.ofMinutes(card.countedMinutes)), colors.surfaceContainerHighest, colors.onSurface, Modifier.weight(1f))
             StatTile(stringResource(R.string.absences_excused), formatAbsenceDuration(Duration.ofMinutes(card.excusedMinutes)), colors.secondaryContainer, colors.onSecondaryContainer, Modifier.weight(1f))
             StatTile(
@@ -380,11 +399,20 @@ private fun AbsenceTotals(card: AbsenceCard) {
 private fun StatTile(label: String, value: String, container: Color, content: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
+            .fillMaxHeight()
             .clip(RoundedCornerShape(14.dp))
             .background(container)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = content, maxLines = 2)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = content,
+            maxLines = 1,
+            softWrap = false,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp),
+        )
         Text(label, style = MaterialTheme.typography.labelSmall, color = content.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
