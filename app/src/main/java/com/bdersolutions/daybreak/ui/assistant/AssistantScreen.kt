@@ -1079,15 +1079,12 @@ private fun InputBar(
                                 options = models.models.map { PickerOption(it.id, it.label, it.tag, it.tagAlarm) },
                                 selectedId = currentModel.id,
                                 onSelect = onSelectModel,
+                                tag = currentModel.tag,
+                                tagAlarm = currentModel.tagAlarm,
+                                onTagLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                                onChipLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                                onInfoClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
                             )
-                            currentModel.tag?.let { tag ->
-                                Spacer(Modifier.size(4.dp))
-                                ModelTagBadge(
-                                    text = tag,
-                                    alarm = currentModel.tagAlarm,
-                                    onClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
-                                )
-                            }
                         }
                         if (models != null && models.showEffort && currentEffort != null) {
                             PickerChip(

@@ -182,7 +182,7 @@ ${warning}
 ${providerRows(settings.providers)}
 </table></div>
 <h3>Models</h3>
-<p class="hint">A model that is Off stays in the app's picker but answers with the upstream error. The tag and description show next to the model in the app: an Info tag is a quiet badge, an Alarm tag is loud, and the description opens when the badge is tapped. Prices are US dollars per million tokens; set them for providers that do not report a cost, so the budget counts.</p>
+<p class="hint">A model that is Off stays in the app's picker but answers with the upstream error. The tag and description show next to the model in the app: an Info tag is a quiet badge, an Alarm tag is loud, and the description opens when the model is long-pressed in the app. Prices are US dollars per million tokens; set them for providers that do not report a cost, so the budget counts.</p>
 <div class="scroll"><table>
 <tr><th>On</th><th>Model id</th><th>Label</th><th>Provider</th><th>Description</th><th>Tag</th><th>Tag kind</th><th>Input $/M</th><th>Output $/M</th></tr>
 ${modelRows(settings.models, settings.providers)}

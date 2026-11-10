@@ -8,7 +8,9 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -19,9 +21,13 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -36,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -46,6 +53,7 @@ import com.bdersolutions.daybreak.R
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,6 +73,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -84,6 +93,7 @@ internal data class PickerOption(
  * A small pill on the prompt bar showing the current choice; tapping it opens a menu that grows out of the
  * pill. The label slides when it changes, the chevron turns, and the menu's rows come in one after another.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PickerChip(
     current: String,
@@ -91,10 +101,23 @@ internal fun PickerChip(
     selectedId: String?,
     onSelect: (String) -> Unit,
     icon: ImageVector? = null,
+    /** The model's tag, shown inside the chip; it grows the chip smoothly instead of pushing its neighbours. */
+    tag: String? = null,
+    tagAlarm: Boolean = false,
+    onTagLongClick: (() -> Unit)? = null,
+    /** A long press anywhere on the chip, e.g. to show the model's description. */
+    onChipLongClick: (() -> Unit)? = null,
+    /** The small info icon next to the arrow; shown only when there is a description to open. */
+    onInfoClick: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val haptics = LocalHaptics.current
     var open by remember { mutableStateOf(false) }
+    // The last tag stays while the badge shrinks away, so it does not blank out mid-animation.
+    var lastTag by remember { mutableStateOf("") }
+    var lastAlarm by remember { mutableStateOf(false) }
+    if (tag != null && tag != lastTag) lastTag = tag
+    lastAlarm = tagAlarm
     val menu = remember { MutableTransitionState(false) }
     menu.targetState = open
     val chevron by animateFloatAsState(
@@ -104,13 +127,19 @@ internal fun PickerChip(
     )
     Box {
         Surface(
-            onClick = {
-                haptics.perform(HapticEvent.TAP)
-                open = true
-            },
             shape = RoundedCornerShape(50),
             color = Color.Transparent,
             contentColor = colors.onSurfaceVariant,
+            // Clipped before the gesture, so the press ripple is a pill too.
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .combinedClickable(
+                    onClick = {
+                        haptics.perform(HapticEvent.TAP)
+                        open = true
+                    },
+                    onLongClick = onChipLongClick,
+                ),
         ) {
             Row(
                 modifier = Modifier.padding(start = 8.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
@@ -130,6 +159,40 @@ internal fun PickerChip(
                     label = "chipLabel",
                 ) { text ->
                     Text(text, style = MaterialTheme.typography.labelLarge)
+                }
+                AnimatedVisibility(
+                    visible = tag != null,
+                    enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f), expandFrom = Alignment.Start) + fadeIn(tween(180, delayMillis = 60)),
+                    exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = 480f), shrinkTowards = Alignment.Start) + fadeOut(tween(120)),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(6.dp))
+                        ModelTagBadge(
+                            text = lastTag,
+                            alarm = lastAlarm,
+                            onClick = {
+                                haptics.perform(HapticEvent.TAP)
+                                open = true
+                            },
+                            onLongClick = onTagLongClick,
+                        )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = onInfoClick != null,
+                    enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f), expandFrom = Alignment.End) + fadeIn(tween(160)),
+                    exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = 480f), shrinkTowards = Alignment.End) + fadeOut(tween(100)),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = stringResource(R.string.assistant_model_info),
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { onInfoClick?.invoke() },
+                        )
+                    }
                 }
                 Icon(
                     Icons.Outlined.ExpandMore,
@@ -179,7 +242,7 @@ internal fun PickerChip(
                     tonalElevation = 3.dp,
                     shadowElevation = 8.dp,
                 ) {
-                    Column(modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 210.dp).padding(vertical = 6.dp)) {
+                    Column(modifier = Modifier.width(PICKER_MENU_WIDTH).padding(vertical = 6.dp)) {
                         options.forEachIndexed { index, option ->
                             Reveal(index = index) {
                                 PickerRow(
@@ -222,12 +285,14 @@ private fun PickerRow(label: String, tag: String?, tagAlarm: Boolean, selected: 
     ) {
         Text(
             text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyLarge,
             color = if (selected) colors.onSecondaryContainer else colors.onSurface,
             modifier = Modifier.weight(1f),
         )
         if (tag != null) {
-            ModelTagBadge(text = tag, alarm = tagAlarm)
+            ModelTagBadge(text = tag, alarm = tagAlarm, inverted = selected)
             Spacer(Modifier.width(6.dp))
         }
         AnimatedVisibility(
@@ -358,29 +423,60 @@ private fun AttachRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 /**
- * The badge a model can carry: "Free", "Beta", or a warning. An info badge is quiet, an alarm badge is red. A
- * tapped badge is what [onClick] is for: the model's description opens under the prompt.
+ * The badge a model can carry: "Free", "Beta", or a warning. An info badge is quiet, an alarm badge is red. A tap
+ * ([onClick]) and a long press ([onLongClick]) are optional; without them the badge is only a label.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ModelTagBadge(text: String, alarm: Boolean, onClick: (() -> Unit)? = null) {
+internal fun ModelTagBadge(
+    text: String,
+    alarm: Boolean,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    /** The badge of the selected model in the open menu: inverted, so it stands out from the highlight. */
+    inverted: Boolean = false,
+) {
     val colors = MaterialTheme.colorScheme
-    val container = if (alarm) colors.errorContainer else colors.secondaryContainer
-    val content = if (alarm) colors.onErrorContainer else colors.onSecondaryContainer
-    Surface(
-        onClick = onClick ?: {},
-        enabled = onClick != null,
-        shape = RoundedCornerShape(50),
-        color = container,
-        contentColor = content,
+    val container = when {
+        inverted -> colors.inverseSurface
+        alarm -> colors.errorContainer
+        else -> colors.secondaryContainer
+    }
+    val content = when {
+        inverted -> colors.inverseOnSurface
+        alarm -> colors.onErrorContainer
+        else -> colors.onSecondaryContainer
+    }
+    val gestures = if (onClick != null || onLongClick != null) {
+        Modifier.combinedClickable(onClick = onClick ?: {}, onLongClick = onLongClick)
+    } else {
+        Modifier
+    }
+    // Exactly the height of the chip's text line, so a tag never makes the chip or the prompt taller.
+    Box(
+        modifier = Modifier
+            .height(20.dp)
+            .clip(RoundedCornerShape(50))
+            .background(container)
+            .then(gestures)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            lineHeight = 14.sp,
+            color = content,
         )
     }
 }
+
+/**
+ * The width of the model menu. Fixed, so a tagged model's badge never makes the whole menu wider; long names are
+ * cut short instead.
+ */
+private val PICKER_MENU_WIDTH = 240.dp
 
 /** Room around the menu for its shadow. */
 private val MENU_SHADOW_INSET = 20.dp

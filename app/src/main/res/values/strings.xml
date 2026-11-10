@@ -780,6 +780,7 @@
     <string name="assistant_delete_confirm">Chat löschen?</string>
     <string name="assistant_delete_cancel">Abbrechen</string>
     <string name="assistant_delete_yes">Löschen</string>
+    <string name="assistant_model_info">Beschreibung</string>
     <string name="assistant_attach_remove">Entfernen</string>
     <string name="assistant_attach_too_large">Die Datei ist zu groß (höchstens 5 MB).</string>
     <string name="assistant_attach_unsupported">Dieser Dateityp geht nicht. Möglich sind Fotos, PDFs und Textdateien.</string>
