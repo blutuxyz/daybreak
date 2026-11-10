@@ -14,6 +14,8 @@ import com.google.gson.JsonParser
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import com.bdersolutions.daybreak.data.schedule.LessonRun
+import com.bdersolutions.daybreak.data.schedule.NowAndNext
 import java.time.format.DateTimeParseException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -92,7 +94,12 @@ data class DayCard(
         /** The exam written in this lesson, if any. */
         val exam: String? = null,
         val periods: Int = 1,
+        /** The cancelled lessons this block takes the place of (a school event, a substitute lesson). */
+        val replaces: List<Replaced> = emptyList(),
     )
+
+    /** A cancelled lesson shown under the block that replaces it. */
+    data class Replaced(val start: LocalTime, val end: LocalTime, val subject: String, val subjectName: String)
 }
 
 /**
@@ -241,17 +248,29 @@ class AssistantToolRunner(
             ?: return ToolOutcome.Result("Error: the timetable for ${date.format(DAY)} could not be loaded. Nothing was shown.")
         val exams = runCatching { data.exams(date, date) }.getOrDefault(emptyList())
         val card = DayCards.build(date, lessons, exams)
-        val held = lessons.filterNot { it.isHoliday }.sortedWith(compareBy({ it.start }, { it.subject }))
+        val notes = lessons.filter { !it.isHoliday && it.lessonText.isNotBlank() }
         val content = buildString {
             append("Shown to the student as a card for ${date.format(DAY)}")
             if (card.holiday != null) append(" (${card.holiday})")
-            if (held.isEmpty()) {
+            if (card.entries.isEmpty()) {
                 append(": no lessons.")
             } else {
-                append(". The card already shows every lesson with time, subject, teacher, room, cancellations, substitutions and exams:\n")
-                held.forEach { appendLine("  ${AssistantContext.lessonLine(it)}") }
-                exams.forEach { appendLine("  exam ${it.start.format(TIME)} ${it.subject}: ${it.name.oneLine()}") }
-                append("Do not list the lessons again. Add at most one or two short sentences on what stands out, or nothing if the day is ordinary.")
+                append(". The card already shows all of this, grouped the same way:\n")
+                val held = card.entries.filterNot { it.cancelled }
+                val alone = card.entries.filter { it.cancelled }
+                if (held.isNotEmpty()) {
+                    appendLine("Taking place:")
+                    held.forEach { appendLine("  ${DayCards.line(it)}") }
+                }
+                if (alone.isNotEmpty()) {
+                    appendLine("Cancelled with nothing in their place (free time):")
+                    alone.forEach { appendLine("  ${DayCards.line(it)}") }
+                }
+                notes.forEach { appendLine("  lesson text ${it.start.format(TIME)} ${it.subject}: ${it.lessonText.oneLine()}") }
+                append(
+                    "Do not list the lessons again. Add at most one or two short sentences on what stands out " +
+                        "(what replaces what, free time, exams, room changes), or nothing if the day is ordinary.",
+                )
             }
         }
         return ToolOutcome.Card(card, content.trimEnd())
@@ -318,33 +337,92 @@ class AssistantToolRunner(
     }
 }
 
-/** Builds the card of one day from the lessons and exams. Pure, so it is tested. */
+/**
+ * Builds the card of one day from the lessons and exams. Pure, so it is tested.
+ *
+ * Held lessons and cancelled ones are merged into double lessons separately, then each cancelled block is
+ * put under the held block it overlaps most: a school event from 07:55 to 13:15 then shows once, with the
+ * four lessons it replaces under it, instead of the cancelled lessons and the event interleaved by time.
+ * Only a cancellation with nothing in its place keeps a row of its own, which is real free time.
+ */
 object DayCards {
     fun build(date: LocalDate, lessons: List<UntisLesson>, exams: List<UntisExam>): DayCard {
         val holiday = lessons.firstOrNull { it.isHoliday }?.let { it.subjectLong.ifBlank { it.subject } }
-        val runs = com.bdersolutions.daybreak.data.schedule.NowAndNext.runs(lessons.filter { it.date == date }, includeCancelled = true)
-        val entries = runs.map { run ->
-            val lesson = run.lesson
-            val exam = exams.firstOrNull { exam ->
-                exam.date == date && exam.start < run.end && run.start < exam.end &&
-                    (exam.subject.isBlank() || exam.subject.equals(lesson.subject, ignoreCase = true))
-            }
-            DayCard.Entry(
-                start = run.start,
-                end = run.end,
-                subject = lesson.subject,
-                subjectName = lesson.subjectLong.ifBlank { lesson.subject },
-                teacher = lesson.teacher,
-                room = lesson.room,
-                cancelled = lesson.isCancelled,
-                irregular = lesson.isIrregular,
-                originalTeacher = if (lesson.hasTeacherChange) lesson.originalTeacher else "",
-                originalRoom = if (lesson.hasRoomChange) lesson.originalRoom else "",
-                note = lesson.substitutionText.ifBlank { lesson.info }.oneLine(160),
-                exam = exam?.let { it.name.ifBlank { it.subject }.oneLine(80) },
-                periods = run.periods,
-            )
+        val day = lessons.filter { it.date == date && !it.isHoliday }
+        val held = NowAndNext.runs(day.filterNot { it.isCancelled })
+        val cancelled = NowAndNext.runs(day.filter { it.isCancelled }, includeCancelled = true)
+
+        val replacedBy = mutableMapOf<Int, MutableList<LessonRun>>()
+        val alone = mutableListOf<LessonRun>()
+        for (run in cancelled) {
+            val host = held.indices
+                .map { it to overlapMinutes(held[it], run) }
+                .filter { it.second > 0 }
+                .maxByOrNull { it.second }
+                ?.first
+            if (host != null) replacedBy.getOrPut(host) { mutableListOf() } += run else alone += run
         }
-        return DayCard(date, entries, holiday?.takeIf { it.isNotBlank() })
+
+        val entries = held.mapIndexed { index, run ->
+            entry(date, run, exams).copy(
+                replaces = replacedBy[index].orEmpty().map { replaced ->
+                    DayCard.Replaced(replaced.start, replaced.end, replaced.lesson.subject, replaced.lesson.subjectLong.ifBlank { replaced.lesson.subject })
+                },
+            )
+        } + alone.map { entry(date, it, exams) }
+        return DayCard(date, entries.sortedWith(compareBy({ it.start }, { it.cancelled })), holiday?.takeIf { it.isNotBlank() })
+    }
+
+    /** One entry as a line for the model. */
+    fun line(entry: DayCard.Entry): String = buildString {
+        append("${entry.start.format(TIME)}-${entry.end.format(TIME)} ${entry.subjectName.ifBlank { entry.subject }.ifBlank { "?" }}")
+        if (entry.teacher.isNotBlank()) append(", teacher ${entry.teacher}")
+        if (entry.room.isNotBlank()) append(", room ${entry.room}")
+        val notes = buildList {
+            if (entry.cancelled) add("CANCELLED")
+            if (entry.irregular) add("irregular/extra lesson")
+            if (entry.originalTeacher.isNotBlank()) add("substitute, normally ${entry.originalTeacher}")
+            if (entry.originalRoom.isNotBlank()) add("room changed from ${entry.originalRoom}")
+            if (entry.note.isNotBlank()) add("note: ${entry.note}")
+            entry.exam?.let { add("EXAM: $it") }
+            if (entry.replaces.isNotEmpty()) {
+                add("in place of the cancelled " + entry.replaces.joinToString { "${it.subjectName} ${it.start.format(TIME)}-${it.end.format(TIME)}" })
+            }
+        }
+        if (notes.isNotEmpty()) append(" [${notes.joinToString("; ")}]")
+    }
+
+    private fun entry(date: LocalDate, run: LessonRun, exams: List<UntisExam>): DayCard.Entry {
+        val lesson = run.lesson
+        val exam = exams.firstOrNull { exam ->
+            exam.date == date && exam.start < run.end && run.start < exam.end &&
+                (exam.subject.isBlank() || exam.subject.equals(lesson.subject, ignoreCase = true))
+        }
+        val subjectName = lesson.subjectLong.ifBlank { lesson.subject }
+        // A note that only repeats the subject ("Schulveranstaltung" on a "Schulveranstaltung") says nothing.
+        val note = lesson.substitutionText.ifBlank { lesson.info }.oneLine(160)
+            .takeUnless { it.equals(subjectName, ignoreCase = true) || it.equals(lesson.subject, ignoreCase = true) }
+            .orEmpty()
+        return DayCard.Entry(
+            start = run.start,
+            end = run.end,
+            subject = lesson.subject,
+            subjectName = subjectName,
+            teacher = lesson.teacher,
+            room = lesson.room,
+            cancelled = lesson.isCancelled,
+            irregular = lesson.isIrregular,
+            originalTeacher = if (lesson.hasTeacherChange) lesson.originalTeacher else "",
+            originalRoom = if (lesson.hasRoomChange) lesson.originalRoom else "",
+            note = note,
+            exam = exam?.let { it.name.ifBlank { it.subject }.oneLine(80) },
+            periods = run.periods,
+        )
+    }
+
+    private fun overlapMinutes(a: LessonRun, b: LessonRun): Long {
+        val start = maxOf(a.start, b.start)
+        val end = minOf(a.end, b.end)
+        return if (end > start) java.time.Duration.between(start, end).toMinutes() else 0L
     }
 }

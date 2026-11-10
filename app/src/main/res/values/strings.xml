@@ -789,10 +789,11 @@
     <string name="assistant_card_exam">Prüfung</string>
     <string name="assistant_card_double">Doppelstunde</string>
     <string name="assistant_card_teacher_change">%1$s statt %2$s</string>
-    <plurals name="assistant_card_summary">
-        <item quantity="one">%1$d Stunde · %2$s–%3$s</item>
-        <item quantity="other">%1$d Stunden · %2$s–%3$s</item>
+    <plurals name="assistant_card_cancelled">
+        <item quantity="one">%d entfällt</item>
+        <item quantity="other">%d entfallen</item>
     </plurals>
+    <string name="assistant_card_instead">Statt</string>
     <string name="assistant_draft_title">Nachricht an eine Lehrkraft</string>
     <string name="assistant_draft_to">An: %1$s</string>
     <string name="assistant_draft_subject">Betreff: %1$s</string>

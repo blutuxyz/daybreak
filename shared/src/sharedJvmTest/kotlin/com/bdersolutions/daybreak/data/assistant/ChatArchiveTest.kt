@@ -60,7 +60,10 @@ class ChatArchiveTest {
         val card = DayCard(
             date = java.time.LocalDate.of(2026, 11, 10),
             entries = listOf(
-                DayCard.Entry(java.time.LocalTime.of(8, 0), java.time.LocalTime.of(9, 30), "M", "Mathematik", "MÜL", "R101", periods = 2, exam = "Schulaufgabe"),
+                DayCard.Entry(
+                    java.time.LocalTime.of(8, 0), java.time.LocalTime.of(9, 30), "M", "Mathematik", "MÜL", "R101", periods = 2, exam = "Schulaufgabe",
+                    replaces = listOf(DayCard.Replaced(java.time.LocalTime.of(8, 0), java.time.LocalTime.of(8, 45), "D", "Deutsch")),
+                ),
                 DayCard.Entry(java.time.LocalTime.of(9, 45), java.time.LocalTime.of(10, 30), "E", "Englisch", cancelled = true, originalRoom = "R102", note = "Aufgaben im Moodle"),
             ),
         )

@@ -61,6 +61,9 @@ import java.util.Locale
 
 private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+/** Above this many characters of full subject names, the "instead of" line uses the short names. */
+private const val MAX_INSTEAD_CHARS = 48
+
 /**
  * A day of the timetable inside the chat, drawn like the drafted message card: the date, then one row per
  * lesson (double lessons as one) with its colour, teacher and room, and badges for cancellations,
@@ -78,6 +81,8 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier) {
         card.date.format(DateTimeFormatter.ofPattern(pattern, locale))
     }
     val held = card.entries.filterNot { it.cancelled }
+    // Every cancelled lesson, whether something replaces it or not.
+    val cancelledCount = card.entries.sumOf { entry -> entry.replaces.size + if (entry.cancelled) 1 else 0 }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -92,18 +97,13 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier) {
                 Spacer(Modifier.size(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(dateText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    if (held.isNotEmpty()) {
-                        Text(
-                            pluralStringResource(
-                                R.plurals.assistant_card_summary,
-                                held.sumOf { it.periods },
-                                held.sumOf { it.periods },
-                                held.minOf { it.start }.format(CLOCK),
-                                held.maxOf { it.end }.format(CLOCK),
-                            ),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.onSurfaceVariant,
-                        )
+                    // When school is, and how much is cancelled: "07:55–17:30 · 4 cancelled".
+                    val summary = listOfNotNull(
+                        held.takeIf { it.isNotEmpty() }?.let { "${it.minOf { e -> e.start }.format(CLOCK)}–${it.maxOf { e -> e.end }.format(CLOCK)}" },
+                        cancelledCount.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.assistant_card_cancelled, it, it) },
+                    ).joinToString(" · ")
+                    if (summary.isNotEmpty()) {
+                        Text(summary, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                     }
                 }
                 dayLabel(card.date, today)?.let { label ->
@@ -115,11 +115,14 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier) {
             when {
                 card.entries.isEmpty() -> EmptyDay(card.holiday)
                 else -> Column(modifier = Modifier.padding(top = 6.dp)) {
-                    card.entries.forEachIndexed { index, entry ->
-                        val previous = card.entries.getOrNull(index - 1)
-                        if (previous != null && Duration.between(previous.end, entry.start).toMinutes() >= NowAndNext.MIN_FREE_PERIOD_MINUTES) {
-                            FreeRow(previous.end, entry.start)
+                    // The latest end so far: an entry can end before the one above it (a short lesson beside a long event).
+                    var busyUntil: LocalTime? = null
+                    card.entries.forEach { entry ->
+                        val until = busyUntil
+                        if (until != null && Duration.between(until, entry.start).toMinutes() >= NowAndNext.MIN_FREE_PERIOD_MINUTES) {
+                            FreeRow(until, entry.start)
                         }
+                        busyUntil = if (until == null || entry.end > until) entry.end else until
                         val isToday = card.date == today
                         LessonRow(
                             entry = entry,
@@ -220,6 +223,25 @@ private fun LessonRow(entry: DayCard.Entry, current: Boolean, past: Boolean) {
             if (entry.note.isNotBlank()) {
                 Text(entry.note, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
+            if (entry.replaces.isNotEmpty()) {
+                // What this block stands in for: "Instead of ~~Technische Mechanik~~, ~~Deutsch~~".
+                // Full names read best, but a long list of them filled five lines: then the short names.
+                val long = entry.replaces.map { it.subjectName.ifBlank { it.subject } }.filter { it.isNotBlank() }.distinct()
+                val names = if (long.sumOf { it.length } > MAX_INSTEAD_CHARS) {
+                    entry.replaces.map { it.subject.ifBlank { it.subjectName } }.filter { it.isNotBlank() }.distinct()
+                } else {
+                    long
+                }
+                val instead = buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(stringResource(R.string.assistant_card_instead)) }
+                    append(" ")
+                    names.forEachIndexed { index, name ->
+                        if (index > 0) append(", ")
+                        withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = cancelled)) { append(name) }
+                    }
+                }
+                Text(instead, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
             val badges = entry.cancelled || entry.originalTeacher.isNotBlank() || entry.irregular || entry.originalRoom.isNotBlank() ||
                 entry.exam != null || current || entry.periods > 1
             if (badges) {
@@ -227,8 +249,11 @@ private fun LessonRow(entry: DayCard.Entry, current: Boolean, past: Boolean) {
                     if (current) AccentBadge(stringResource(R.string.now), colors.primary, colors.onPrimary)
                     if (entry.exam != null) AccentBadge("${stringResource(R.string.assistant_card_exam)} · ${entry.exam}", examContainer(), examContent())
                     if (entry.cancelled) AccentBadge(stringResource(R.string.lesson_cancelled), cancelled.copy(alpha = 0.16f), cancelled)
-                    if (!entry.cancelled && (entry.originalTeacher.isNotBlank() || entry.irregular)) {
+                    // A substitute teacher is a substitution; an extra lesson or a school event is just changed.
+                    if (!entry.cancelled && entry.originalTeacher.isNotBlank()) {
                         AccentBadge(stringResource(R.string.lesson_substitution), warningContainer(), changed)
+                    } else if (!entry.cancelled && entry.irregular) {
+                        AccentBadge(stringResource(R.string.lesson_changed), warningContainer(), changed)
                     }
                     if (!entry.cancelled && entry.originalRoom.isNotBlank()) AccentBadge(stringResource(R.string.lesson_room_changed), warningContainer(), changed)
                     if (entry.periods > 1 && !entry.cancelled) AccentBadge(stringResource(R.string.assistant_card_double), colors.secondaryContainer, colors.onSecondaryContainer)

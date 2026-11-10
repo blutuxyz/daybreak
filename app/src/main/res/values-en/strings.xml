@@ -781,10 +781,11 @@
     <string name="assistant_card_exam">Exam</string>
     <string name="assistant_card_double">Double lesson</string>
     <string name="assistant_card_teacher_change">%1$s instead of %2$s</string>
-    <plurals name="assistant_card_summary">
-        <item quantity="one">%1$d lesson · %2$s–%3$s</item>
-        <item quantity="other">%1$d lessons · %2$s–%3$s</item>
+    <plurals name="assistant_card_cancelled">
+        <item quantity="one">%d cancelled</item>
+        <item quantity="other">%d cancelled</item>
     </plurals>
+    <string name="assistant_card_instead">Instead of</string>
     <string name="assistant_draft_title">Message to a teacher</string>
     <string name="assistant_draft_to">To: %1$s</string>
     <string name="assistant_draft_subject">Subject: %1$s</string>

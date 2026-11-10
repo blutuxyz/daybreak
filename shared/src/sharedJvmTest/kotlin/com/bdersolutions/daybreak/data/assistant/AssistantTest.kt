@@ -290,6 +290,33 @@ class AssistantTest {
         assertTrue(entries[1].cancelled)
         assertEquals("R102", entries[2].originalRoom)
         assertTrue(outcome.content.contains("Do not list the lessons again"))
-        assertTrue(outcome.content.contains("[CANCELLED]"))
+        assertTrue(outcome.content.contains("Cancelled with nothing in their place"))
+    }
+    @Test
+    fun aSchoolEventShowsOnceWithTheLessonsItReplacesUnderIt() {
+        // Like a real day: an event from 07:55 to 13:15 instead of four lessons (one of them double), then
+        // a lesson in the afternoon and one cancelled lesson that nothing replaces.
+        val day = monday.plusDays(2)
+        val cancelled = LessonStatus.CANCELLED
+        val data = object : AssistantData by FakeData() {
+            override suspend fun lessons(from: LocalDate, to: LocalDate) = listOf(
+                lesson(30, day, "07:55", "08:45", "TMB", status = cancelled),
+                lesson(31, day, "07:55", "13:15", "SV", status = LessonStatus.IRREGULAR, info = "SV"),
+                lesson(32, day, "08:45", "09:35", "TMB", status = cancelled),
+                lesson(33, day, "09:50", "10:40", "FI", status = cancelled),
+                lesson(34, day, "12:25", "13:15", "D", status = cancelled),
+                lesson(35, day, "14:05", "14:55", "GGP"),
+                lesson(36, day, "15:00", "15:50", "KOP", status = cancelled),
+            )
+        }
+        val card = (runTool("show_timetable", """{"date":"2026-11-11"}""", data) as ToolOutcome.Card).card
+        assertEquals(listOf("SV", "GGP", "KOP"), card.entries.map { it.subject })
+        val event = card.entries[0]
+        assertEquals(LocalTime.of(13, 15), event.end)
+        assertEquals("the double lesson stays one entry", listOf("TMB", "FI", "D"), event.replaces.map { it.subject })
+        assertEquals(LocalTime.of(9, 35), event.replaces[0].end)
+        assertEquals("a note that only repeats the subject is dropped", "", event.note)
+        assertTrue(card.entries[2].cancelled)
+        assertTrue(card.entries[2].replaces.isEmpty())
     }
 }

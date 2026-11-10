@@ -150,6 +150,23 @@ object ChatArchive {
                             if (entry.note.isNotBlank()) addProperty("note", entry.note)
                             entry.exam?.let { addProperty("exam", it) }
                             addProperty("periods", entry.periods)
+                            if (entry.replaces.isNotEmpty()) {
+                                add(
+                                    "replaces",
+                                    JsonArray().also { replaced ->
+                                        entry.replaces.forEach { lesson ->
+                                            replaced.add(
+                                                JsonObject().apply {
+                                                    addProperty("start", lesson.start.toString())
+                                                    addProperty("end", lesson.end.toString())
+                                                    addProperty("subject", lesson.subject)
+                                                    addProperty("subjectName", lesson.subjectName)
+                                                },
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                         },
                     )
                 }
@@ -179,6 +196,17 @@ object ChatArchive {
                         note = e.text("note"),
                         exam = e.get("exam")?.asString,
                         periods = e.get("periods")?.asInt ?: 1,
+                        replaces = e.getAsJsonArray("replaces")?.mapNotNull { item ->
+                            runCatching {
+                                val r = item.asJsonObject
+                                DayCard.Replaced(
+                                    start = LocalTime.parse(r.get("start").asString),
+                                    end = LocalTime.parse(r.get("end").asString),
+                                    subject = r.text("subject"),
+                                    subjectName = r.text("subjectName"),
+                                )
+                            }.getOrNull()
+                        }.orEmpty(),
                     )
                 }.getOrNull()
             }.orEmpty(),
