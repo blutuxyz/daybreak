@@ -105,6 +105,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -145,6 +146,12 @@ import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.ui.semantics.selected
+import com.bdersolutions.daybreak.ui.theme.daybreakColorScheme
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import kotlinx.coroutines.delay
@@ -1368,22 +1375,18 @@ private fun MockRow(icon: ImageVector, title: String, modifier: Modifier = Modif
 
 // ---------------------------------------------------------------------------------------------------
 // The last step: choose how the app looks. Every choice is saved at once and the whole app (this tour
-// included) re-themes live, so the result is seen while choosing. All of it is under More → Appearance too.
+// included) re-themes live; the preview card at the top shows the result with demo lessons. The theme
+// and start-view options are small drawn screens rather than words, each in its own real colours. All
+// of it is under More → Appearance too.
 // ---------------------------------------------------------------------------------------------------
 
 private enum class ThemeChoice { SYSTEM, LIGHT, DARK, AMOLED }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun AppearanceScene(settingsRepository: SettingsRepository) {
     val settings by settingsRepository.settings.collectAsStateWithLifecycle()
     val haptics = LocalHaptics.current
-    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val dark = when (settings.themeMode) {
-        ThemeMode.SYSTEM -> systemDark
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-    }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val dynamicAvailable = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
     val theme = when {
         settings.themeMode == ThemeMode.DARK && settings.amoledBlack -> ThemeChoice.AMOLED
@@ -1391,96 +1394,196 @@ private fun AppearanceScene(settingsRepository: SettingsRepository) {
         settings.themeMode == ThemeMode.LIGHT -> ThemeChoice.LIGHT
         else -> ThemeChoice.SYSTEM
     }
+    // The schemes each theme tile is drawn in: the chosen colours in light, dark and AMOLED black.
+    val light = remember(settings.dynamicColor, settings.accent) { daybreakColorScheme(context, settings.copy(amoledBlack = false), dark = false) }
+    val dark = remember(settings.dynamicColor, settings.accent) { daybreakColorScheme(context, settings.copy(amoledBlack = false), dark = true) }
+    val black = remember(settings.dynamicColor, settings.accent) { daybreakColorScheme(context, settings.copy(amoledBlack = true), dark = true) }
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val scroll = rememberScrollState()
+    val edge = MaterialTheme.colorScheme.surfaceContainerLowest
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .verticalScroll(scroll)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        AppearancePreview(showNowNext = settings.showNowNext)
+
         ChoiceSection(stringResource(R.string.tutorial_section_theme)) {
-            ChoiceRow(
-                options = ThemeChoice.entries.map { choice ->
-                    choice to when (choice) {
-                        ThemeChoice.SYSTEM -> themeLabel(ThemeMode.SYSTEM)
-                        ThemeChoice.LIGHT -> themeLabel(ThemeMode.LIGHT)
-                        ThemeChoice.DARK -> themeLabel(ThemeMode.DARK)
-                        ThemeChoice.AMOLED -> stringResource(R.string.tutorial_theme_amoled)
-                    }
-                },
-                selected = theme,
-                onSelect = { choice ->
-                    haptics.perform(HapticEvent.SELECT)
-                    settingsRepository.setThemeMode(
-                        when (choice) {
-                            ThemeChoice.SYSTEM -> ThemeMode.SYSTEM
-                            ThemeChoice.LIGHT -> ThemeMode.LIGHT
-                            ThemeChoice.DARK, ThemeChoice.AMOLED -> ThemeMode.DARK
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeChoice.entries.forEach { choice ->
+                    ChoiceTile(
+                        label = when (choice) {
+                            ThemeChoice.SYSTEM -> themeLabel(ThemeMode.SYSTEM)
+                            ThemeChoice.LIGHT -> themeLabel(ThemeMode.LIGHT)
+                            ThemeChoice.DARK -> themeLabel(ThemeMode.DARK)
+                            ThemeChoice.AMOLED -> stringResource(R.string.tutorial_theme_amoled)
                         },
-                    )
-                    settingsRepository.setAmoledBlack(choice == ThemeChoice.AMOLED)
-                },
-            )
-        }
-        ChoiceSection(stringResource(R.string.tutorial_section_colors)) {
-            if (dynamicAvailable) {
-                ChoiceRow(
-                    options = listOf(true to stringResource(R.string.tutorial_material_you), false to stringResource(R.string.settings_accent)),
-                    selected = settings.dynamicColor,
-                    onSelect = {
-                        haptics.perform(HapticEvent.SELECT)
-                        settingsRepository.setDynamicColor(it)
-                    },
-                )
-            }
-            androidx.compose.animation.AnimatedVisibility(visible = !dynamicAvailable || !settings.dynamicColor) {
-                androidx.compose.foundation.layout.FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    AccentColor.entries.forEach { accent ->
-                        val (seed, onSeed) = accentSwatchColors(accent, dark)
-                        AccentSwatch(
-                            color = seed,
-                            onColor = onSeed,
-                            label = accentLabel(accent),
-                            selected = settings.accent == accent,
-                            onClick = {
-                                settingsRepository.setDynamicColor(false)
-                                settingsRepository.setAccent(accent)
-                            },
-                        )
+                        selected = theme == choice,
+                        aspectRatio = 0.7f,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            haptics.perform(HapticEvent.SELECT)
+                            settingsRepository.setThemeMode(
+                                when (choice) {
+                                    ThemeChoice.SYSTEM -> ThemeMode.SYSTEM
+                                    ThemeChoice.LIGHT -> ThemeMode.LIGHT
+                                    ThemeChoice.DARK, ThemeChoice.AMOLED -> ThemeMode.DARK
+                                },
+                            )
+                            settingsRepository.setAmoledBlack(choice == ThemeChoice.AMOLED)
+                        },
+                    ) {
+                        when (choice) {
+                            ThemeChoice.LIGHT -> drawMiniScreen(light)
+                            ThemeChoice.DARK -> drawMiniScreen(dark)
+                            ThemeChoice.AMOLED -> drawMiniScreen(black)
+                            // Half light, half dark, with the side the phone uses now first.
+                            ThemeChoice.SYSTEM -> {
+                                drawMiniScreen(if (systemDark) dark else light)
+                                clipRect(left = size.width / 2f) {
+                                    drawMiniScreen(if (systemDark) light else dark)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        ChoiceSection(stringResource(R.string.settings_start_view)) {
-            ChoiceRow(
-                options = StartView.entries.map { it to startViewLabel(it) },
-                selected = settings.startView,
-                onSelect = {
-                    haptics.perform(HapticEvent.SELECT)
-                    settingsRepository.setStartView(it)
-                },
-            )
+
+        ChoiceSection(stringResource(R.string.tutorial_section_colors)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (dynamicAvailable) {
+                    val wallpaper = remember { daybreakColorScheme(context, settings.copy(dynamicColor = true), dark = systemDark) }
+                    ColorDot(
+                        brush = Brush.sweepGradient(listOf(wallpaper.primary, wallpaper.tertiary, wallpaper.secondary, wallpaper.primary)),
+                        check = wallpaper.onPrimary,
+                        label = stringResource(R.string.tutorial_material_you),
+                        selected = settings.dynamicColor,
+                        icon = Icons.Outlined.Wallpaper,
+                        onClick = {
+                            haptics.perform(HapticEvent.SELECT)
+                            settingsRepository.setDynamicColor(true)
+                        },
+                    )
+                }
+                AccentColor.entries.forEach { accent ->
+                    val (seed, onSeed) = accentSwatchColors(accent, dark = MaterialTheme.colorScheme.surface.isDark())
+                    ColorDot(
+                        brush = androidx.compose.ui.graphics.SolidColor(seed),
+                        check = onSeed,
+                        label = accentLabel(accent),
+                        selected = (!settings.dynamicColor || !dynamicAvailable) && settings.accent == accent,
+                        onClick = {
+                            haptics.perform(HapticEvent.SELECT)
+                            settingsRepository.setDynamicColor(false)
+                            settingsRepository.setAccent(accent)
+                        },
+                    )
+                }
+            }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_now_next), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    stringResource(R.string.settings_now_next_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+        ChoiceSection(stringResource(R.string.settings_start_view)) {
+            val scheme = MaterialTheme.colorScheme
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StartView.entries.forEach { view ->
+                    ChoiceTile(
+                        label = startViewLabel(view),
+                        selected = settings.startView == view,
+                        aspectRatio = 1.45f,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            haptics.perform(HapticEvent.SELECT)
+                            settingsRepository.setStartView(view)
+                        },
+                    ) {
+                        if (view == StartView.DAY) drawDayView(scheme) else drawWeekView(scheme)
+                    }
+                }
+            }
+        }
+
+        Surface(
+            onClick = {
+                val on = !settings.showNowNext
+                haptics.perform(if (on) HapticEvent.TOGGLE_ON else HapticEvent.TOGGLE_OFF)
+                settingsRepository.setShowNowNext(on)
+            },
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Row(modifier = Modifier.padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_now_next), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        stringResource(R.string.settings_now_next_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Switch(
+                    checked = settings.showNowNext,
+                    onCheckedChange = {
+                        haptics.perform(if (it) HapticEvent.TOGGLE_ON else HapticEvent.TOGGLE_OFF)
+                        settingsRepository.setShowNowNext(it)
+                    },
                 )
             }
-            Spacer(Modifier.width(12.dp))
-            Switch(
-                checked = settings.showNowNext,
-                onCheckedChange = {
-                    haptics.perform(if (it) HapticEvent.TOGGLE_ON else HapticEvent.TOGGLE_OFF)
-                    settingsRepository.setShowNowNext(it)
-                },
-            )
+        }
+    }
+    // More below: the page fades out at the bottom edge until it is scrolled to the end.
+    val fade by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, tween(200), label = "scrollFade")
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .height(36.dp)
+            .graphicsLayer { alpha = fade }
+            .background(Brush.verticalGradient(listOf(Color.Transparent, edge))),
+    )
+    }
+}
+
+/** What the choices look like: the demo day's start, with the "Now and next" card on top when it is on. */
+@Composable
+private fun AppearancePreview(showNowNext: Boolean) {
+    Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AnimatedVisibility(
+                visible = showNowNext,
+                enter = androidx.compose.animation.expandVertically(spring(stiffness = 400f)) + fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically(spring(stiffness = 400f)) + fadeOut(),
+            ) {
+                NowNextCard()
+            }
+            LessonBlock(demoDays[0][0])
+            AnimatedVisibility(
+                visible = !showNowNext,
+                enter = androidx.compose.animation.expandVertically(spring(stiffness = 400f)) + fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically(spring(stiffness = 400f)) + fadeOut(),
+            ) {
+                LessonBlock(demoDays[0][1])
+            }
         }
     }
 }
@@ -1489,45 +1592,204 @@ private fun AppearanceScene(settingsRepository: SettingsRepository) {
 private fun ChoiceSection(title: String, content: @Composable () -> Unit) {
     Column {
         Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         content()
     }
 }
 
-/** A row of equally wide options; the chosen one fills with the accent, with a spring. */
+/**
+ * A choice drawn as a small picture with its name under it. The chosen one gets an accent ring and a check
+ * badge and sits a little larger; the others step back slightly.
+ */
 @Composable
-private fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
+private fun ChoiceTile(
+    label: String,
+    selected: Boolean,
+    aspectRatio: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    picture: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val scale by animateFloatAsState(if (selected) 1f else 0.94f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tileScale")
+    val ring by animateColorAsState(if (selected) colors.primary else colors.outlineVariant, spring(stiffness = 500f), label = "tileRing")
+    Column(
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .clickable(onClick = onClick)
+            .semantics { this.selected = selected },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        options.forEach { (value, label) ->
-            val chosen = value == selected
-            val container by animateColorAsState(
-                if (chosen) MaterialTheme.colorScheme.primary else Color.Transparent,
-                spring(stiffness = 500f),
-                label = "choice",
-            )
-            val content by animateColorAsState(
-                if (chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                spring(stiffness = 500f),
-                label = "choiceText",
-            )
-            Box(
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspectRatio)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
+        ) {
+            Canvas(
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(container)
-                    .clickable { onSelect(value) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(if (selected) 2.5.dp else 1.dp, ring, RoundedCornerShape(14.dp)),
+            ) { picture() }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = selected,
+                enter = scaleIn(spring(dampingRatio = 0.5f, stiffness = 600f)) + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp),
             ) {
-                Text(label, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(colors.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(14.dp))
+                }
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) colors.primary else colors.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** A colour to pick: a dot in the colour, a ring and a check when chosen, its name under it. */
+@Composable
+private fun ColorDot(
+    brush: Brush,
+    check: Color,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val scale by animateFloatAsState(if (selected) 1f else 0.86f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "dotScale")
+    val ring by animateColorAsState(if (selected) colors.onSurface else Color.Transparent, spring(stiffness = 500f), label = "dotRing")
+    Column(
+        modifier = Modifier
+            .widthIn(min = 58.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .border(2.dp, ring, CircleShape)
+                .padding(4.dp)
+                .clip(CircleShape)
+                .background(brush),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                selected -> Icon(Icons.Rounded.Check, contentDescription = null, tint = check, modifier = Modifier.size(20.dp))
+                icon != null -> Icon(icon, contentDescription = null, tint = check, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) colors.onSurface else colors.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun Color.isDark(): Boolean = (0.299f * red + 0.587f * green + 0.114f * blue) < 0.5f
+
+/** A tiny phone screen in [scheme]: a title, three lessons with their colour stripes and the tab bar. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawMiniScreen(scheme: androidx.compose.material3.ColorScheme) {
+    val w = size.width
+    val h = size.height
+    val radius = CornerRadius(w * 0.06f)
+    drawRect(scheme.surface)
+    drawRoundRect(scheme.onSurface.copy(alpha = 0.75f), Offset(w * 0.12f, h * 0.09f), Size(w * 0.46f, h * 0.045f), CornerRadius(h))
+    drawRoundRect(scheme.onSurfaceVariant.copy(alpha = 0.4f), Offset(w * 0.12f, h * 0.16f), Size(w * 0.3f, h * 0.03f), CornerRadius(h))
+    val lessons = listOf(scheme.primaryContainer to scheme.primary, scheme.secondaryContainer to scheme.secondary, scheme.tertiaryContainer to scheme.tertiary)
+    lessons.forEachIndexed { index, (container, accent) ->
+        val top = h * (0.25f + index * 0.18f)
+        drawRoundRect(container, Offset(w * 0.1f, top), Size(w * 0.8f, h * 0.14f), radius)
+        drawRoundRect(accent, Offset(w * 0.15f, top + h * 0.03f), Size(w * 0.04f, h * 0.08f), CornerRadius(w))
+        drawRoundRect(accent.copy(alpha = 0.55f), Offset(w * 0.25f, top + h * 0.045f), Size(w * 0.4f, h * 0.03f), CornerRadius(h))
+    }
+    drawRoundRect(scheme.surfaceContainerHigh, Offset(w * 0.1f, h * 0.85f), Size(w * 0.8f, h * 0.085f), CornerRadius(h))
+    drawRoundRect(scheme.primary, Offset(w * 0.2f, h * 0.872f), Size(w * 0.16f, h * 0.04f), CornerRadius(h))
+}
+
+/** The day view in miniature: the weekday strip with today marked, then the day's lessons one under another. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDayView(scheme: androidx.compose.material3.ColorScheme) {
+    val w = size.width
+    val h = size.height
+    drawRect(scheme.surfaceContainerLow)
+    val dot = h * 0.11f
+    repeat(5) { day ->
+        val cx = w * (0.13f + day * 0.14f) // left of the check badge in the corner
+        drawCircle(if (day == 1) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.25f), dot / 2f, Offset(cx, h * 0.17f))
+    }
+    val lessons = listOf(scheme.primaryContainer to scheme.primary, scheme.tertiaryContainer to scheme.tertiary, scheme.secondaryContainer to scheme.secondary)
+    lessons.forEachIndexed { index, (container, accent) ->
+        val top = h * (0.33f + index * 0.21f)
+        drawRoundRect(container, Offset(w * 0.08f, top), Size(w * 0.84f, h * 0.17f), CornerRadius(h * 0.05f))
+        drawRoundRect(accent, Offset(w * 0.11f, top + h * 0.035f), Size(w * 0.025f, h * 0.1f), CornerRadius(w))
+        drawRoundRect(accent.copy(alpha = 0.55f), Offset(w * 0.17f, top + h * 0.065f), Size(w * 0.35f, h * 0.04f), CornerRadius(h))
+    }
+}
+
+/** The week view in miniature: five day columns with lessons of different lengths. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWeekView(scheme: androidx.compose.material3.ColorScheme) {
+    val w = size.width
+    val h = size.height
+    drawRect(scheme.surfaceContainerLow)
+    val tones = listOf(scheme.primaryContainer, scheme.secondaryContainer, scheme.tertiaryContainer)
+    // Start and length of each block, as parts of the column, per day.
+    val days = listOf(
+        listOf(0f to 0.3f, 0.34f to 0.2f, 0.6f to 0.25f),
+        listOf(0f to 0.18f, 0.22f to 0.35f, 0.62f to 0.18f),
+        listOf(0.1f to 0.28f, 0.42f to 0.3f),
+        listOf(0f to 0.22f, 0.26f to 0.2f, 0.5f to 0.32f),
+        listOf(0f to 0.4f, 0.46f to 0.2f),
+    )
+    val columnWidth = w * 0.84f / 5f
+    val top = h * 0.24f
+    val height = h * 0.66f
+    days.forEachIndexed { day, blocks ->
+        val left = w * 0.08f + day * columnWidth
+        drawRoundRect(
+            if (day == 1) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.3f),
+            Offset(left + columnWidth * 0.3f, h * 0.1f),
+            Size(columnWidth * 0.4f, h * 0.05f),
+            CornerRadius(h),
+        )
+        blocks.forEachIndexed { index, (start, length) ->
+            drawRoundRect(
+                tones[(day + index) % tones.size],
+                Offset(left + columnWidth * 0.08f, top + start * height),
+                Size(columnWidth * 0.84f, length * height),
+                CornerRadius(columnWidth * 0.18f),
+            )
         }
     }
 }
