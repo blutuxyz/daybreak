@@ -4,6 +4,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 /** One saved chat, as it is kept on the device. */
@@ -16,8 +17,8 @@ data class SavedChat(
     val drafts: Map<String, SavedDraft> = emptyMap(),
     /** Where [title] came from: the first question, an AI title, or the student. Only AUTO is ever replaced. */
     val titleSource: TitleSource = TitleSource.AUTO,
-    /** Timetable cards the assistant showed, by tool call id. */
-    val cards: Map<String, DayCard> = emptyMap(),
+    /** Cards the assistant showed (a day, exams, absences), by tool call id. */
+    val cards: Map<String, AssistantCard> = emptyMap(),
 )
 
 enum class TitleSource { AUTO, AI, MANUAL }
@@ -90,7 +91,7 @@ object ChatArchive {
             },
         )
         if (chat.cards.isNotEmpty()) {
-            add("cards", JsonObject().also { cards -> chat.cards.forEach { (callId, card) -> cards.add(callId, encodeCard(card)) } })
+            add("cards", JsonObject().also { cards -> chat.cards.forEach { (callId, card) -> cards.add(callId, encodeAnyCard(card)) } })
         }
     }.toString()
 
@@ -113,7 +114,7 @@ object ChatArchive {
                 }.getOrNull()
             }.orEmpty().toMap()
             val cards = root.getAsJsonObject("cards")?.entrySet()?.mapNotNull { (callId, element) ->
-                runCatching { callId to decodeCard(element.asJsonObject) }.getOrNull()
+                runCatching { callId to decodeAnyCard(element.asJsonObject) }.getOrNull()
             }.orEmpty().toMap()
             SavedChat(
                 cards = cards,
@@ -148,6 +149,119 @@ object ChatArchive {
                 ChatSummary(o.get("id").asLong, o.get("title").asString, o.get("updatedAt").asLong)
             }.getOrNull()
         }.sortedByDescending { it.updatedAt }
+    }
+
+    /** A card with its kind; a card saved before there were kinds is a day. */
+    private fun encodeAnyCard(card: AssistantCard): JsonObject = when (card) {
+        is DayCard -> encodeCard(card).apply { addProperty("kind", "day") }
+        is ExamCard -> encodeExams(card).apply { addProperty("kind", "exams") }
+        is AbsenceCard -> encodeAbsences(card).apply { addProperty("kind", "absences") }
+    }
+
+    private fun decodeAnyCard(o: JsonObject): AssistantCard = when (o.get("kind")?.asString) {
+        "exams" -> decodeExams(o)
+        "absences" -> decodeAbsences(o)
+        else -> decodeCard(o)
+    }
+
+    private fun encodeExams(card: ExamCard) = JsonObject().apply {
+        addProperty("from", card.from.toString())
+        addProperty("to", card.to.toString())
+        add(
+            "exams",
+            JsonArray().also { array ->
+                card.exams.forEach { exam ->
+                    array.add(
+                        JsonObject().apply {
+                            addProperty("date", exam.date.toString())
+                            addProperty("start", exam.start.toString())
+                            addProperty("end", exam.end.toString())
+                            addProperty("subject", exam.subject)
+                            addProperty("subjectName", exam.subjectName)
+                            addProperty("name", exam.name)
+                            addProperty("text", exam.text)
+                            addProperty("teacher", exam.teacher)
+                            addProperty("room", exam.room)
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    private fun decodeExams(o: JsonObject): ExamCard {
+        fun JsonObject.text(name: String) = get(name)?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+        return ExamCard(
+            from = LocalDate.parse(o.get("from").asString),
+            to = LocalDate.parse(o.get("to").asString),
+            exams = o.getAsJsonArray("exams")?.mapNotNull { element ->
+                runCatching {
+                    val e = element.asJsonObject
+                    ExamCard.Exam(
+                        date = LocalDate.parse(e.get("date").asString),
+                        start = LocalTime.parse(e.get("start").asString),
+                        end = LocalTime.parse(e.get("end").asString),
+                        subject = e.text("subject"),
+                        subjectName = e.text("subjectName"),
+                        name = e.text("name"),
+                        text = e.text("text"),
+                        teacher = e.text("teacher"),
+                        room = e.text("room"),
+                    )
+                }.getOrNull()
+            }.orEmpty(),
+        )
+    }
+
+    private fun encodeAbsences(card: AbsenceCard) = JsonObject().apply {
+        addProperty("countedMinutes", card.countedMinutes)
+        addProperty("recordedMinutes", card.recordedMinutes)
+        addProperty("excusedMinutes", card.excusedMinutes)
+        addProperty("openMinutes", card.openMinutes)
+        addProperty("excusedCount", card.excusedCount)
+        addProperty("openCount", card.openCount)
+        add(
+            "entries",
+            JsonArray().also { array ->
+                card.entries.forEach { entry ->
+                    array.add(
+                        JsonObject().apply {
+                            addProperty("start", entry.start.toString())
+                            addProperty("end", entry.end.toString())
+                            addProperty("countedMinutes", entry.countedMinutes)
+                            addProperty("excused", entry.excused)
+                            addProperty("reason", entry.reason)
+                            addProperty("text", entry.text)
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    private fun decodeAbsences(o: JsonObject): AbsenceCard {
+        fun JsonObject.text(name: String) = get(name)?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+        return AbsenceCard(
+            countedMinutes = o.get("countedMinutes").asLong,
+            recordedMinutes = o.get("recordedMinutes").asLong,
+            excusedMinutes = o.get("excusedMinutes").asLong,
+            openMinutes = o.get("openMinutes").asLong,
+            excusedCount = o.get("excusedCount").asInt,
+            openCount = o.get("openCount").asInt,
+            entries = o.getAsJsonArray("entries")?.mapNotNull { element ->
+                runCatching {
+                    val e = element.asJsonObject
+                    AbsenceCard.Entry(
+                        start = LocalDateTime.parse(e.get("start").asString),
+                        end = LocalDateTime.parse(e.get("end").asString),
+                        countedMinutes = e.get("countedMinutes").asLong,
+                        excused = e.get("excused").asBoolean,
+                        reason = e.text("reason"),
+                        text = e.text("text"),
+                    )
+                }.getOrNull()
+            }.orEmpty(),
+        )
     }
 
     private fun encodeCard(card: DayCard) = JsonObject().apply {

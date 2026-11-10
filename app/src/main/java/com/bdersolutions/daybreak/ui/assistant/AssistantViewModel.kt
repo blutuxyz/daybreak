@@ -8,7 +8,7 @@ import com.bdersolutions.daybreak.data.assistant.AppAssistantData
 import com.bdersolutions.daybreak.data.assistant.AssistantApi
 import com.bdersolutions.daybreak.data.assistant.AssistantContext
 import com.bdersolutions.daybreak.data.assistant.AssistantData
-import com.bdersolutions.daybreak.data.assistant.DayCard
+import com.bdersolutions.daybreak.data.assistant.AssistantCard
 import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.data.assistant.AssistantEvent
 import com.bdersolutions.daybreak.data.assistant.AssistantFailure
@@ -70,8 +70,8 @@ data class AssistantUiState(
     val failure: AssistantFailure? = null,
     /** Drafted messages by tool call id. */
     val drafts: Map<String, DraftState> = emptyMap(),
-    /** Timetable cards the assistant showed, by tool call id. */
-    val cards: Map<String, DayCard> = emptyMap(),
+    /** Cards the assistant showed (a day, exams, absences), by tool call id. */
+    val cards: Map<String, AssistantCard> = emptyMap(),
     /** Pictures and files waiting in the input bar. */
     val staged: List<ChatAttachment> = emptyList(),
     val models: AssistantModels? = null,

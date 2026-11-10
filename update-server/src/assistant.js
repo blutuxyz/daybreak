@@ -95,6 +95,24 @@ export const TOOLS = [
     },
   },
   {
+    name: 'show_exams',
+    description:
+      "Shows the student their exams in a date range as a card in the chat (date, time, subject, teacher, room, what the school called it and its topic text), built from their real data. Use it whenever the student asks about exams or tests: the next one, the ones this month, or a past one ('what was the test last Friday'). Defaults to today and the next 60 days. The result lists the same exams for you.",
+    parameters: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'First day, YYYY-MM-DD, default today' },
+        end_date: { type: 'string', description: 'Last day, YYYY-MM-DD, default today + 60 days' },
+      },
+    },
+  },
+  {
+    name: 'show_absences',
+    description:
+      "Shows the student's absences of this school year as a card in the chat: the time that counts (whole recorded days clipped to that day's lessons, as on the app's Absences tab), how much is excused or open, and every entry. Use it whenever the student asks about their absences (Fehlstunden). The result gives you the same figures.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'list_teachers',
     description: 'The teachers the student is allowed to write a WebUntis message to, with the user_id needed by draft_message.',
     parameters: { type: 'object', properties: {} },
@@ -123,8 +141,9 @@ You help one student with their own school week: lessons, cancellations and subs
 
 How to work:
 - The <timetable> block is a summary the app exported a moment ago. For other dates, lesson notes and topics, homework, absences or teachers, call the tools; they read the student's real data. Never invent lessons, rooms, teachers, exams, topics or times. If something is not in the data, say so.
-- "What do I have today / tomorrow / on Monday": call show_timetable for that day. The card already shows every lesson, so do not list them again; add one or two short sentences on what stands out (cancellations, substitutions, room changes, exams, notes), or just a short friendly line if the day is ordinary. If show_timetable is not available, list the lessons as a short list instead.
-- Absences: the summary gives the totals of the whole school year; call get_absences for details. Only say there are no absences if the data says "none recorded".
+- "What do I have today / tomorrow / on Monday": call show_timetable for that day. The card already shows every lesson, so do not list them again; add one or two short sentences on what stands out (cancellations, substitutions, room changes, exams, notes), or just a short friendly line if the day is ordinary. If a show_ tool is not available, write the answer as a short list instead.
+- Exams ("when is my next exam", "what was the test on Friday"): call show_exams with a fitting range (for a past exam, a range that holds it). The card shows date, time, subject, teacher, room and the school's text, so do not repeat them; say in a sentence how soon it is or what stands out, and offer to look up the lesson notes for what to study.
+- Absences ("how many absences do I have"): call show_absences. The card shows the totals and every entry; add one short sentence at most (for example how much is not excused). Use the time that counts from the result, not the recorded time. Only say there are no absences if the data says "none recorded".
 - For "what do I have to study for my next exam": find the exam (get_exams), then read the teachers' notes on that subject (get_lesson_notes) and the exam text, and summarise the topics. Say clearly when no topics were written down.
 - Messages to teachers: only when the student asks. Call list_teachers, then draft_message. The student confirms in the app; never say a message was sent unless the tool result says "sent".
 - Answer in the language the app uses (<app_language>) unless the student writes in another one.

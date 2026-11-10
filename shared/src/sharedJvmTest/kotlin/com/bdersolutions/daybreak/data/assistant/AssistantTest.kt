@@ -240,7 +240,7 @@ class AssistantTest {
         assertTrue(notes.indexOf("Bruchrechnung") < notes.indexOf("Einführung Brüche"))
         assertTrue("class register topics are read", notes.contains("topic: Brüche erweitern und kürzen"))
         assertTrue(resultOf(runTool("get_lesson_notes", """{"subject":"Physik"}""")).contains("Subjects in the timetable"))
-        assertTrue(resultOf(runTool("get_absences")).contains("this school year: 1 entries, 90 minutes recorded"))
+        assertTrue(resultOf(runTool("get_absences")).contains("Absences this school year: 1 entries"))
         assertTrue(resultOf(runTool("nope")).startsWith("Unknown tool"))
     }
 
@@ -281,8 +281,8 @@ class AssistantTest {
             )
         }
         val outcome = runTool("show_timetable", """{"date":"2026-11-12"}""", data) as ToolOutcome.Card
-        val entries = outcome.card.entries
-        assertEquals(day, outcome.card.date)
+        val entries = (outcome.card as DayCard).entries
+        assertEquals(day, (outcome.card as DayCard).date)
         assertEquals(3, entries.size)
         assertEquals(2, entries[0].periods)
         assertEquals(LocalTime.of(9, 30), entries[0].end)
@@ -309,7 +309,7 @@ class AssistantTest {
                 lesson(36, day, "15:00", "15:50", "KOP", status = cancelled),
             )
         }
-        val card = (runTool("show_timetable", """{"date":"2026-11-11"}""", data) as ToolOutcome.Card).card
+        val card = (runTool("show_timetable", """{"date":"2026-11-11"}""", data) as ToolOutcome.Card).card as DayCard
         assertEquals(listOf("SV", "GGP", "KOP"), card.entries.map { it.subject })
         val event = card.entries[0]
         assertEquals(LocalTime.of(13, 15), event.end)
@@ -318,5 +318,21 @@ class AssistantTest {
         assertEquals("a note that only repeats the subject is dropped", "", event.note)
         assertTrue(card.entries[2].cancelled)
         assertTrue(card.entries[2].replaces.isEmpty())
+    }
+
+    @Test
+    fun examAndAbsenceCardsComeFromTheTools() {
+        val exams = runTool("show_exams") as ToolOutcome.Card
+        val card = exams.card as ExamCard
+        assertEquals(listOf("M"), card.exams.map { it.subject })
+        assertEquals("Schulaufgabe 2", card.exams[0].name)
+        assertTrue(exams.content.contains("Do not list the exams again"))
+
+        val absences = runTool("show_absences") as ToolOutcome.Card
+        // The absence is on a Friday whose week is known and has no lessons that day, so nothing counts.
+        assertEquals(90L, (absences.card as AbsenceCard).recordedMinutes)
+        assertEquals(0L, (absences.card as AbsenceCard).countedMinutes)
+        assertTrue(absences.content.contains("Time that counts"))
+        assertTrue(resultOf(runTool("get_absences")).contains("Time that counts"))
     }
 }

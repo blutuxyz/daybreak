@@ -56,7 +56,7 @@ class ChatArchiveTest {
     }
 
     @Test
-    fun timetableCardsAreKept() {
+    fun everyKindOfCardIsKept() {
         val card = DayCard(
             date = java.time.LocalDate.of(2026, 11, 10),
             entries = listOf(
@@ -72,7 +72,19 @@ class ChatArchiveTest {
             title = "Heute",
             updatedAt = 1,
             messages = listOf(ChatMessage(1, ChatRole.USER, "Was habe ich heute?")),
-            cards = mapOf("c9" to card, "c10" to DayCard(card.date.plusDays(1), emptyList(), holiday = "Herbstferien")),
+            cards = mapOf(
+                "c9" to card,
+                "c10" to DayCard(card.date.plusDays(1), emptyList(), holiday = "Herbstferien"),
+                "c11" to ExamCard(
+                    card.date,
+                    card.date.plusDays(60),
+                    listOf(ExamCard.Exam(card.date, java.time.LocalTime.of(11, 35), java.time.LocalTime.of(12, 25), "E1", "Englisch", "Test", "future forms", "KRAB", "R12")),
+                ),
+                "c12" to AbsenceCard(
+                    countedMinutes = 635, recordedMinutes = 2115, excusedMinutes = 535, openMinutes = 100, excusedCount = 1, openCount = 1,
+                    entries = listOf(AbsenceCard.Entry(java.time.LocalDateTime.of(2026, 10, 19, 11, 35), java.time.LocalDateTime.of(2026, 10, 19, 13, 15), 100, false, "", "")),
+                ),
+            ),
         )
         assertEquals(chat, ChatArchive.decode(ChatArchive.encode(chat)))
     }

@@ -3,6 +3,8 @@ package com.bdersolutions.daybreak.data.assistant
 import com.bdersolutions.daybreak.data.assistant.AssistantContext.DAY
 import com.bdersolutions.daybreak.data.assistant.AssistantContext.TIME
 import com.bdersolutions.daybreak.data.assistant.AssistantContext.oneLine
+import com.bdersolutions.daybreak.ui.absences.SchoolDayWindows
+import com.bdersolutions.daybreak.ui.absences.absenceWeekStarts
 import com.bdersolutions.daybreak.untis.RecipientGroup
 import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisExam
@@ -60,8 +62,8 @@ sealed interface ToolOutcome {
     /** A message to send; the student has to confirm it first. */
     data class Confirm(val draft: MessageDraft) : ToolOutcome
 
-    /** A day shown to the student as a card; [content] goes back to the model. */
-    data class Card(val card: DayCard, val content: String) : ToolOutcome
+    /** Something shown to the student as a card; [content] goes back to the model. */
+    data class Card(val card: AssistantCard, val content: String) : ToolOutcome
 }
 
 /**
@@ -74,7 +76,7 @@ data class DayCard(
     val entries: List<Entry>,
     /** The holiday or free day it falls in, if any. */
     val holiday: String? = null,
-) {
+) : AssistantCard {
     data class Entry(
         val start: LocalTime,
         val end: LocalTime,
@@ -122,6 +124,8 @@ class AssistantToolRunner(
             "list_teachers" -> teachers()
             "draft_message" -> draft(call.id, args)
             "show_timetable" -> showTimetable(args)
+            "show_exams" -> showExams(args)
+            "show_absences" -> showAbsences()
             else -> ToolOutcome.Result("Unknown tool ${call.name}.")
         }
     } catch (error: CancellationException) {
@@ -219,26 +223,69 @@ class AssistantToolRunner(
     }
 
     private suspend fun absences(): ToolOutcome {
-        val absences = data.absences()?.sortedByDescending { it.start }
+        val absences = data.absences()
             ?: return ToolOutcome.Result("Error: the absences could not be loaded. The student may be offline; the Absences tab shows them.")
         if (absences.isEmpty()) return ToolOutcome.Result("No absences recorded this school year.")
-        val total = absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
-        val unexcused = absences.filterNot { it.excused }
-        val out = StringBuilder(
-            "Absences this school year: ${absences.size} entries, ${total.toMinutes()} minutes recorded " +
-                "(${unexcused.size} entries, ${unexcused.fold(Duration.ZERO) { s, a -> s + a.duration }.toMinutes()} minutes not excused). " +
-                "A whole recorded day can be longer than the lessons of that day.\n",
-        )
-        absences.take(40).forEach { absence ->
-            out.append("${absence.start.toLocalDate().format(DAY)} ${absence.start.toLocalTime().format(TIME)}-")
-            if (absence.end.toLocalDate() != absence.start.toLocalDate()) out.append("${absence.end.toLocalDate()} ")
-            out.append(absence.end.toLocalTime().format(TIME))
-            out.append(if (absence.excused) ", excused" else ", not excused")
-            if (absence.reasonName.isNotBlank()) out.append(", ${absence.reasonName.oneLine()}")
-            if (absence.text.isNotBlank()) out.append(" (${absence.text.oneLine(160)})")
-            out.appendLine()
+        return ToolOutcome.Result(absenceText(AbsenceCards.build(absences, absenceWindows(absences))))
+    }
+
+    /** The absences as a card, with the same figures as the Absences tab; the model gets them as text. */
+    private suspend fun showAbsences(): ToolOutcome {
+        val absences = data.absences()
+            ?: return ToolOutcome.Result("Error: the absences could not be loaded. The student may be offline. Nothing was shown.")
+        val card = AbsenceCards.build(absences, absenceWindows(absences))
+        val content = if (absences.isEmpty()) {
+            "Shown to the student as a card: no absences recorded this school year."
+        } else {
+            "Shown to the student as a card with the totals and every entry:\n" + absenceText(card) +
+                "\nDo not list the entries again. Add at most one or two short sentences, for example about open (not excused) absences."
         }
-        return ToolOutcome.Result(out.toString().trimEnd())
+        return ToolOutcome.Card(card, content)
+    }
+
+    private fun absenceText(card: AbsenceCard): String = buildString {
+        append("Absences this school year: ${card.excusedCount + card.openCount} entries. ")
+        append("Time that counts (clipped to the lessons of each day, as on the Absences tab): ${card.countedMinutes} minutes")
+        append(" (${card.excusedMinutes} excused, ${card.openMinutes} not excused in ${card.openCount} entries)")
+        if (card.recordedMinutes != card.countedMinutes) append("; recorded by the school: ${card.recordedMinutes} minutes, since whole days are entered longer than the lessons")
+        appendLine(". One school lesson is 50 minutes.")
+        card.entries.forEach { appendLine(AbsenceCards.line(it)) }
+    }.trimEnd()
+
+    /** When school is on the days of [absences], so whole recorded days count only their lessons. */
+    private suspend fun absenceWindows(absences: List<UntisAbsence>): SchoolDayWindows? {
+        val weeks = absenceWeekStarts(absences).toList().takeLast(MAX_ABSENCE_WEEKS)
+        if (weeks.isEmpty()) return null
+        val lessons = mutableListOf<UntisLesson>()
+        val known = mutableListOf<LocalDate>()
+        for (week in weeks) {
+            val loaded = runCatching { data.lessons(week, week.plusDays(6)) }.getOrNull() ?: continue
+            lessons += loaded
+            known += week
+        }
+        return SchoolDayWindows.from(lessons, known)
+    }
+
+    /** Exams as a card; the model gets them as text. Defaults to the next 60 days. */
+    private suspend fun showExams(args: JsonObject): ToolOutcome {
+        val start = args.date("start_date") ?: today()
+        var end = args.date("end_date") ?: start.plusDays(DEFAULT_EXAM_DAYS)
+        if (end.isBefore(start)) return ToolOutcome.Result("Error: end_date is before start_date. Nothing was shown.")
+        if (Duration.between(start.atStartOfDay(), end.atStartOfDay()).toDays() > MAX_EXAM_DAYS) end = start.plusDays(MAX_EXAM_DAYS)
+        val exams = data.exams(start, end)
+        val dates = exams.map { it.date }.distinct().sorted().take(ExamCards.MAX_EXAMS)
+        val lessons = dates.associateWith { date -> runCatching { data.lessons(date, date) }.getOrNull().orEmpty() }
+        val card = ExamCards.build(start, end, exams, lessons)
+        val content = if (card.exams.isEmpty()) {
+            "Shown to the student as a card: no exams from ${start.format(DAY)} to ${end.format(DAY)}."
+        } else {
+            buildString {
+                appendLine("Shown to the student as a card with these exams (date, time, subject, teacher, room and the school's text):")
+                card.exams.forEach { appendLine("  ${ExamCards.line(it)}") }
+                append("Today is ${today().format(DAY)}. Do not list the exams again. Add at most one or two short sentences (how soon, what to study), or nothing.")
+            }
+        }
+        return ToolOutcome.Card(card, content.trimEnd())
     }
 
     /** One day as a card for the student; the model gets the same lessons as text and is told not to repeat them. */
@@ -326,6 +373,11 @@ class AssistantToolRunner(
         /** Ranges up to this many days get the class register topics (they cost one more request). */
         private const val TOPIC_DAYS = 14L
         private const val MAX_TOPIC_LESSONS = 80
+        private const val DEFAULT_EXAM_DAYS = 60L
+        private const val MAX_EXAM_DAYS = 180L
+
+        /** Weeks of lessons loaded to clip whole recorded days; older ones keep the recorded time. */
+        private const val MAX_ABSENCE_WEEKS = 20
 
         /** What goes back to the model after the student answered a draft. */
         fun sentResult(draft: MessageDraft): String =

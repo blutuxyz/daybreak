@@ -345,7 +345,7 @@ fun AssistantScreen(
                                     )
                                 }
                                 // The quiet record of the tools, without the ones whose card shows what they did.
-                                val recorded = message.toolCalls.filterNot { it.name == "show_timetable" && state.cards[it.id] != null }
+                                val recorded = message.toolCalls.filterNot { it.name in CARD_TOOLS && state.cards[it.id] != null }
                                 if (message.role == ChatRole.ASSISTANT && recorded.isNotEmpty()) {
                                     ToolActivity(names = recorded.map { it.name }, running = false)
                                 }
@@ -353,7 +353,7 @@ fun AssistantScreen(
                                     MessageBubble(message = message, streaming = message.id == state.streamingId)
                                 }
                                 message.toolCalls.forEach { call ->
-                                    state.cards[call.id]?.let { card -> DayCardView(card) }
+                                    state.cards[call.id]?.let { card -> AssistantCardView(card) }
                                     state.drafts[call.id]?.let { draft ->
                                         DraftCard(
                                             state = draft,
@@ -414,6 +414,9 @@ fun AssistantScreen(
 }
 
 private const val MAX_INPUT = 2000
+
+/** Tools that show a card; the card says what they did, so they get no "looked it up" line. */
+private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences")
 
 /** A top-bar icon appearing: its space opens with a spring while it fades and grows in. */
 private val barIconEnter =
@@ -847,6 +850,8 @@ private fun toolLabel(name: String): String = when (name) {
     "list_teachers" -> stringResource(R.string.assistant_tool_teachers)
     "draft_message" -> stringResource(R.string.assistant_tool_draft)
     "show_timetable" -> stringResource(R.string.assistant_tool_timetable)
+    "show_exams" -> stringResource(R.string.assistant_tool_exams_card)
+    "show_absences" -> stringResource(R.string.assistant_tool_absences_card)
     else -> name
 }
 
