@@ -54,4 +54,23 @@ class ChatArchiveTest {
         val body = AssistantProtocol.requestBody(chat.messages + ChatMessage(3, ChatRole.USER, "Noch was"), "", "de", java.time.LocalDate.of(2026, 11, 9))
         assert(!body.contains("Gedanken"))
     }
+
+    @Test
+    fun timetableCardsAreKept() {
+        val card = DayCard(
+            date = java.time.LocalDate.of(2026, 11, 10),
+            entries = listOf(
+                DayCard.Entry(java.time.LocalTime.of(8, 0), java.time.LocalTime.of(9, 30), "M", "Mathematik", "MÜL", "R101", periods = 2, exam = "Schulaufgabe"),
+                DayCard.Entry(java.time.LocalTime.of(9, 45), java.time.LocalTime.of(10, 30), "E", "Englisch", cancelled = true, originalRoom = "R102", note = "Aufgaben im Moodle"),
+            ),
+        )
+        val chat = SavedChat(
+            id = 1,
+            title = "Heute",
+            updatedAt = 1,
+            messages = listOf(ChatMessage(1, ChatRole.USER, "Was habe ich heute?")),
+            cards = mapOf("c9" to card, "c10" to DayCard(card.date.plusDays(1), emptyList(), holiday = "Herbstferien")),
+        )
+        assertEquals(chat, ChatArchive.decode(ChatArchive.encode(chat)))
+    }
 }

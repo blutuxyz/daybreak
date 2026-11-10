@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.data.assistant
 
 import com.bdersolutions.daybreak.data.cache.TimetableCache
+import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.untis.UntisHomework
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.google.gson.JsonArray
@@ -326,6 +327,8 @@ object AssistantContext {
         cache: TimetableCache,
         now: LocalDateTime,
         homework: List<UntisHomework> = emptyList(),
+        /** The absences of the whole school year, or null when they could not be loaded. */
+        absences: List<UntisAbsence>? = null,
         maxChars: Int = AssistantProtocol.MAX_CONTEXT_CHARS,
     ): String {
         val today = now.toLocalDate()
@@ -395,13 +398,19 @@ object AssistantContext {
             }
         }
 
-        if (cache.absences.isNotEmpty()) {
-            val total = cache.absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
-            val unexcused = cache.absences.count { !it.excused }
-            out.appendLine()
-            out.appendLine(
-                "Absences: ${cache.absences.size} entries, ${total.toMinutes()} minutes recorded, $unexcused not excused (details: get_absences).",
-            )
+        // Not the cache's absences: it holds only the few weeks around today, and "none" there was taken
+        // for "none at all".
+        out.appendLine()
+        when {
+            absences == null -> out.appendLine("Absences: not in this summary (call get_absences).")
+            absences.isEmpty() -> out.appendLine("Absences this school year: none recorded.")
+            else -> {
+                val total = absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
+                val unexcused = absences.count { !it.excused }
+                out.appendLine(
+                    "Absences this school year: ${absences.size} entries, ${total.toMinutes()} minutes recorded, $unexcused not excused (details: get_absences).",
+                )
+            }
         }
 
         val text = out.toString().trimEnd()
@@ -409,7 +418,7 @@ object AssistantContext {
     }
 
     /** One lesson as one line: time, subject, teacher, room, and in brackets every change and note. */
-    internal fun lessonLine(lesson: UntisLesson): String {
+    internal fun lessonLine(lesson: UntisLesson, topic: String? = null): String {
         val out = StringBuilder()
         out.append("${lesson.start.format(TIME)}-${lesson.end.format(TIME)} ")
         out.append(lesson.subjectLong.ifBlank { lesson.subject }.ifBlank { "?" })
@@ -426,6 +435,7 @@ object AssistantContext {
             if (lesson.substitutionText.isNotBlank()) add("note: ${lesson.substitutionText.oneLine()}")
             if (lesson.lessonText.isNotBlank()) add("lesson text: ${lesson.lessonText.oneLine()}")
             if (lesson.info.isNotBlank()) add("info: ${lesson.info.oneLine()}")
+            if (!topic.isNullOrBlank()) add("topic: ${topic.oneLine()}")
         }
         if (notes.isNotEmpty()) out.append(" [${notes.joinToString("; ")}]")
         return out.toString()

@@ -11,7 +11,12 @@ import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisHomework
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.untis.UntisRecipient
+import com.bdersolutions.daybreak.ui.absences.schoolYearStartFor
+import com.bdersolutions.daybreak.untis.UntisPermissionException
 import java.time.LocalDate
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
@@ -38,7 +43,46 @@ class AppAssistantData(
 
     override suspend fun homework(from: LocalDate, to: LocalDate): List<UntisHomework> = schoolData.homework(from, to)
 
-    override fun absences(): List<UntisAbsence> = timetable.cache.value.absences
+    private val absenceLock = Mutex()
+    private var schoolYearAbsences: List<UntisAbsence>? = null
+    private val topicLock = Mutex()
+    private val topics = mutableMapOf<Long, String>()
+    private val topicsAsked = mutableSetOf<Long>()
+    private var topicsRefused = false
+
+    /**
+     * The whole school year, as on the Absences tab: the timetable cache holds only the weeks around today,
+     * so "none in the cache" said nothing. Loaded once per chat page; null when it could not be loaded.
+     */
+    override suspend fun absences(): List<UntisAbsence>? = absenceLock.withLock {
+        schoolYearAbsences ?: try {
+            val today = LocalDate.now()
+            schoolData.absences(schoolYearStartFor(today), today).also { schoolYearAbsences = it }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Asked once per lesson; a school that does not show topics to students is not asked again. */
+    override suspend fun lessonTopics(lessons: List<UntisLesson>): Map<Long, String> = topicLock.withLock {
+        val wanted = lessons.map { it.id }.filter { it > 0 }.distinct()
+        val missing = wanted.filterNot { it in topicsAsked }
+        if (missing.isNotEmpty() && !topicsRefused) {
+            try {
+                topics += schoolData.lessonTopics(missing)
+                topicsAsked += missing
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: UntisPermissionException) {
+                topicsRefused = true
+            } catch (_: Exception) {
+                // Offline or an unknown answer: the lessons' own notes still go to the model.
+            }
+        }
+        wanted.mapNotNull { id -> topics[id]?.let { id to it } }.toMap()
+    }
 
     override suspend fun teachers(): List<UntisRecipient> = schoolData.recipients()
 

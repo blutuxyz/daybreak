@@ -773,6 +773,18 @@
     <string name="assistant_tool_absences">Checked the absences</string>
     <string name="assistant_tool_teachers">Looked up the teachers</string>
     <string name="assistant_tool_draft">Drafted a message</string>
+    <string name="assistant_tool_timetable">Showed the timetable</string>
+    <string name="assistant_card_today">Today</string>
+    <string name="assistant_card_tomorrow">Tomorrow</string>
+    <string name="assistant_card_no_lessons">No lessons on this day.</string>
+    <string name="assistant_card_free">Free period</string>
+    <string name="assistant_card_exam">Exam</string>
+    <string name="assistant_card_double">Double lesson</string>
+    <string name="assistant_card_teacher_change">%1$s instead of %2$s</string>
+    <plurals name="assistant_card_summary">
+        <item quantity="one">%1$d lesson · %2$s–%3$s</item>
+        <item quantity="other">%1$d lessons · %2$s–%3$s</item>
+    </plurals>
     <string name="assistant_draft_title">Message to a teacher</string>
     <string name="assistant_draft_to">To: %1$s</string>
     <string name="assistant_draft_subject">Subject: %1$s</string>

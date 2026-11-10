@@ -3,6 +3,8 @@ package com.bdersolutions.daybreak.data.assistant
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.time.LocalDate
+import java.time.LocalTime
 
 /** One saved chat, as it is kept on the device. */
 data class SavedChat(
@@ -14,6 +16,8 @@ data class SavedChat(
     val drafts: Map<String, SavedDraft> = emptyMap(),
     /** Where [title] came from: the first question, an AI title, or the student. Only AUTO is ever replaced. */
     val titleSource: TitleSource = TitleSource.AUTO,
+    /** Timetable cards the assistant showed, by tool call id. */
+    val cards: Map<String, DayCard> = emptyMap(),
 )
 
 enum class TitleSource { AUTO, AI, MANUAL }
@@ -63,6 +67,9 @@ object ChatArchive {
                 }
             },
         )
+        if (chat.cards.isNotEmpty()) {
+            add("cards", JsonObject().also { cards -> chat.cards.forEach { (callId, card) -> cards.add(callId, encodeCard(card)) } })
+        }
     }.toString()
 
     fun decode(text: String?): SavedChat? {
@@ -83,7 +90,11 @@ object ChatArchive {
                     draft.callId to SavedDraft(draft, o.get("status").asString)
                 }.getOrNull()
             }.orEmpty().toMap()
+            val cards = root.getAsJsonObject("cards")?.entrySet()?.mapNotNull { (callId, element) ->
+                runCatching { callId to decodeCard(element.asJsonObject) }.getOrNull()
+            }.orEmpty().toMap()
             SavedChat(
+                cards = cards,
                 id = root.get("id").asLong,
                 title = root.get("title")?.asString ?: titleFor(messages),
                 updatedAt = root.get("updatedAt")?.asLong ?: 0L,
@@ -115,6 +126,63 @@ object ChatArchive {
                 ChatSummary(o.get("id").asLong, o.get("title").asString, o.get("updatedAt").asLong)
             }.getOrNull()
         }.sortedByDescending { it.updatedAt }
+    }
+
+    private fun encodeCard(card: DayCard) = JsonObject().apply {
+        addProperty("date", card.date.toString())
+        card.holiday?.let { addProperty("holiday", it) }
+        add(
+            "entries",
+            JsonArray().also { array ->
+                card.entries.forEach { entry ->
+                    array.add(
+                        JsonObject().apply {
+                            addProperty("start", entry.start.toString())
+                            addProperty("end", entry.end.toString())
+                            addProperty("subject", entry.subject)
+                            addProperty("subjectName", entry.subjectName)
+                            addProperty("teacher", entry.teacher)
+                            addProperty("room", entry.room)
+                            if (entry.cancelled) addProperty("cancelled", true)
+                            if (entry.irregular) addProperty("irregular", true)
+                            if (entry.originalTeacher.isNotBlank()) addProperty("originalTeacher", entry.originalTeacher)
+                            if (entry.originalRoom.isNotBlank()) addProperty("originalRoom", entry.originalRoom)
+                            if (entry.note.isNotBlank()) addProperty("note", entry.note)
+                            entry.exam?.let { addProperty("exam", it) }
+                            addProperty("periods", entry.periods)
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    private fun decodeCard(o: JsonObject): DayCard {
+        fun JsonObject.text(name: String) = get(name)?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+        return DayCard(
+            date = LocalDate.parse(o.get("date").asString),
+            holiday = o.get("holiday")?.asString,
+            entries = o.getAsJsonArray("entries")?.mapNotNull { element ->
+                runCatching {
+                    val e = element.asJsonObject
+                    DayCard.Entry(
+                        start = LocalTime.parse(e.get("start").asString),
+                        end = LocalTime.parse(e.get("end").asString),
+                        subject = e.text("subject"),
+                        subjectName = e.text("subjectName"),
+                        teacher = e.text("teacher"),
+                        room = e.text("room"),
+                        cancelled = e.get("cancelled")?.asBoolean == true,
+                        irregular = e.get("irregular")?.asBoolean == true,
+                        originalTeacher = e.text("originalTeacher"),
+                        originalRoom = e.text("originalRoom"),
+                        note = e.text("note"),
+                        exam = e.get("exam")?.asString,
+                        periods = e.get("periods")?.asInt ?: 1,
+                    )
+                }.getOrNull()
+            }.orEmpty(),
+        )
     }
 
     private fun encodeMessage(message: ChatMessage) = JsonObject().apply {

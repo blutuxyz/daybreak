@@ -25,6 +25,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +46,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -100,6 +105,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,18 +118,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.assistant.AnswerMarkdown
 import com.bdersolutions.daybreak.data.assistant.AttachmentProblem
 import com.bdersolutions.daybreak.data.assistant.AttachmentReader
 import com.bdersolutions.daybreak.data.assistant.AssistantFailure
@@ -207,11 +210,51 @@ fun AssistantScreen(
         }
     }
 
-    // Follow the conversation: a new message or a growing answer keeps the end in view.
-    val lastText = shown.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(shown.size, lastText, state.waiting, state.failure, state.runningTools, state.drafts) {
-        val count = listState.layoutInfo.totalItemsCount
-        if (count > 0) listState.animateScrollToItem(count - 1, scrollOffset = Int.MAX_VALUE / 2)
+    // The rows of the list, counted here rather than read from the list's layout info: that info is only
+    // updated by the next layout pass, so right after a change it still has the old number of rows.
+    val itemCount = shown.size +
+        (if (state.runningTools.isNotEmpty()) 1 else 0) +
+        (if (state.waiting) 1 else 0) +
+        (if (state.failure != null) 1 else 0)
+    val lastQuestion = shown.lastOrNull { it.role == ChatRole.USER }?.id
+    val last = shown.lastOrNull()
+    val growth = listOf(last?.text?.length, last?.reasoning?.length, last?.toolCalls?.size, state.streamingId, state.drafts, state.cards.size)
+
+    // Follow the conversation while its end is in view. Once the student drags the list up to read, it
+    // stays put until they come back down to the end or ask something new.
+    val follow = remember(listState) { FollowState() }
+    val animations = motionAnimationsEnabled()
+    LaunchedEffect(listState) {
+        launch {
+            listState.interactionSource.interactions.collect { interaction ->
+                if (interaction is DragInteraction.Start) {
+                    follow.touched = true
+                    follow.enabled = false
+                }
+            }
+        }
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling && follow.touched) {
+                follow.touched = false
+                follow.enabled = !listState.canScrollForward
+            }
+        }
+    }
+    LaunchedEffect(listState, itemCount, lastQuestion, growth) {
+        if (itemCount == 0) return@LaunchedEffect
+        val firstLayout = follow.count == 0
+        val newRow = itemCount > follow.count
+        if (lastQuestion != follow.question) follow.enabled = true
+        follow.count = itemCount
+        follow.question = lastQuestion
+        if (follow.enabled) listState.revealEnd(itemCount - 1, animated = newRow && !firstLayout && animations)
+    }
+    // The keyboard (or anything else) shrinking the list keeps the end in view too.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.viewportSize.height }.collect {
+            val count = listState.layoutInfo.totalItemsCount
+            if (follow.enabled && count > 0) listState.revealEnd(count - 1, animated = false)
+        }
     }
 
     Scaffold(
@@ -288,20 +331,23 @@ fun AssistantScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(shown, key = { "${state.chatId}-${it.id}" }) { message ->
-                            Column(modifier = Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(modifier = Modifier.animateItem(fadeInSpec = rowFadeIn, fadeOutSpec = null), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (message.role == ChatRole.ASSISTANT && message.reasoning.isNotBlank()) {
                                     ThinkingSection(
                                         reasoning = message.reasoning,
                                         thinking = message.id == state.streamingId && message.text.isBlank() && message.toolCalls.isEmpty(),
                                     )
                                 }
-                                if (message.role == ChatRole.ASSISTANT && message.toolCalls.isNotEmpty()) {
-                                    ToolActivity(names = message.toolCalls.map { it.name }, running = false)
+                                // The quiet record of the tools, without the ones whose card shows what they did.
+                                val recorded = message.toolCalls.filterNot { it.name == "show_timetable" && state.cards[it.id] != null }
+                                if (message.role == ChatRole.ASSISTANT && recorded.isNotEmpty()) {
+                                    ToolActivity(names = recorded.map { it.name }, running = false)
                                 }
                                 if (message.text.isNotBlank() || message.attachments.isNotEmpty()) {
                                     MessageBubble(message = message, streaming = message.id == state.streamingId)
                                 }
                                 message.toolCalls.forEach { call ->
+                                    state.cards[call.id]?.let { card -> DayCardView(card) }
                                     state.drafts[call.id]?.let { draft ->
                                         DraftCard(
                                             state = draft,
@@ -319,14 +365,14 @@ fun AssistantScreen(
                             }
                         }
                         if (state.runningTools.isNotEmpty()) {
-                            item(key = "tools") { ToolActivity(names = state.runningTools, running = true, modifier = Modifier.animateItem()) }
+                            item(key = "tools") { ToolActivity(names = state.runningTools, running = true, modifier = statusRow()) }
                         }
                         if (state.waiting) {
-                            item(key = "typing") { TypingIndicator(Modifier.animateItem()) }
+                            item(key = "typing") { TypingIndicator(statusRow()) }
                         }
                         state.failure?.let { failure ->
                             item(key = "failure") {
-                                FailureCard(failure = failure, onRetry = { viewModel.retry(language) }, modifier = Modifier.animateItem())
+                                FailureCard(failure = failure, onRetry = { viewModel.retry(language) }, modifier = statusRow())
                             }
                         }
                     }
@@ -362,6 +408,41 @@ fun AssistantScreen(
 }
 
 private const val MAX_INPUT = 2000
+
+/**
+ * Rows fade in but never fade out. A removed row that fades out is kept and drawn where it was until its
+ * fade ends, and the row that replaces it (the answer after the typing dots, the error after them, the dots
+ * after a retry) appears in exactly that place, so the two were drawn on top of each other. The list also
+ * scrolls while that happens, and the fading row was then left behind on screen until the next relayout
+ * (opening or closing the keyboard).
+ */
+private val rowFadeIn = tween<Float>(durationMillis = 180)
+
+/** The typing dots, the running tools and the error: they come and go in place, so they do not slide either. */
+private fun LazyItemScope.statusRow(): Modifier =
+    Modifier.animateItem(fadeInSpec = rowFadeIn, placementSpec = null, fadeOutSpec = null)
+
+/** What the chat list remembers about following the conversation; read only by effects, so not state. */
+private class FollowState {
+    var enabled = true
+    var touched = false
+    var count = 0
+    var question: Long? = null
+}
+
+/**
+ * Scrolls so the bottom of row [lastIndex] sits at the bottom of the list (or as far as the list goes).
+ * The first scroll lays the list out again, so the sizes used for the second one are current.
+ */
+private suspend fun LazyListState.revealEnd(lastIndex: Int, animated: Boolean) {
+    if (animated) animateScrollToItem(lastIndex) else scrollToItem(lastIndex)
+    val info = layoutInfo
+    val row = info.visibleItemsInfo.lastOrNull { it.index == lastIndex } ?: return
+    val overflow = row.offset + row.size - (info.viewportEndOffset - info.afterContentPadding)
+    if (overflow > 0) {
+        if (animated) animateScrollBy(overflow.toFloat()) else scrollBy(overflow.toFloat())
+    }
+}
 
 /** The model picker under the title, when the server shows it; otherwise the plain subtitle. */
 @Composable
@@ -586,18 +667,28 @@ private fun MessageBubble(message: ChatMessage, streaming: Boolean, modifier: Mo
                     contentColor = if (user) colors.onPrimary else colors.onSurface,
                     modifier = Modifier.widthIn(max = 320.dp),
                 ) {
-                    if (!user && !streaming && hasMath(message.text)) {
-                        // Formulas: drawn by KaTeX once the answer is complete.
-                        MathText(
-                            text = message.text,
-                            color = colors.onSurface,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
+                    if (user) {
+                        Text(text = message.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                     } else {
-                        val text = if (user) AnnotatedString(message.text) else rememberMarkdownLite(message.text)
-                        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                            Text(text = text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
-                            if (streaming) BlinkingCursor()
+                        val blocks = rememberAnswerBlocks(message.text)
+                        val bubblePadding = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                        if (!streaming && remember(blocks) { AnswerMarkdown.hasMath(blocks) }) {
+                            // Formulas: drawn by KaTeX once the answer is complete; the plain answer holds the place until then.
+                            val palette = MathPalette(
+                                text = colors.onSurface,
+                                accent = colors.primary,
+                                muted = colors.onSurfaceVariant,
+                                codeBackground = colors.surfaceContainerHighest,
+                                divider = colors.outlineVariant,
+                            )
+                            MathText(
+                                blocks = blocks,
+                                palette = palette,
+                                modifier = bubblePadding,
+                                placeholder = { AnswerText(blocks, streaming = false) },
+                            )
+                        } else {
+                            AnswerText(blocks, streaming = streaming, modifier = bubblePadding)
                         }
                     }
                 }
@@ -656,40 +747,6 @@ private fun AttachmentThumb(attachment: ChatAttachment, onRemove: (() -> Unit)? 
             }
         }
     }
-}
-
-/** **bold** becomes bold; everything else stays as written. The model is told to keep to that. */
-@Composable
-private fun rememberMarkdownLite(text: String): AnnotatedString = remember(text) {
-    buildAnnotatedString {
-        val parts = text.split("**")
-        parts.forEachIndexed { index, part ->
-            if (index % 2 == 1 && index < parts.lastIndex) {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(part) }
-            } else {
-                if (index % 2 == 1) append("**")
-                append(part)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlinkingCursor() {
-    val transition = rememberInfiniteTransition(label = "cursor")
-    val alpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.15f,
-        animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
-        label = "cursorAlpha",
-    )
-    Box(
-        modifier = Modifier
-            .padding(start = 3.dp, top = 4.dp)
-            .size(width = 7.dp, height = 18.dp)
-            .graphicsLayer { this.alpha = alpha }
-            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
-    )
 }
 
 @Composable
@@ -757,6 +814,7 @@ private fun toolLabel(name: String): String = when (name) {
     "get_absences" -> stringResource(R.string.assistant_tool_absences)
     "list_teachers" -> stringResource(R.string.assistant_tool_teachers)
     "draft_message" -> stringResource(R.string.assistant_tool_draft)
+    "show_timetable" -> stringResource(R.string.assistant_tool_timetable)
     else -> name
 }
 
