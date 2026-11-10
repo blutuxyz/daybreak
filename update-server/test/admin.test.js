@@ -44,6 +44,9 @@ test('signed in, the page shows the forms with a strict content security policy'
   assert.equal(response.statusCode, 200);
   assert.match(response.headers['content-type'], /text\/html/);
   assert.match(response.headers['content-security-policy'], /default-src 'none'/);
+  // The one thing the page may do is style itself; script stays forbidden.
+  assert.match(response.headers['content-security-policy'], /style-src 'unsafe-inline'/);
+  assert.match(response.body, /<style>/, 'the page brings its own styles');
   assert.match(response.body, /action="\/admin\/min-version"/);
   assert.match(response.body, /action="\/admin\/messages"/);
   assert.doesNotMatch(response.body, /<script/i);

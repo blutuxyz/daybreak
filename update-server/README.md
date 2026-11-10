@@ -42,7 +42,7 @@ Drafts, prereleases and tags that are not `vX.Y.Z` are ignored.
 ## Minimum version and messages
 
 The same server can tell every app two things. Both are set on the admin page, `https://updates.example.com/admin`
-(a plain page without styling or scripts; sign in with `ADMIN_TOKEN` as the password, any user name).
+(plain forms with one small style block and no scripts; sign in with `ADMIN_TOKEN` as the password, any user name).
 
 - **Minimum version.** Apps older than this stop at an "Update required" screen. They can only update from
   there or close. Enter it as `1.2.0` (or leave it empty for no minimum). Use it for security fixes or when a

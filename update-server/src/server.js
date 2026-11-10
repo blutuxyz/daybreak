@@ -466,7 +466,10 @@ export function buildServer({
   const adminHeaders = (reply) =>
     reply
       .header('Cache-Control', 'no-store')
-      .header('Content-Security-Policy', "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+      .header(
+        'Content-Security-Policy',
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      )
       .header('X-Content-Type-Options', 'nosniff');
   const backToAdmin = (reply, notice) => reply.code(303).header('Location', `/admin?notice=${notice}`).send();
 
