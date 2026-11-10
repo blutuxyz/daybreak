@@ -50,8 +50,13 @@ export function buildServer({
   const adminLimiter = new RateLimiter({ limit: 60, windowMs: 60_000, now });
 
   // Ko-fi posts a form ("data=<json>"). Reading it needs no extra package.
-  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 65_536 }, (_, body, done) => {
-    done(null, Object.fromEntries(new URLSearchParams(body)));
+  // A field repeated in the form (one per row of the provider and model tables) becomes an array of its values.
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 262_144 }, (_, body, done) => {
+    const fields = {};
+    for (const [key, value] of new URLSearchParams(body)) {
+      fields[key] = key in fields ? [].concat(fields[key], value) : value;
+    }
+    done(null, fields);
   });
   const statusLimiter = new RateLimiter({ limit: 30, windowMs: 60_000, now });
   // Limits per IP address, set on the admin page (they apply at once, without a restart).
@@ -487,9 +492,11 @@ export function buildServer({
         efforts: EFFORTS,
         keyConfigured: Boolean(assistant?.configured),
         clientSwitchOn: assistant ? await assistant.clientSwitchOn() : true,
-        unknownModels: assistant?.configured ? await assistant.unknownModels(settings.models.map((model) => model.id)) : null,
+        unknownModels: assistant?.configured
+          ? await assistant.unknownModels(settings.models.filter((model) => settings.providers.find((provider) => provider.id === model.provider)?.type === 'openrouter').map((model) => model.id))
+          : null,
         usage: await assistantStore.usageToday(),
-        logs: await assistantStore.logs({ limit: 200 }),
+        logs: await assistantStore.logPage({ page: request.query?.logPage }),
       };
     }
     adminHeaders(reply).type('text/html; charset=utf-8');
@@ -533,7 +540,7 @@ export function buildServer({
   app.post('/admin/assistant', async (request, reply) => {
     if (!guardAdmin(request, reply, { write: true })) return reply;
     if (!assistantStore) return reply.code(404).send({ error: 'not_found' });
-    const parsed = parseSettingsForm(request.body);
+    const parsed = parseSettingsForm(request.body, assistantStore.currentSettings());
     if (parsed.error) return backToAdmin(reply, parsed.error);
     await assistantStore.saveSettings(parsed.value);
     return backToAdmin(reply, 'assistant_saved');

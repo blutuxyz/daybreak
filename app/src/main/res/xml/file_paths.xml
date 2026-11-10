@@ -4,4 +4,6 @@
     <cache-path name="attachments" path="attachments/" />
     <!-- Timetable pictures made by the share button, see ui/timetable/ShareTimetable. -->
     <cache-path name="shared" path="shared/" />
+    <!-- Pictures taken with the camera for the assistant, see ui/assistant/AssistantScreen. -->
+    <cache-path name="camera" path="camera/" />
 </paths>

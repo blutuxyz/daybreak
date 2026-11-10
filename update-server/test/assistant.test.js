@@ -150,11 +150,25 @@ test('buildOpenRouterBody sends tools, provider routing and attachments in the O
   assert.equal(fallbackDefault.provider.sort, undefined);
 });
 
-test('settings form: models per line, numbers, checkboxes', () => {
+test('settings form: provider and model rows, numbers, checkboxes', () => {
+  const current = readSettings({ providers: [{ id: 'mine', name: 'Mine', type: 'openai', baseUrl: 'https://llm.example/v1', apiKey: 'stored-key' }] });
   const { value } = parseSettingsForm({
     enabled: 'on',
-    models: 'anthropic/claude-haiku-5.5 | Schnell\r\ngoogle/gemini-3.8-flash',
-    defaultModel: 'google/gemini-3.8-flash',
+    providerId: ['mine', ''],
+    providerName: ['Mine', ''],
+    providerType: ['openai', 'anthropic'],
+    providerBase: ['https://llm.example/v1', 'https://api.example.com'],
+    providerKey: ['', 'typed-key'],
+    modelId: ['anthropic/claude-haiku-5.5', 'claude-x', ''],
+    modelLabel: ['Schnell', '', ''],
+    modelProvider: ['mine', 'p-new', ''],
+    modelEnabled: ['on', 'off', 'on'],
+    modelDescription: ['Uses your limits faster', '', ''],
+    modelTag: ['Free', '', ''],
+    modelTagKind: ['info', 'alarm', 'info'],
+    modelInputPrice: ['0.5', '3', '0'],
+    modelOutputPrice: ['1.5', '15', '0'],
+    defaultModel: 'claude-x',
     providerSort: 'throughput',
     freeCentsPerDay: '10',
     paidCentsPerDay: '20',
@@ -162,17 +176,35 @@ test('settings form: models per line, numbers, checkboxes', () => {
     updateChecksPerMinute: '30',
     downloadsPerHour: '20',
     logRetentionDays: '7',
+  }, current);
+  // The blank rows are not saved; a blank key keeps the stored one.
+  assert.equal(value.providers.length, 2);
+  assert.equal(value.providers[0].apiKey, 'stored-key');
+  assert.equal(value.providers[1].type, 'anthropic');
+  assert.equal(value.models.length, 2);
+  assert.deepEqual(value.models[0], {
+    id: 'anthropic/claude-haiku-5.5',
+    label: 'Schnell',
+    provider: 'mine',
+    enabled: true,
+    description: 'Uses your limits faster',
+    tag: 'Free',
+    tagKind: 'info',
+    inputPrice: 0.5,
+    outputPrice: 1.5,
   });
-  assert.deepEqual(value.models, [
-    { id: 'anthropic/claude-haiku-5.5', label: 'Schnell' },
-    { id: 'google/gemini-3.8-flash', label: 'google/gemini-3.8-flash' },
-  ]);
-  assert.equal(value.defaultModel, 'google/gemini-3.8-flash');
+  assert.equal(value.models[1].enabled, false);
+  assert.equal(value.models[1].tagKind, 'alarm');
+  assert.equal(value.models[1].provider, 'mine');
+  assert.equal(value.defaultModel, 'claude-x');
   assert.equal(value.providerSort, 'throughput');
   assert.equal(value.allowFallbacks, false);
   assert.equal(value.logContent, false);
-  assert.equal(parseSettingsForm({ models: 'bad model id with spaces' }).error, 'bad_model');
-  assert.equal(parseSettingsForm({ models: 'a/b', freeCentsPerDay: '-1' }).error, 'bad_number');
+  assert.equal(parseSettingsForm({ modelId: ['bad model id with spaces'] }).error, 'bad_model');
+  assert.equal(parseSettingsForm({ providerName: ['x'], providerBase: ['ftp://nope'] }).error, 'bad_url');
+  assert.equal(parseSettingsForm({ modelId: ['a/b'], modelInputPrice: ['-1'], freeCentsPerDay: '10' }).error, 'bad_number');
+  assert.equal(parseSettingsForm({ modelId: ['a/b'], freeCentsPerDay: '-1' }).error, 'bad_number');
+
 });
 
 test('the defaults are 10 cents a day for free users and 20 for supporters', () => {
@@ -272,7 +304,7 @@ test('the admin page shows the assistant settings and the clickable log', async 
   const auth = { authorization: `Basic ${Buffer.from('x:admin-secret').toString('base64')}` };
   const page = await app.inject({ method: 'GET', url: '/admin', headers: auth });
   assert.equal(page.statusCode, 200);
-  assert.match(page.body, /AI assistant \(OpenRouter\)/);
+  assert.match(page.body, /<h2>AI assistant<\/h2>/);
   const [entry] = await store.logs();
   assert.ok(page.body.includes(`/admin/assistant/logs/${entry.id}`));
   const detail = await app.inject({ method: 'GET', url: `/admin/assistant/logs/${entry.id}`, headers: auth });
@@ -284,7 +316,7 @@ test('the admin page shows the assistant settings and the clickable log', async 
     method: 'POST',
     url: '/admin/assistant',
     headers: { ...auth, 'content-type': 'application/x-www-form-urlencoded' },
-    payload: 'enabled=on&showModelSwitcher=on&models=google%2Fgemini-3.8-flash&providerSort=latency&freeCentsPerDay=5&paidCentsPerDay=15&assistantPerMinute=10&updateChecksPerMinute=30&downloadsPerHour=20&logRetentionDays=3',
+    payload: 'enabled=on&showModelSwitcher=on&modelId=google%2Fgemini-3.8-flash&modelLabel=&modelProvider=openrouter&modelEnabled=on&modelDescription=&modelTag=&modelTagKind=info&modelInputPrice=0&modelOutputPrice=0&providerSort=latency&freeCentsPerDay=5&paidCentsPerDay=15&assistantPerMinute=10&updateChecksPerMinute=30&downloadsPerHour=20&logRetentionDays=3',
   });
   assert.equal(saved.statusCode, 303);
   const settings = await store.settings();
@@ -401,4 +433,33 @@ test('the timetable card tool is offered and its calls and results are accepted'
     ],
   });
   assert.ok(parsed.value, parsed.error);
+});
+
+test('a switched-off model answers with the upstream error and sends nothing to a provider', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    throw new Error('must not be called');
+  };
+  const { app, store } = await setup({ fetchImpl, settings: { models: [{ id: 'google/off-model', label: 'Off', enabled: false }], defaultModel: 'google/off-model' } });
+  assert.deepEqual(events((await post(app, validBody)).body), [{ type: 'error', code: 'upstream' }]);
+  assert.equal(calls, 0);
+  assert.match((await store.logs())[0].error, /switched off/);
+});
+
+test('an Anthropic-compatible provider gets the messages format: system apart, tool results as user blocks', async () => {
+  const { toAnthropicRequest } = await import('../src/upstream.js');
+  const messages = [
+    { role: 'system', content: [{ type: 'text', text: 'Rules.' }, { type: 'text', text: 'Context.' }] },
+    { role: 'user', content: 'Was habe ich morgen?' },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'get_lessons', arguments: '{"from":"2026-11-11"}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: '[]' },
+  ];
+  const tools = [{ type: 'function', function: { name: 'get_lessons', description: 'd', parameters: { type: 'object' } } }];
+  const out = toAnthropicRequest(messages, tools, 900);
+  assert.equal(out.system, ['Rules.', '', 'Context.'].join('\n'));
+  assert.deepEqual(out.messages[1], { role: 'assistant', content: [{ type: 'tool_use', id: 'c1', name: 'get_lessons', input: { from: '2026-11-11' } }] });
+  assert.deepEqual(out.messages[2], { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'c1', content: '[]' }] });
+  assert.equal(out.tools[0].input_schema.type, 'object');
+  assert.equal(out.max_tokens, 900);
 });

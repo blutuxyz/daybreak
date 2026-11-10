@@ -1,3 +1,4 @@
+import { PROVIDER_TYPES, TAG_KINDS } from './assistant-store.js';
 import { escapeHtml } from './page.js';
 import { FEATURES, LEVELS, readSwitches } from './announcements.js';
 
@@ -76,7 +77,62 @@ function cents(value) {
   return `${Number(value ?? 0).toFixed(3)} ¢`;
 }
 
-/** The assistant: OpenRouter models, routing, limits, logging, and the request log. */
+/** One row per provider; two blank rows to add more. A blank key keeps the stored one. */
+function providerRows(providers) {
+  const rows = [...providers, null, null];
+  return rows
+    .map((provider) => {
+      const type = provider?.type ?? 'openai';
+      const typeOptions = PROVIDER_TYPES.map(
+        (item) => `<option value="${item.id}"${item.id === type ? ' selected' : ''}>${escapeHtml(item.label)}</option>`,
+      ).join('');
+      const keyHint = provider?.apiKey ? 'key set (blank keeps it)' : type === 'openrouter' ? 'key (blank: OPENROUTER_API_KEY)' : 'key';
+      return `<tr>
+<td><input type="hidden" name="providerId" value="${escapeHtml(provider?.id ?? '')}"><input name="providerName" value="${escapeHtml(provider?.name ?? '')}" placeholder="name" size="14"></td>
+<td><select name="providerType">${typeOptions}</select></td>
+<td><input name="providerBase" value="${escapeHtml(provider?.baseUrl ?? '')}" placeholder="https://… (blank: default)" size="28"></td>
+<td><input name="providerKey" type="password" autocomplete="off" placeholder="${escapeHtml(keyHint)}" size="20"></td>
+</tr>`;
+    })
+    .join('\n');
+}
+
+/** One row per model; three blank rows to add more. Switched-off models stay in the picker and answer with the upstream error. */
+function modelRows(models, providers) {
+  const rows = [...models, null, null, null];
+  return rows
+    .map((model) => {
+      const providerOptions = providers
+        .map((provider) => `<option value="${escapeHtml(provider.id)}"${model?.provider === provider.id ? ' selected' : ''}>${escapeHtml(provider.name)}</option>`)
+        .join('');
+      const tagOptions = TAG_KINDS.map(
+        (kind) => `<option value="${kind.id}"${(model?.tagKind ?? 'info') === kind.id ? ' selected' : ''}>${escapeHtml(kind.label)}</option>`,
+      ).join('');
+      return `<tr>
+<td><select name="modelEnabled"><option value="on"${!model || model.enabled ? ' selected' : ''}>On</option><option value="off"${model && !model.enabled ? ' selected' : ''}>Off</option></select></td>
+<td><input name="modelId" value="${escapeHtml(model?.id ?? '')}" placeholder="model id" size="22"></td>
+<td><input name="modelLabel" value="${escapeHtml(model?.label ?? '')}" placeholder="label" size="12"></td>
+<td><select name="modelProvider">${providerOptions}</select></td>
+<td><input name="modelDescription" value="${escapeHtml(model?.description ?? '')}" placeholder="shown on tap" size="24" maxlength="300"></td>
+<td><input name="modelTag" value="${escapeHtml(model?.tag ?? '')}" placeholder="tag" size="8" maxlength="24"></td>
+<td><select name="modelTagKind">${tagOptions}</select></td>
+<td><input name="modelInputPrice" type="number" min="0" step="any" value="${model?.inputPrice ?? 0}" size="6" title="US dollars per million input tokens (not reported by OpenRouter)"></td>
+<td><input name="modelOutputPrice" type="number" min="0" step="any" value="${model?.outputPrice ?? 0}" size="6" title="US dollars per million output tokens (not reported by OpenRouter)"></td>
+</tr>`;
+    })
+    .join('\n');
+}
+
+/** Previous and next page of the request log, with the page number. */
+function logPager(logs) {
+  if (logs.pages <= 1) return '';
+  const link = (page, label) => (page < 1 || page > logs.pages || page === logs.page
+    ? `<span class="hint">${label}</span>`
+    : `<a href="/admin?logPage=${page}#requests">${label}</a>`);
+  return `<p class="pager">${link(logs.page - 1, '← Newer')} <span class="hint">Page ${logs.page} of ${logs.pages} (${logs.total} requests)</span> ${link(logs.page + 1, 'Older →')}</p>`;
+}
+
+/** The assistant: providers, models, routing, limits, logging, and the paged request log. */
 function assistantSection(assistant) {
   if (!assistant) return '';
   const { settings, sorts, routings, efforts, keyConfigured, clientSwitchOn, unknownModels, usage, logs } = assistant;
@@ -86,7 +142,6 @@ function assistantSection(assistant) {
   const routingOptions = routings
     .map((routing) => `<option value="${routing.id}"${routing.id === settings.hiddenRouting ? ' selected' : ''}>${escapeHtml(routing.label)}</option>`)
     .join('');
-  const modelLines = settings.models.map((model) => (model.label && model.label !== model.id ? `${model.id} | ${model.label}` : model.id)).join('\n');
   const defaultOptions = settings.models
     .map((model) => `<option value="${escapeHtml(model.id)}"${model.id === settings.defaultModel ? ' selected' : ''}>${escapeHtml(model.label)} (${escapeHtml(model.id)})</option>`)
     .join('');
@@ -99,39 +154,49 @@ function assistantSection(assistant) {
   if (!clientSwitchOn) {
     warning = '<p class="hint">Client switch "AI assistant" is off: the app hides the assistant, and the server side is off as well.</p>';
   } else if (!keyConfigured) {
-    warning = '<p class="hint">OPENROUTER_API_KEY is not set: the assistant is off and the app hides it.</p>';
+    warning = '<p class="hint">No provider has a key: the assistant is off and the app hides it. Add a key to a provider below (OpenRouter can use OPENROUTER_API_KEY).</p>';
   } else if (unknownModels === null) {
     warning = '<p class="hint">Could not read the OpenRouter model list to check the ids.</p>';
   } else if (unknownModels.length > 0) {
     warning = `<p class="hint">OpenRouter does not know: ${unknownModels.map(escapeHtml).join(', ')}. Requests with these models fail.</p>`;
   }
-  const rows = logs.length === 0
+  const rows = logs.total === 0
     ? '<p class="hint">No requests logged yet.</p>'
     : `<div class="scroll"><table>
 <tr><th>Time (UTC)</th><th>Status</th><th>Model</th><th>User</th><th>Cost</th><th>Tokens in/out</th><th>Duration</th></tr>
-${logs
+${logs.entries
   .map(
     (entry) => `<tr><td><a href="/admin/assistant/logs/${escapeHtml(entry.id)}">${escapeHtml(entry.at.replace('T', ' ').slice(0, 19))}</a></td><td>${escapeHtml(entry.status)}</td><td>${escapeHtml(entry.model || '–')}</td><td>${escapeHtml(entry.user)}${entry.paid ? ' (paid)' : ''}</td><td>${cents(entry.costCents)}</td><td>${entry.promptTokens ?? '–'} / ${entry.completionTokens ?? '–'}</td><td>${(entry.durationMs / 1000).toFixed(1)} s</td></tr>`,
   )
   .join('\n')}
 </table></div>`;
-  return `<h2>AI assistant (OpenRouter)</h2>
+  return `<h2>AI assistant</h2>
 ${warning}
 <p class="hint">Today: ${usage.users} users, ${cents(usage.cents)} spent. Budgets are per user and UTC day.</p>
 <form method="post" action="/admin/assistant">
 <p>${checkbox('enabled', settings.enabled, 'Server-side switch: the assistant answers')}</p>
+<h3>Providers</h3>
+<p class="hint">OpenRouter, or any server with an OpenAI-compatible chat completions API or an Anthropic-compatible messages API. Give the address of the server, not of one endpoint.</p>
+<div class="scroll"><table>
+<tr><th>Name</th><th>Type</th><th>Address</th><th>API key</th></tr>
+${providerRows(settings.providers)}
+</table></div>
+<h3>Models</h3>
+<p class="hint">A model that is Off stays in the app's picker but answers with the upstream error. The tag and description show next to the model in the app: an Info tag is a quiet badge, an Alarm tag is loud, and the description opens when the badge is tapped. Prices are US dollars per million tokens; set them for providers that do not report a cost, so the budget counts.</p>
+<div class="scroll"><table>
+<tr><th>On</th><th>Model id</th><th>Label</th><th>Provider</th><th>Description</th><th>Tag</th><th>Tag kind</th><th>Input $/M</th><th>Output $/M</th></tr>
+${modelRows(settings.models, settings.providers)}
+</table></div>
 <p>${checkbox('showModelSwitcher', settings.showModelSwitcher, 'Show the model switcher in the app')}</p>
 <p><label>While the switcher is hidden, users get <select name="hiddenRouting">${routingOptions}</select></label></p>
-<p><label>Models the app may use, one per line: <code>openrouter/model-id | label</code>
-<textarea name="models" rows="5" spellcheck="false">${escapeHtml(modelLines)}</textarea></label></p>
 <p><label>Default model <select name="defaultModel">${defaultOptions}</select></label> <span class="hint">Save once after changing the list to pick from it.</span></p>
-<p><label>Provider routing <select name="providerSort">${sortOptions}</select></label></p>
+<p><label>Provider routing (OpenRouter) <select name="providerSort">${sortOptions}</select></label></p>
 <p>${checkbox('aiTitles', settings.aiTitles, 'Name new chats with a short AI title (one extra small request per chat, counted in the budget)')}</p>
 <p>${checkbox('showEffortSelector', settings.showEffortSelector, 'Show the reasoning-effort picker in the app')}</p>
 <p><label>Levels the app offers <span class="hint">(${efforts.join(', ')}; not every model takes every level)</span> <input name="efforts" value="${escapeHtml(settings.efforts.join(', '))}" size="24"></label></p>
 <p><label>Default effort <select name="defaultEffort">${effortOptions}</select></label></p>
-<p>${checkbox('allowFallbacks', settings.allowFallbacks, 'Allow a fallback to another provider when one fails')}</p>
-<p>${checkbox('denyDataCollection', settings.denyDataCollection, 'Only providers that do not store or train on prompts')}</p>
+<p>${checkbox('allowFallbacks', settings.allowFallbacks, 'Allow a fallback to another provider when one fails (OpenRouter)')}</p>
+<p>${checkbox('denyDataCollection', settings.denyDataCollection, 'Only providers that do not store or train on prompts (OpenRouter)')}</p>
 <h3>Limits</h3>
 <div class="grid">
 ${number('freeCentsPerDay', 'Budget per user and day, free (US cents)')}
@@ -144,9 +209,10 @@ ${number('downloadsPerHour', 'Downloads per IP and hour')}
 <p><label>Keep the log for <input name="logRetentionDays" type="number" min="0" step="any" value="${escapeHtml(String(settings.logRetentionDays))}"> days (at most 30)</label></p>
 <p><button type="submit">Save assistant settings</button></p>
 </form>
-<h3>Requests</h3>
+<h3 id="requests">Requests</h3>
 <form method="post" action="/admin/assistant/logs/clear"><button type="submit" class="plain">Clear log</button></form>
 ${rows}
+${logPager(logs)}
 `;
 }
 

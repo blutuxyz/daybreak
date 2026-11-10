@@ -52,7 +52,16 @@ data class ChatMessage(
 )
 
 /** A model the admin allows, as the app shows it in the picker. */
-data class AssistantModel(val id: String, val label: String)
+data class AssistantModel(
+    val id: String,
+    val label: String,
+    /** Shown when the tag badge is tapped; empty when the admin wrote none. */
+    val description: String = "",
+    /** The badge next to the model, e.g. "Free"; null when there is none. */
+    val tag: String? = null,
+    /** Alarm badges are loud; info badges are quiet. */
+    val tagAlarm: Boolean = false,
+)
 
 /** The answer of `GET /v1/assistant/models`. */
 data class AssistantModels(
@@ -85,8 +94,11 @@ enum class AssistantFailure {
     /** OpenRouter or the model's provider failed, or the assistant is switched off on the server. */
     UPSTREAM,
 
-    /** Not available right now. Also what a used-up daily budget looks like: the app does not say more. */
+    /** Not available right now. */
     UNAVAILABLE,
+
+    /** The day's usage is used up: the answer comes back tomorrow. Shown as a sheet, not as an error. */
+    LIMIT,
 
     /** The question or chat was not accepted (too long, for example). */
     REJECTED,
@@ -254,8 +266,9 @@ object AssistantProtocol {
         }
     }
 
-    /** Maps the server's error code to a [AssistantFailure]. A used-up budget ("limit") looks like any outage. */
+    /** Maps the server's error code to a [AssistantFailure]. */
     fun failureFor(code: String?): AssistantFailure = when (code) {
+        "limit" -> AssistantFailure.LIMIT
         "upstream" -> AssistantFailure.UPSTREAM
         "busy", "too_many_requests" -> AssistantFailure.BUSY
         "bad_request", "context_too_long", "message_too_long", "too_many_messages", "bad_attachment",
@@ -291,7 +304,13 @@ object AssistantProtocol {
         val models = (json.get("models") as? JsonArray)?.mapNotNull { element ->
             val model = element as? JsonObject ?: return@mapNotNull null
             val id = model.string("id") ?: return@mapNotNull null
-            AssistantModel(id, model.string("label") ?: id)
+            AssistantModel(
+                id = id,
+                label = model.string("label") ?: id,
+                description = model.string("description").orEmpty(),
+                tag = model.string("tag")?.takeIf { it.isNotBlank() },
+                tagAlarm = model.string("tagKind") == "alarm",
+            )
         }.orEmpty()
         val show = json.get("showSwitcher")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: models.isNotEmpty()
         val efforts = (json.get("efforts") as? JsonArray)?.mapNotNull { it.takeIf { e -> e.isJsonPrimitive }?.asString }.orEmpty()

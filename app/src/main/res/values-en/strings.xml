@@ -737,12 +737,12 @@
     <string name="messages_detail_title">Message</string>
 
     <!-- AI assistant, tutorial, AMOLED -->
-    <string name="assistant_title">AI assistant</string>
+    <string name="assistant_title">Dawn</string>
     <string name="assistant_subtitle">Beta · answers from your timetable</string>
     <string name="assistant_row_desc">Questions about lessons, exams, study topics and homework</string>
     <string name="assistant_new_chat">New chat</string>
     <string name="assistant_model">Choose model</string>
-    <string name="assistant_welcome_title">Ask Daybreak</string>
+    <string name="assistant_welcome_title">Ask Dawn</string>
     <string name="assistant_welcome_body">Ask in your own words about lessons, substitutions, exams or what to study. You can attach photos and files too.</string>
     <string name="assistant_suggestion_tomorrow">What do I have tomorrow?</string>
     <string name="assistant_suggestion_exam">When is my next exam?</string>
@@ -750,6 +750,8 @@
     <string name="assistant_suggestion_changes">Is anything cancelled this week?</string>
     <string name="assistant_suggestion_absences">How much have I been absent?</string>
     <string name="assistant_privacy_note">Your question, attachments and timetable go to an AI service.</string>
+    <string name="assistant_disclaimer">Dawn is AI and can make mistakes. Check important details.</string>
+    <string name="assistant_history_more">Show more (%1$d)</string>
     <string name="assistant_unavailable">The assistant is not available in this version.</string>
     <string name="assistant_input_hint">Ask something…</string>
     <string name="assistant_send">Send</string>
@@ -762,6 +764,14 @@
     <string name="assistant_attach">Attach</string>
     <string name="assistant_attach_photo">Photo</string>
     <string name="assistant_attach_file">File (PDF or text)</string>
+    <string name="assistant_attach_camera">Camera</string>
+    <string name="assistant_limit_title">Daily limit reached</string>
+    <string name="assistant_limit_body">Today\'s assistant usage is used up. It is available again tomorrow.</string>
+    <string name="assistant_limit_ok">Got it</string>
+    <string name="assistant_error_limit">Today\'s assistant limit is reached.</string>
+    <string name="assistant_delete_confirm">Delete this chat?</string>
+    <string name="assistant_delete_cancel">Cancel</string>
+    <string name="assistant_delete_yes">Delete</string>
     <string name="assistant_attach_remove">Remove</string>
     <string name="assistant_attach_too_large">The file is too large (5 MB at most).</string>
     <string name="assistant_attach_unsupported">That file type does not work. Photos, PDFs and text files do.</string>

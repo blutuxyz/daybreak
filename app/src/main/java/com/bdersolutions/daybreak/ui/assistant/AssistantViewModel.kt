@@ -79,6 +79,8 @@ data class AssistantUiState(
     val selectedEffort: String? = null,
     /** The saved chat this is, or null for a new chat that has no question yet. */
     val chatId: Long? = null,
+    /** True right after a saved chat was opened: its latest answer is played in word by word. */
+    val opened: Boolean = false,
     val history: List<ChatSummary> = emptyList(),
     /** The chat's name when it is not simply the first question (an AI title or the student's own). */
     val chatTitle: String? = null,
@@ -226,6 +228,7 @@ class AssistantViewModel(
                     drafts = drafts,
                     cards = chat.cards,
                     chatId = chat.id,
+                    opened = true,
                     chatTitle = chat.title.takeIf { chat.titleSource != TitleSource.AUTO },
                     titleSource = chat.titleSource,
                     models = it.models,
@@ -287,6 +290,11 @@ class AssistantViewModel(
         _state.update { it.copy(staged = it.staged - attachment) }
     }
 
+    /** The student has read the usage sheet, or the error card was closed. */
+    fun dismissFailure() {
+        _state.update { it.copy(failure = null) }
+    }
+
     fun send(text: String, language: String) {
         val current = _state.value
         val question = text.trim()
@@ -297,6 +305,7 @@ class AssistantViewModel(
                 messages = it.messages + message,
                 staged = emptyList(),
                 waiting = true,
+                opened = false,
                 failure = null,
                 chatId = it.chatId ?: System.currentTimeMillis(),
             )

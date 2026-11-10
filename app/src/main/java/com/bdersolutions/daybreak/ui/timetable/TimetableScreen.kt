@@ -28,7 +28,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -93,6 +96,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import com.bdersolutions.daybreak.ui.assistant.DaybreakMark
 import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -428,15 +432,6 @@ fun TimetableScreen(
                         )
                     },
                     actions = {
-                        if (onOpenAssistant != null) {
-                            IconButton(onClick = onOpenAssistant) {
-                                Icon(
-                                    Icons.Outlined.AutoAwesome,
-                                    contentDescription = stringResource(R.string.assistant_title),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
                         IconButton(onClick = { showSearch = true }) {
                             Icon(
                                 Icons.Outlined.Search,
@@ -478,6 +473,28 @@ fun TimetableScreen(
                                 Icons.Outlined.SwapHoriz,
                                 contentDescription = stringResource(R.string.target_picker_title),
                             )
+                        }
+                        // The assistant sits at the far right, in a fixed amber that no theme colour uses, so it stands out.
+                        // It appears once the server confirms the assistant: its width opens with a spring, so the icons
+                        // to its left glide over instead of jumping.
+                        val assistantLabel = stringResource(R.string.assistant_title)
+                        AnimatedVisibility(
+                            visible = onOpenAssistant != null,
+                            enter = expandHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f), expandFrom = Alignment.End) +
+                                fadeIn(tween(220, delayMillis = 80)) +
+                                scaleIn(spring(dampingRatio = 0.7f, stiffness = 420f), initialScale = 0.6f),
+                            exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = 480f), shrinkTowards = Alignment.End) +
+                                fadeOut(tween(120)) +
+                                scaleOut(tween(140), targetScale = 0.6f),
+                        ) {
+                            IconButton(onClick = { onOpenAssistant?.invoke() }) {
+                                DaybreakMark(
+                                    size = 24,
+                                    plain = true,
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier.semantics { contentDescription = assistantLabel },
+                                )
+                            }
                         }
                     },
                     scrollBehavior = scrollBehavior,
