@@ -199,7 +199,7 @@ class AssistantTest {
         )
         assertEquals(AssistantEvent.Failure(AssistantFailure.UPSTREAM), AssistantProtocol.parseEvent("""data: {"type":"error","code":"upstream"}"""))
         // A used-up budget looks like any other outage.
-        assertEquals(AssistantEvent.Failure(AssistantFailure.UNAVAILABLE), AssistantProtocol.parseEvent("""data: {"type":"error","code":"limit"}"""))
+        assertEquals(AssistantEvent.Failure(AssistantFailure.LIMIT), AssistantProtocol.parseEvent("""data: {"type":"error","code":"limit"}"""))
         assertNull(AssistantProtocol.parseEvent(": keep-alive"))
         assertNull(AssistantProtocol.parseEvent("data: not json"))
 

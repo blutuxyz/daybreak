@@ -1,4 +1,15 @@
 import { userKey } from './assistant-store.js';
+import {
+  UpstreamError,
+  completeOnce,
+  connectionFor,
+  costCents,
+  providerFor,
+  streamAnthropic,
+  streamChatCompletions,
+} from './upstream.js';
+
+export { UpstreamError, streamOpenRouter } from './upstream.js';
 
 /**
  * The AI assistant of the app ("Frag Daybreak" / "Ask Daybreak"), served through OpenRouter.
@@ -149,7 +160,7 @@ How to work:
 - Answer in the language the app uses (<app_language>) unless the student writes in another one.
 - Be brief and friendly, like a helpful classmate: usually one to four short sentences or a short list. 24-hour times (08:00). Name days by weekday and date.
 - Format with Markdown: short paragraphs, "- " bullet lists, "1. " numbered steps for worked solutions, **bold** for a key time, room or result. A "### " heading only to split a longer explanation, a small table only to compare a few things side by side. Code blocks only for real program code.
-- Maths: always LaTeX inside delimiters, $...$ inline and $$...$$ on a line of its own for bigger formulas; the app renders it. Never write LaTeX commands (\\frac, \\sqrt, ^{...}) without delimiters, never put formulas in code blocks or backticks, and use \\begin{aligned}...\\end{aligned} only inside $$...$$. Write a plain number with a unit as text (5 €, 3 cm), not as a formula.
+- Maths: write every formula in LaTeX between dollar signs: $x^{2}$ inline, and $$...$$ on a line of its own for bigger formulas, for example $$x = \\frac{-b \\pm \\sqrt{b^{2}-4ac}}{2a}$$. Close every brace, and keep one formula inside one $...$ or $$...$$ pair, never split across pairs. The app renders it as the answer streams. Never write LaTeX commands (\\frac, \\sqrt, ^{...}) without delimiters, never put formulas in code blocks or backticks, and use \\begin{aligned}...\\end{aligned} only inside $$...$$. Write a plain number with a unit as text (5 €, 3 cm), not as a formula.
 - For homework or quiz questions, explain the steps so the student learns the method, not only the final answer.
 - You cannot change anything in WebUntis or see other students' data.
 
@@ -323,114 +334,6 @@ export function buildOpenRouterBody({ model, request, settings }) {
   };
 }
 
-/** Reads a server-sent event stream line by line from a fetch body. */
-async function* sseLines(body) {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let index;
-    while ((index = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, index).replace(/\r$/, '');
-      buffer = buffer.slice(index + 1);
-      yield line;
-    }
-  }
-  if (buffer) yield buffer;
-}
-
-/** An error from OpenRouter or the model's provider. */
-export class UpstreamError extends Error {
-  constructor(message, { status, code = 'upstream' } = {}) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/**
- * Streams one completion from OpenRouter. Yields { type: 'text' }, then at the end
- * { type: 'finish', toolCalls, usage, provider, model }. Throws UpstreamError.
- */
-export async function* streamOpenRouter({ fetchImpl = fetch, apiKey, baseUrl, referer, body, signal }) {
-  let response;
-  try {
-    response = await fetchImpl(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        'HTTP-Referer': referer,
-        'X-Title': 'Daybreak',
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    throw new UpstreamError(`could not reach OpenRouter: ${error?.message ?? error}`);
-  }
-  if (!response.ok) {
-    let detail = '';
-    try {
-      const parsed = JSON.parse(await response.text());
-      detail = parsed?.error?.message ?? JSON.stringify(parsed).slice(0, 500);
-    } catch {
-      detail = '';
-    }
-    throw new UpstreamError(`OpenRouter answered ${response.status}${detail ? `: ${detail}` : ''}`, {
-      status: response.status,
-      code: response.status === 429 ? 'busy' : 'upstream',
-    });
-  }
-
-  const calls = new Map();
-  let usage;
-  let provider;
-  let servedModel;
-  let finishReason;
-  for await (const line of sseLines(response.body)) {
-    if (!line.startsWith('data:')) continue;
-    const data = line.slice(5).trim();
-    if (data === '[DONE]') break;
-    let chunk;
-    try {
-      chunk = JSON.parse(data);
-    } catch {
-      continue;
-    }
-    if (chunk.error) {
-      throw new UpstreamError(`provider error: ${chunk.error.message ?? JSON.stringify(chunk.error).slice(0, 300)}`, {
-        status: chunk.error.code,
-      });
-    }
-    if (chunk.usage) usage = chunk.usage;
-    if (chunk.provider) provider = chunk.provider;
-    if (chunk.model) servedModel = chunk.model;
-    const choice = chunk.choices?.[0];
-    if (!choice) continue;
-    if (choice.finish_reason) finishReason = choice.finish_reason;
-    if (choice.finish_reason === 'error') throw new UpstreamError('provider ended the answer with an error');
-    const delta = choice.delta ?? {};
-    // Models that reason stream it as delta.reasoning before the answer (OpenRouter's format).
-    if (typeof delta.reasoning === 'string' && delta.reasoning) yield { type: 'reasoning', text: delta.reasoning };
-    if (typeof delta.content === 'string' && delta.content) yield { type: 'text', text: delta.content };
-    for (const call of delta.tool_calls ?? []) {
-      const key = call.index ?? 0;
-      const current = calls.get(key) ?? { id: '', name: '', arguments: '' };
-      if (call.id) current.id = call.id;
-      if (call.function?.name) current.name += call.function.name;
-      if (call.function?.arguments) current.arguments += call.function.arguments;
-      calls.set(key, current);
-    }
-  }
-  const toolCalls = [...calls.values()]
-    .filter((call) => call.name)
-    .map((call, index) => ({ id: call.id || `call_${index}`, name: call.name, arguments: call.arguments || '{}' }));
-  yield { type: 'finish', toolCalls, usage, provider, model: servedModel, finishReason };
-}
-
 /** Checks the body of POST /v1/assistant/title: { language, question, answer, model? }. */
 export function parseTitleRequest(body) {
   if (!body || typeof body !== 'object') return { error: 'bad_request' };
@@ -494,7 +397,8 @@ export class AssistantService {
   }
 
   get configured() {
-    return Boolean(this.config.openRouterApiKey);
+    const settings = this.store?.currentSettings?.() ?? DEFAULT_SETTINGS;
+    return settings.providers.some((provider) => connectionFor(provider, this.config).apiKey);
   }
 
   /**
@@ -544,7 +448,7 @@ export class AssistantService {
       efforts: settings.showEffortSelector ? settings.efforts : [],
       defaultEffort: settings.showEffortSelector ? settings.defaultEffort || settings.efforts.at(-1) || null : null,
       showSwitcher: settings.showModelSwitcher,
-      models: settings.showModelSwitcher ? settings.models : [],
+      models: settings.showModelSwitcher ? settings.models.map(publicModel) : [],
       defaultModel: settings.showModelSwitcher ? settings.defaultModel : null,
     };
   }
@@ -571,42 +475,28 @@ export class AssistantService {
     const limit = settings.freeCentsPerDay > settings.paidCentsPerDay ? settings.freeCentsPerDay : settings.paidCentsPerDay;
     if ((await this.store.spentToday(user)) >= limit) return null;
     const model = this.pickModel(settings, request.model);
-    if (!model) return null;
+    const upstream = model ? providerFor(settings, model) : null;
+    const conn = upstream ? connectionFor(upstream, this.config) : null;
+    // A switched-off model, or one without a provider and key, makes no title: the app keeps the first question.
+    if (!model || !model.enabled || !upstream || !conn.apiKey) return null;
     const started = this.now();
-    const provider = { allow_fallbacks: settings.allowFallbacks };
-    if (settings.providerSort !== 'default') provider.sort = settings.providerSort;
-    if (settings.denyDataCollection) provider.data_collection = 'deny';
     const entry = { user, paid: false, model: model.id, status: 'title', costCents: 0 };
     try {
-      const response = await this.fetchImpl(`${this.config.openRouterUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.openRouterApiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': this.config.publicUrl ?? 'https://github.com/blutuxyz/daybreak',
-          'X-Title': 'Daybreak',
-        },
-        body: JSON.stringify({
-          model: model.id,
-          max_tokens: 24,
-          provider,
-          messages: [
-            {
-              role: 'system',
-              content: `Write a short title of 2 to 5 words for this chat between a school student and an assistant, in ${request.language === 'de' ? 'German' : 'English'}. Reply with the title only: no quotes, no full stop, no emoji.`,
-            },
-            { role: 'user', content: `Question: ${request.question}
+      const { text, usage } = await completeOnce({
+        fetchImpl: this.fetchImpl,
+        provider: upstream,
+        conn,
+        modelId: model.id,
+        maxTokens: 24,
+        referer: this.config.publicUrl ?? 'https://github.com/blutuxyz/daybreak',
+        system: `Write a short title of 2 to 5 words for this chat between a school student and an assistant, in ${request.language === 'de' ? 'German' : 'English'}. Reply with the title only: no quotes, no full stop, no emoji.`,
+        user: `Question: ${request.question}
 
-Answer: ${request.answer}` },
-          ],
-        }),
+Answer: ${request.answer}`,
       });
-      if (!response.ok) throw new Error(`OpenRouter answered ${response.status}`);
-      const parsed = await response.json();
-      const cents = Number(parsed?.usage?.cost ?? 0) * 100;
-      entry.costCents = Number.isFinite(cents) ? cents : 0;
+      entry.costCents = costCents(upstream, model, usage);
       await this.store.addSpend(user, entry.costCents);
-      const title = cleanTitle(parsed?.choices?.[0]?.message?.content);
+      const title = cleanTitle(text);
       await this.store.addLog({ ...entry, durationMs: this.now() - started, ...(settings.logContent ? { content: { context: '', messages: [], answer: title, toolCalls: [] } } : {}) });
       return title || null;
     } catch (error) {
@@ -647,19 +537,30 @@ Answer: ${request.answer}` },
     entry.model = allowed.id;
     entry.effort = pickEffort(settings, request.effort);
 
+    // A model switched off on the admin page answers with the upstream error, for that model only; nothing is
+    // sent to a provider. The same goes for a model whose provider was removed or has no key.
+    const upstream = providerFor(settings, allowed);
+    const conn = upstream ? connectionFor(upstream, this.config) : null;
+    if (!allowed.enabled || !upstream || !conn.apiKey) {
+      send({ type: 'error', code: 'upstream' });
+      return finish({ status: 'error', error: allowed.enabled ? 'no provider with a key for this model' : 'model switched off on the admin page' });
+    }
+
     let answer = '';
     let reasoning = '';
     let toolCalls = [];
     try {
-      const body = buildOpenRouterBody({ model: allowed.id, request, settings });
-      for await (const event of streamOpenRouter({
+      const events = streamProvider({
         fetchImpl: this.fetchImpl,
-        apiKey: this.config.openRouterApiKey,
-        baseUrl: this.config.openRouterUrl,
+        provider: upstream,
+        conn,
+        modelId: allowed.id,
+        request,
+        settings,
         referer: this.config.publicUrl ?? 'https://github.com/blutuxyz/daybreak',
-        body,
         signal,
-      })) {
+      });
+      for await (const event of events) {
         if (event.type === 'text') {
           answer += event.text;
           send(event);
@@ -668,8 +569,7 @@ Answer: ${request.answer}` },
           send(event);
         } else {
           toolCalls = event.toolCalls;
-          const cents = Number(event.usage?.cost ?? 0) * 100;
-          entry.costCents = Number.isFinite(cents) ? cents : 0;
+          entry.costCents = costCents(upstream, allowed, event.usage);
           entry.promptTokens = event.usage?.prompt_tokens;
           entry.completionTokens = event.usage?.completion_tokens;
           entry.provider = event.provider;
@@ -690,4 +590,45 @@ Answer: ${request.answer}` },
       return finish({ status: 'error', error: String(error?.message ?? error).slice(0, 1000), upstreamStatus: error?.status });
     }
   }
+}
+
+/** What the app may show of a model: no provider, price or switch. */
+export function publicModel(model) {
+  return { id: model.id, label: model.label, description: model.description, tag: model.tag, tagKind: model.tagKind };
+}
+
+/** The request body for an OpenAI-compatible chat completions server. */
+export function buildOpenAiBody({ model, messages, tools }) {
+  return {
+    model,
+    stream: true,
+    stream_options: { include_usage: true },
+    max_tokens: ASSISTANT_LIMITS.maxOutputTokens,
+    messages,
+    tools,
+    tool_choice: 'auto',
+  };
+}
+
+/** Streams one answer from the provider a model is served by, in that provider's own format. */
+async function* streamProvider({ fetchImpl, provider, conn, modelId, request, settings, referer, signal }) {
+  const messages = toOpenRouterMessages(request);
+  const tools = TOOLS.map((tool) => ({ type: 'function', function: tool }));
+  if (provider.type === 'anthropic') {
+    yield* streamAnthropic({ fetchImpl, conn, modelId, messages, tools, maxTokens: ASSISTANT_LIMITS.maxOutputTokens, signal });
+    return;
+  }
+  const isOpenRouter = provider.type === 'openrouter';
+  const body = isOpenRouter
+    ? buildOpenRouterBody({ model: modelId, request, settings })
+    : buildOpenAiBody({ model: modelId, messages, tools });
+  yield* streamChatCompletions({
+    fetchImpl,
+    provider,
+    conn,
+    body,
+    referer,
+    signal,
+    label: isOpenRouter ? 'OpenRouter' : 'the provider',
+  });
 }

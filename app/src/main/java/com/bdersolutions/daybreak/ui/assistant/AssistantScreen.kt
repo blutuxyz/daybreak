@@ -1,6 +1,8 @@
 package com.bdersolutions.daybreak.ui.assistant
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -10,6 +12,10 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
@@ -26,6 +32,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,12 +45,11 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,7 +57,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -63,10 +73,15 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.PersonOff
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Description
@@ -78,6 +93,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MailOutline
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -117,12 +133,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -131,11 +145,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.assistant.AnswerMarkdown
+import com.bdersolutions.daybreak.data.assistant.AssistantModels
 import com.bdersolutions.daybreak.data.assistant.AttachmentProblem
 import com.bdersolutions.daybreak.data.assistant.AttachmentReader
 import com.bdersolutions.daybreak.data.assistant.AssistantFailure
@@ -170,7 +186,12 @@ fun AssistantScreen(
     var attachmentNote by remember { mutableStateOf<Int?>(null) }
     // A fresh list per chat: messages are numbered per chat, so the same number in another chat is another message.
     val listState = remember(state.chatId) { androidx.compose.foundation.lazy.LazyListState() }
+    // The messages of each chat as they were last on screen, for a chat that is leaving.
+    val chatSnapshots = remember { HashMap<String, List<ChatMessage>>() }
     var showHistory by remember { mutableStateOf(false) }
+    if (state.failure == AssistantFailure.LIMIT) {
+        UsageLimitSheet(onDismiss = viewModel::dismissFailure)
+    }
     if (showHistory) {
         HistorySheet(
             chats = state.history,
@@ -204,6 +225,11 @@ fun AssistantScreen(
     }
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { addUri(it) }
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { addUri(it) }
+    var cameraUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = cameraUri
+        if (saved && uri != null) addUri(uri)
+    }
 
     val send = { text: String ->
         if ((text.isNotBlank() || state.staged.isNotEmpty()) && !state.busy) {
@@ -224,12 +250,14 @@ fun AssistantScreen(
 
     // The rows of the list, counted here rather than read from the list's layout info: that info is only
     // updated by the next layout pass, so right after a change it still has the old number of rows.
+    val lastQuestion = shown.lastOrNull { it.role == ChatRole.USER }?.id
+    val last = shown.lastOrNull()
+    // An opened chat plays its latest answer in word by word; a new question or a new chat ends that (see openChat).
+    val replayId = if (state.opened) shown.lastOrNull { it.role == ChatRole.ASSISTANT && it.text.isNotBlank() }?.id else null
     val itemCount = shown.size +
         (if (state.runningTools.isNotEmpty()) 1 else 0) +
         (if (state.waiting) 1 else 0) +
         (if (state.failure != null) 1 else 0)
-    val lastQuestion = shown.lastOrNull { it.role == ChatRole.USER }?.id
-    val last = shown.lastOrNull()
     val growth = listOf(last?.text?.length, last?.reasoning?.length, last?.toolCalls?.size, state.streamingId, state.drafts, state.cards.size)
 
     // Follow the conversation while its end is in view. Once the student drags the list up to read, it
@@ -276,12 +304,10 @@ fun AssistantScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DaybreakMark(size = 24, plain = true)
+                        Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.assistant_title))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ModelPicker(state = state, onSelect = viewModel::selectModel)
-                            EffortPicker(state = state, onSelect = viewModel::selectEffort)
-                        }
                     }
                 },
                 navigationIcon = {
@@ -327,19 +353,38 @@ fun AssistantScreen(
                 .padding(innerPadding)
                 .imePadding(),
         ) {
+            // The welcome page and each chat move as a whole: switching chats, or starting a new one, makes the chat
+            // that goes away slide and fade out too. A leaving chat shows the messages it had when it was on screen.
+            val screenKey = when {
+                !viewModel.available -> "unavailable"
+                shown.isEmpty() && !state.busy -> "welcome"
+                else -> "chat-${state.chatId}"
+            }
+            if (screenKey.startsWith("chat-")) chatSnapshots[screenKey] = shown
             Box(modifier = Modifier.weight(1f)) {
-                if (!viewModel.available) {
+                AnimatedContent(
+                    targetState = screenKey,
+                    transitionSpec = {
+                        (fadeIn(tween(220, delayMillis = 90)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 12 })
+                            .togetherWith(fadeOut(tween(160)) + slideOutVertically(tween(200, easing = LinearOutSlowInEasing)) { -it / 12 })
+                            .using(SizeTransform(clip = false))
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "chatScreen",
+                ) { key ->
+                if (key == "unavailable") {
                     UnavailableState()
-                } else if (shown.isEmpty() && !state.busy) {
+                } else if (key == "welcome") {
                     WelcomeState(onSuggestion = send)
                 } else {
+                    val messages = chatSnapshots[key].orEmpty()
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(shown, key = { "${state.chatId}-${it.id}" }) { message ->
+                        items(messages, key = { "${state.chatId}-${it.id}" }) { message ->
                             Column(modifier = Modifier.animateItem(fadeInSpec = rowFadeIn, fadeOutSpec = null), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (message.role == ChatRole.ASSISTANT && message.reasoning.isNotBlank()) {
                                     ThinkingSection(
@@ -353,7 +398,11 @@ fun AssistantScreen(
                                     ToolActivity(names = recorded.map { it.name }, running = false)
                                 }
                                 if (message.text.isNotBlank() || message.attachments.isNotEmpty()) {
-                                    MessageBubble(message = message, streaming = message.id == state.streamingId)
+                                    MessageBubble(
+                                        message = message,
+                                        streaming = message.id == state.streamingId,
+                                        replay = message.id == replayId,
+                                    )
                                 }
                                 message.toolCalls.forEach { call ->
                                     state.cards[call.id]?.let { card -> AssistantCardView(card, onOpenLesson) }
@@ -379,12 +428,14 @@ fun AssistantScreen(
                         if (state.waiting) {
                             item(key = "typing") { TypingIndicator(statusRow()) }
                         }
-                        state.failure?.let { failure ->
+                        // A used-up day is explained in a sheet (see UsageLimitSheet), not in the chat.
+                        state.failure?.takeIf { it != AssistantFailure.LIMIT }?.let { failure ->
                             item(key = "failure") {
                                 FailureCard(failure = failure, onRetry = { viewModel.retry(language) }, modifier = statusRow())
                             }
                         }
                     }
+                }
                 }
             }
             if (viewModel.available) {
@@ -409,7 +460,19 @@ fun AssistantScreen(
                     },
                     onPickImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                     onPickFile = { pickFile.launch(arrayOf("application/pdf", "text/plain", "text/markdown", "text/csv")) },
+                    onTakePhoto = {
+                        // The picture goes to the app's own cache folder, through the file provider, and is read back on return.
+                        val file = File(context.cacheDir, "camera/photo-${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                        cameraUri = uri
+                        takePhoto.launch(uri)
+                    },
                     onRemove = viewModel::removeAttachment,
+                    models = state.models,
+                    selectedModel = state.selectedModel,
+                    selectedEffort = state.selectedEffort,
+                    onSelectModel = viewModel::selectModel,
+                    onSelectEffort = viewModel::selectEffort,
                 )
             }
         }
@@ -417,6 +480,13 @@ fun AssistantScreen(
 }
 
 private const val MAX_INPUT = 2000
+
+/** How many saved chats the history sheet shows at first, and how many more each "show more" adds. */
+private const val HISTORY_PAGE = 10
+
+/** The delay between two rows that "Show more" grows in, so they open one after another. */
+private const val GROW_STAGGER_MS = 45
+
 
 /** Tools that show a card; the card says what they did, so they get no "looked it up" line. */
 private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences")
@@ -437,6 +507,9 @@ private val RENAME_GAP = 6.dp
 
 /** How the history row and its buttons change between showing a chat and renaming it. */
 private val renameSpring = spring<IntSize>(dampingRatio = 0.85f, stiffness = 420f, visibilityThreshold = IntSize.VisibilityThreshold)
+
+/** How the chats below a deleted one move up: a soft spring, so they flow rather than snap. */
+private val historyPlacement = spring<IntOffset>(dampingRatio = 0.9f, stiffness = 340f, visibilityThreshold = IntOffset.VisibilityThreshold)
 
 /**
  * Rows fade in but never fade out. A removed row that fades out is kept and drawn where it was until its
@@ -473,71 +546,29 @@ private suspend fun LazyListState.revealEnd(lastIndex: Int, animated: Boolean) {
     }
 }
 
-/** The model picker under the title, when the server shows it; otherwise the plain subtitle. */
-@Composable
-private fun ModelPicker(state: AssistantUiState, onSelect: (String) -> Unit) {
-    val models = state.models
-    val subtitleStyle = MaterialTheme.typography.labelMedium
-    if (models == null || !models.showSwitcher) {
-        Text(stringResource(R.string.assistant_subtitle), style = subtitleStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    var open by remember { mutableStateOf(false) }
-    val current = models.models.firstOrNull { it.id == state.selectedModel } ?: models.models.firstOrNull()
-    Box {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = { open = true }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp), modifier = Modifier.height(24.dp)) {
-                Text(current?.label ?: "", style = subtitleStyle, color = MaterialTheme.colorScheme.primary)
-                Icon(Icons.Outlined.ExpandMore, contentDescription = stringResource(R.string.assistant_model), modifier = Modifier.size(16.dp))
-            }
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            models.models.forEach { model ->
-                DropdownMenuItem(
-                    text = { Text(model.label) },
-                    onClick = {
-                        open = false
-                        onSelect(model.id)
-                    },
-                    trailingIcon = if (model.id == current?.id) {
-                        { Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
+/** The first page of an empty chat: the mark, a short hello, and the questions most students ask as rows. */
 @Composable
 private fun WelcomeState(onSuggestion: (String) -> Unit) {
     val suggestions = listOf(
-        stringResource(R.string.assistant_suggestion_tomorrow),
-        stringResource(R.string.assistant_suggestion_exam),
-        stringResource(R.string.assistant_suggestion_study),
-        stringResource(R.string.assistant_suggestion_changes),
-        stringResource(R.string.assistant_suggestion_absences),
+        Icons.Outlined.Today to stringResource(R.string.assistant_suggestion_tomorrow),
+        Icons.Outlined.Event to stringResource(R.string.assistant_suggestion_exam),
+        Icons.Outlined.MenuBook to stringResource(R.string.assistant_suggestion_study),
+        Icons.Outlined.EventBusy to stringResource(R.string.assistant_suggestion_changes),
+        Icons.Outlined.PersonOff to stringResource(R.string.assistant_suggestion_absences),
     )
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Reveal(index = 0) { SparkleOrb(size = 88) }
+        Reveal(index = 0) { DaybreakMark(size = 84) }
         Spacer(Modifier.height(20.dp))
         Reveal(index = 1) {
             Text(
                 text = stringResource(R.string.assistant_welcome_title),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
             )
@@ -549,32 +580,17 @@ private fun WelcomeState(onSuggestion: (String) -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 320.dp),
             )
         }
-        Spacer(Modifier.height(24.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            suggestions.forEachIndexed { index, suggestion ->
-                Reveal(index = 3 + index) {
-                    Surface(
-                        onClick = { onSuggestion(suggestion) },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        Text(
-                            text = suggestion,
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
-                    }
-                }
+        Spacer(Modifier.height(28.dp))
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            suggestions.forEachIndexed { index, (icon, text) ->
+                Reveal(index = 3 + index) { SuggestionRow(icon = icon, text = text, onClick = { onSuggestion(text) }) }
             }
         }
         Spacer(Modifier.height(28.dp))
-        Reveal(index = 9) {
+        Reveal(index = 8) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.size(6.dp))
@@ -584,6 +600,37 @@ private fun WelcomeState(onSuggestion: (String) -> Unit) {
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
+        }
+    }
+}
+
+/** One suggested question: an icon in a tinted disc, the question, and an arrow. */
+@Composable
+private fun SuggestionRow(icon: ImageVector, text: String, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = colors.surfaceContainerLow,
+        contentColor = colors.onSurface,
+        border = BorderStroke(1.dp, colors.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(colors.secondaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = colors.onSecondaryContainer, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = colors.outline, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -629,55 +676,30 @@ internal fun Reveal(index: Int, content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** A slowly turning gradient disc with a sparkle: the assistant's face. */
 @Composable
-internal fun SparkleOrb(size: Int, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    val animations = motionAnimationsEnabled()
-    val transition = rememberInfiniteTransition(label = "orb")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (animations) 360f else 0f,
-        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
-        label = "orbAngle",
-    )
-    val breathe by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (animations) 1.06f else 1f,
-        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
-        label = "orbBreathe",
-    )
-    val brush = remember(colors) {
-        Brush.sweepGradient(listOf(colors.primary, colors.tertiary, colors.secondary, colors.primary))
-    }
-    Box(
-        modifier = modifier
-            .size(size.dp)
-            .graphicsLayer {
-                scaleX = breathe
-                scaleY = breathe
-            }
-            .clip(CircleShape)
-            .drawBehind { rotate(angle) { drawCircle(brush, radius = this.size.maxDimension) } },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size((size * 0.45f).dp))
-    }
-}
-
-@Composable
-private fun MessageBubble(message: ChatMessage, streaming: Boolean, modifier: Modifier = Modifier) {
+private fun MessageBubble(message: ChatMessage, streaming: Boolean, replay: Boolean = false, modifier: Modifier = Modifier) {
     val user = message.role == ChatRole.USER
     val colors = MaterialTheme.colorScheme
+    // While the answer streams, only the part released so far is on screen (see rememberRevealedLength).
+    val revealed = rememberRevealedLength(message.text.length, streaming = streaming && !user)
+    // An opened chat's latest answer plays in word by word, each word fading in quickly.
+    val playing = replay && !streaming && !user
+    val words = rememberWordRevealedLength(message.text, replay = playing)
+    val shownText = when {
+        playing -> message.text.take(words)
+        streaming && !user -> message.text.take(revealed)
+        else -> message.text
+    }
+    val fresh = rememberFreshText(
+        shownText.length,
+        active = (streaming || playing) && !user,
+        fadeNanos = if (playing) WORD_FADE_NANOS else FADE_NANOS,
+    )
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (user) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Top,
     ) {
-        if (!user) {
-            SparkleOrb(size = 28, modifier = Modifier.padding(top = 2.dp))
-            Spacer(Modifier.size(8.dp))
-        }
         Column(horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
             if (message.attachments.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
@@ -685,44 +707,56 @@ private fun MessageBubble(message: ChatMessage, streaming: Boolean, modifier: Mo
                 }
             }
             if (message.text.isNotBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(
-                        topStart = 20.dp,
-                        topEnd = 20.dp,
-                        bottomStart = if (user) 20.dp else 6.dp,
-                        bottomEnd = if (user) 6.dp else 20.dp,
-                    ),
-                    color = if (user) colors.primary else colors.surfaceContainerHigh,
-                    contentColor = if (user) colors.onPrimary else colors.onSurface,
-                    modifier = Modifier.widthIn(max = 320.dp),
-                ) {
-                    if (user) {
+                if (user) {
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp),
+                        color = colors.primary,
+                        contentColor = colors.onPrimary,
+                        modifier = Modifier.widthIn(max = 320.dp),
+                    ) {
                         Text(text = message.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
-                    } else {
-                        val blocks = rememberAnswerBlocks(message.text)
-                        val bubblePadding = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                        if (!streaming && remember(blocks) { AnswerMarkdown.hasMath(blocks) }) {
-                            // Formulas: drawn by KaTeX once the answer is complete; the plain answer holds the place until then.
-                            val palette = MathPalette(
-                                text = colors.onSurface,
-                                accent = colors.primary,
-                                muted = colors.onSurfaceVariant,
-                                codeBackground = colors.surfaceContainerHighest,
-                                divider = colors.outlineVariant,
-                            )
-                            MathText(
-                                blocks = blocks,
-                                palette = palette,
-                                modifier = bubblePadding,
-                                placeholder = { AnswerText(blocks, streaming = false) },
-                            )
-                        } else {
-                            AnswerText(blocks, streaming = streaming, modifier = bubblePadding)
-                        }
                     }
+                } else {
+                    // The answer sits directly in the chat, without a card behind it.
+                    AnswerContent(
+                        text = shownText,
+                        // Streaming and the replay of an opened chat both fade the newest text in.
+                        streaming = (streaming || playing) && !user,
+                        fresh = fresh,
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * An assistant answer, with or without formulas. Formulas are drawn by KaTeX as soon as their delimiters are
+ * there, also while the answer streams; the plain text holds the place until the formula page has drawn.
+ */
+@Composable
+private fun AnswerContent(text: String, streaming: Boolean, fresh: FreshText?, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val blocks = rememberAnswerBlocks(text)
+    val hasMath = remember(blocks) { AnswerMarkdown.hasMath(blocks) }
+    if (hasMath) {
+        val palette = MathPalette(
+            text = colors.onSurface,
+            accent = colors.primary,
+            muted = colors.onSurfaceVariant,
+            codeBackground = colors.surfaceContainerHighest,
+            divider = colors.outlineVariant,
+        )
+        MathText(
+            blocks = blocks,
+            palette = palette,
+            modifier = modifier,
+            fresh = if (streaming) fresh else null,
+            placeholder = { AnswerText(blocks, streaming = false, modifier = Modifier.fillMaxWidth()) },
+        )
+    } else {
+        AnswerText(blocks, streaming = streaming, modifier = modifier, fresh = if (streaming) fresh else null)
     }
 }
 
@@ -794,33 +828,33 @@ internal fun typingDotKeyframes(dot: Int) = keyframes {
 
 internal const val TYPING_CYCLE_MS = 1200
 
+/**
+ * The generating indicator: one thin ring in the primary colour that breathes in and out while the answer is being
+ * made. No card and no mark around it; it sits where the answer will appear.
+ */
 @Composable
 internal fun TypingIndicator(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "typing")
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        SparkleOrb(size = 28)
-        Spacer(Modifier.size(8.dp))
-        Surface(shape = RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                repeat(3) { dot ->
-                    val lift by transition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(typingDotKeyframes(dot)),
-                        label = "dot$dot",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .graphicsLayer {
-                                translationY = -lift * 5.dp.toPx()
-                                alpha = 0.45f + 0.55f * lift
-                            }
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
-                    )
+    val colors = MaterialTheme.colorScheme
+    val animations = motionAnimationsEnabled()
+    val transition = rememberInfiniteTransition(label = "typingRing")
+    val breathe by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (animations) 1f else 0f,
+        animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "typingRingBreathe",
+    )
+    Row(modifier = modifier.fillMaxWidth().padding(start = 4.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer {
+                    val scale = 0.7f + 0.3f * breathe
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 0.35f + 0.65f * breathe
                 }
-            }
-        }
+                .border(width = 2.dp, color = colors.primary, shape = CircleShape),
+        )
     }
 }
 
@@ -828,7 +862,7 @@ internal fun TypingIndicator(modifier: Modifier = Modifier) {
 @Composable
 private fun ToolActivity(names: List<String>, running: Boolean, modifier: Modifier = Modifier) {
     val labels = names.distinct().map { toolLabel(it) }
-    Row(modifier = modifier.padding(start = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (running) {
             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
         } else {
@@ -922,6 +956,7 @@ private fun FailureCard(failure: AssistantFailure, onRetry: () -> Unit, modifier
         AssistantFailure.BUSY -> stringResource(R.string.assistant_error_busy)
         AssistantFailure.UPSTREAM -> stringResource(R.string.assistant_error_upstream)
         AssistantFailure.UNAVAILABLE -> stringResource(R.string.assistant_error_unavailable)
+        AssistantFailure.LIMIT -> stringResource(R.string.assistant_error_limit)
         AssistantFailure.REJECTED -> stringResource(R.string.assistant_error_rejected)
     }
     Surface(
@@ -942,7 +977,11 @@ private fun FailureCard(failure: AssistantFailure, onRetry: () -> Unit, modifier
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+/**
+ * The prompt: one rounded card with the text on top and, underneath, the attach button on the left and the
+ * model and effort choices and the send button on the right, as in the chat apps students know. The line
+ * under it says the answers can be wrong, and it is always there.
+ */
 @Composable
 private fun InputBar(
     value: String,
@@ -954,131 +993,153 @@ private fun InputBar(
     onStop: () -> Unit,
     onPickImage: () -> Unit,
     onPickFile: () -> Unit,
+    onTakePhoto: () -> Unit,
     onRemove: (ChatAttachment) -> Unit,
+    models: AssistantModels?,
+    selectedModel: String?,
+    selectedEffort: String?,
+    onSelectModel: (String) -> Unit,
+    onSelectEffort: (String) -> Unit,
 ) {
-    var menu by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.surface) {
+    val colors = MaterialTheme.colorScheme
+    val currentModel = models?.models?.firstOrNull { it.id == selectedModel } ?: models?.models?.firstOrNull()
+    val currentEffort = selectedEffort ?: models?.defaultEffort ?: models?.efforts?.firstOrNull()
+    // The model's description opens under the prompt when its tag is tapped; a new model closes it.
+    var describing by remember { mutableStateOf(false) }
+    LaunchedEffect(currentModel?.id) { describing = false }
+    val description = currentModel?.description.orEmpty()
+    Surface(color = colors.surface) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
         ) {
             AnimatedVisibility(visible = staged.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Row(
                     modifier = Modifier
-                        .padding(start = 48.dp, bottom = 8.dp)
+                        .padding(start = 8.dp, bottom = 8.dp)
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     staged.forEach { attachment -> AttachmentThumb(attachment, onRemove = { onRemove(attachment) }) }
                 }
             }
-            Row(verticalAlignment = Alignment.Bottom) {
-                Box(modifier = Modifier.padding(bottom = 4.dp)) {
-                    IconButton(onClick = { menu = true }, enabled = canAttach && !busy) {
-                        Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.assistant_attach))
-                    }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.assistant_attach_photo)) },
-                            leadingIcon = { Icon(Icons.Outlined.AddPhotoAlternate, contentDescription = null) },
-                            onClick = {
-                                menu = false
-                                onPickImage()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.assistant_attach_file)) },
-                            leadingIcon = { Icon(Icons.Outlined.AttachFile, contentDescription = null) },
-                            onClick = {
-                                menu = false
-                                onPickFile()
-                            },
-                        )
-                    }
+            AnimatedVisibility(
+                visible = describing && description.isNotBlank(),
+                enter = expandVertically(tween(260, easing = FastOutSlowInEasing)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200, easing = LinearOutSlowInEasing)) + fadeOut(tween(140)),
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    color = colors.secondaryContainer,
+                    contentColor = colors.onSecondaryContainer,
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
                 }
-                TextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.assistant_input_hint)) },
-                    maxLines = 5,
-                    shape = RoundedCornerShape(26.dp),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                    ),
-                )
-                Spacer(Modifier.size(8.dp))
-                AnimatedContent(
-                    targetState = busy,
-                    transitionSpec = {
-                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.6f)).togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.6f))
-                    },
-                    label = "sendStop",
-                    modifier = Modifier.padding(bottom = 4.dp),
-                ) { isBusy ->
-                    if (isBusy) {
-                        FilledIconButton(
-                            onClick = onStop,
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            ),
-                        ) {
-                            Icon(Icons.Rounded.Stop, contentDescription = stringResource(R.string.assistant_stop))
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = colors.surfaceContainerHigh,
+            ) {
+                Column(modifier = Modifier.padding(start = 6.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)) {
+                    TextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(R.string.assistant_input_hint)) },
+                        maxLines = 6,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { onSend() }),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                        ),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AttachMenu(
+                            enabled = canAttach && !busy,
+                            onPhoto = onPickImage,
+                            onCamera = onTakePhoto,
+                            onFile = onPickFile,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (models != null && models.showSwitcher && currentModel != null) {
+                            PickerChip(
+                                current = currentModel.label,
+                                options = models.models.map { PickerOption(it.id, it.label, it.tag, it.tagAlarm) },
+                                selectedId = currentModel.id,
+                                onSelect = onSelectModel,
+                                tag = currentModel.tag,
+                                tagAlarm = currentModel.tagAlarm,
+                                onTagLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                                onChipLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                                onInfoClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                            )
                         }
-                    } else {
-                        FilledIconButton(onClick = onSend, enabled = value.isNotBlank() || staged.isNotEmpty(), modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = stringResource(R.string.assistant_send))
+                        if (models != null && models.showEffort && currentEffort != null) {
+                            PickerChip(
+                                current = effortLabel(currentEffort),
+                                options = models.efforts.map { PickerOption(it, effortLabel(it)) },
+                                selectedId = currentEffort,
+                                onSelect = onSelectEffort,
+                                icon = Icons.Outlined.Psychology,
+                            )
+                        }
+                        Spacer(Modifier.size(6.dp))
+                        AnimatedContent(
+                            targetState = busy,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.6f)).togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.6f))
+                            },
+                            label = "sendStop",
+                        ) { isBusy ->
+                            if (isBusy) {
+                                FilledIconButton(
+                                    onClick = onStop,
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = colors.secondaryContainer,
+                                        contentColor = colors.onSecondaryContainer,
+                                    ),
+                                ) {
+                                    Icon(Icons.Rounded.Stop, contentDescription = stringResource(R.string.assistant_stop))
+                                }
+                            } else {
+                                FilledIconButton(
+                                    onClick = onSend,
+                                    enabled = value.isNotBlank() || staged.isNotEmpty(),
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = stringResource(R.string.assistant_send))
+                                }
+                            }
                         }
                     }
                 }
             }
+            Text(
+                text = stringResource(R.string.assistant_disclaimer),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.outline,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 2.dp),
+            )
         }
     }
 }
 
-
-/** The reasoning-effort picker next to the model, when the server shows it. */
-@Composable
-private fun EffortPicker(state: AssistantUiState, onSelect: (String) -> Unit) {
-    val models = state.models ?: return
-    if (!models.showEffort) return
-    var open by remember { mutableStateOf(false) }
-    val current = state.selectedEffort ?: models.defaultEffort ?: models.efforts.firstOrNull() ?: return
-    Box {
-        TextButton(onClick = { open = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.height(24.dp)) {
-            Icon(Icons.Outlined.Psychology, contentDescription = stringResource(R.string.assistant_effort), modifier = Modifier.size(16.dp))
-            Spacer(Modifier.size(4.dp))
-            Text(effortLabel(current), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            models.efforts.forEach { effort ->
-                DropdownMenuItem(
-                    text = { Text(effortLabel(effort)) },
-                    onClick = {
-                        open = false
-                        onSelect(effort)
-                    },
-                    trailingIcon = if (effort == current) {
-                        { Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun effortLabel(effort: String): String = when (effort) {
@@ -1107,7 +1168,21 @@ private fun HistorySheet(
 ) {
     val haptics = LocalHaptics.current
     var renamingId by remember { mutableStateOf<Long?>(null) }
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+    var deletingId by remember { mutableStateOf<Long?>(null) }
+    // Always fully open: a sheet that sizes itself to its content moved its top edge up in steps each time
+    // "Show more" made the list taller. Opened at full height, it stays put and the list scrolls inside it.
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetScope = rememberCoroutineScope()
+    // Choosing a chat slides the sheet away first, then opens the chat; removing the sheet at once cut the animation.
+    val pick: (Long) -> Unit = { id ->
+        sheetScope.launch {
+            sheetState.hide()
+            onOpen(id)
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+      // A fixed height (the list scrolls inside it), so growing the list never moves the sheet's edge.
+      Column(modifier = Modifier.fillMaxHeight(0.92f)) {
         Text(
             text = stringResource(R.string.assistant_history),
             style = MaterialTheme.typography.titleLarge,
@@ -1122,25 +1197,111 @@ private fun HistorySheet(
                 modifier = Modifier.padding(24.dp),
             )
         }
-        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-            items(chats, key = { it.id }) { chat ->
-                HistoryRow(
-                    chat = chat,
-                    current = chat.id == currentId,
-                    editing = renamingId == chat.id,
-                    onOpen = { onOpen(chat.id) },
-                    onStartRename = { renamingId = chat.id },
-                    onDelete = { onDelete(chat.id) },
-                    onSave = { name ->
-                        haptics.perform(HapticEvent.TAP)
-                        onRename(chat.id, name)
-                        renamingId = null
-                    },
-                    onCancel = { renamingId = null },
-                    modifier = Modifier.animateItem(),
-                )
+        var shown by rememberSaveable { mutableStateOf(HISTORY_PAGE) }
+        // The rows that "Show more" just added (id -> place in that batch). They grow in one after another; the
+        // rows already on the list never animate. The transition states live here, not in the rows, so a row
+        // that scrolls out of view and back does not grow again.
+        val growing = remember { HashMap<Long, Int>() }
+        val entered = remember { HashMap<Long, MutableTransitionState<Boolean>>() }
+        LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(chats.take(shown), key = { it.id }) { chat ->
+                val state = entered.getOrPut(chat.id) { MutableTransitionState(growing[chat.id] == null) }
+                state.targetState = true
+                val delay = (growing[chat.id] ?: 0) * GROW_STAGGER_MS
+                AnimatedVisibility(
+                    visibleState = state,
+                    enter = expandVertically(
+                        animationSpec = tween(380, delayMillis = delay, easing = FastOutSlowInEasing),
+                        expandFrom = Alignment.Top,
+                    ) + fadeIn(tween(240, delayMillis = delay + 60, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(220, easing = LinearOutSlowInEasing)) + fadeOut(tween(160)),
+                    // No placement spring: the rows below must follow the growing row frame by frame, or they lag and overlap it.
+                    // Rows below a deleted one glide up with a spring. While a row is still growing in, its placement is
+                    // not animated: the rows below must follow its height frame by frame or they overlap it.
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = null,
+                        placementSpec = if (state.isIdle) historyPlacement else null,
+                    ),
+                ) {
+                    // The bin turns the row into a confirmation in place: the row gives way to the question, and the
+                    // answer deletes the chat. Nothing is deleted from a single tap.
+                    AnimatedContent(
+                        targetState = deletingId == chat.id,
+                        transitionSpec = {
+                            (fadeIn(tween(200, delayMillis = 60)) + scaleIn(spring(dampingRatio = 0.85f, stiffness = 420f), initialScale = 0.96f))
+                                .togetherWith(fadeOut(tween(90)))
+                                .using(SizeTransform(clip = false) { _, _ -> renameSpring })
+                        },
+                        label = "historyDelete",
+                    ) { confirming ->
+                        if (confirming) {
+                            ConfirmDeleteRow(
+                                title = chat.title,
+                                onCancel = {
+                                    haptics.perform(HapticEvent.TAP)
+                                    deletingId = null
+                                },
+                                onConfirm = {
+                                    haptics.perform(HapticEvent.MESSAGE_SENT)
+                                    deletingId = null
+                                    onDelete(chat.id)
+                                },
+                            )
+                        } else {
+                            HistoryRow(
+                                chat = chat,
+                                current = chat.id == currentId,
+                                editing = renamingId == chat.id,
+                                onOpen = { pick(chat.id) },
+                                onStartRename = { renamingId = chat.id },
+                                onDelete = {
+                                    haptics.perform(HapticEvent.TAP)
+                                    deletingId = chat.id
+                                },
+                                onSave = { name ->
+                                    haptics.perform(HapticEvent.TAP)
+                                    onRename(chat.id, name)
+                                    renamingId = null
+                                },
+                                onCancel = { renamingId = null },
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = "showMore") {
+                val remaining = chats.size - shown
+                // The button is always in the list, so it can shrink away when the last chats are shown.
+                AnimatedVisibility(
+                    visible = remaining > 0,
+                    enter = expandVertically(tween(320, easing = FastOutSlowInEasing)) + fadeIn(tween(260, delayMillis = 120)),
+                    exit = shrinkVertically(tween(260, easing = LinearOutSlowInEasing)) + fadeOut(tween(120)),
+                ) {
+                    TextButton(
+                        onClick = {
+                            haptics.perform(HapticEvent.TAP)
+                            chats.drop(shown).take(HISTORY_PAGE).forEachIndexed { index, chat -> growing[chat.id] = index }
+                            shown += HISTORY_PAGE
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        AnimatedContent(
+                            targetState = minOf(HISTORY_PAGE, remaining),
+                            transitionSpec = {
+                                (fadeIn(tween(200)) + slideInVertically { it / 2 })
+                                    .togetherWith(fadeOut(tween(120)) + slideOutVertically { -it / 2 })
+                            },
+                            label = "showMoreCount",
+                        ) { count ->
+                            Text(stringResource(R.string.assistant_history_more, count))
+                        }
+                    }
+                }
             }
         }
+      }
     }
 }
 
@@ -1245,6 +1406,98 @@ private fun HistoryRow(
     }
 }
 
+/**
+ * The day's usage is used up. The same kind of bottom sheet as the supporter popup: one icon, a short
+ * explanation, and one button to close it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UsageLimitSheet(onDismiss: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // Closing slides the sheet down first; the state only changes once it is gone, so the exit animates.
+    val close: () -> Unit = {
+        scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = close, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(colors.secondaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.Schedule, contentDescription = null, tint = colors.onSecondaryContainer, modifier = Modifier.size(30.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.assistant_limit_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.assistant_limit_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = close, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.assistant_limit_ok))
+            }
+        }
+    }
+}
+
+/** The question that replaces a chat's row while it is being deleted: cancel, or delete for good. */
+@Composable
+private fun ConfirmDeleteRow(title: String, onCancel: () -> Unit, onConfirm: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(CircleShape)
+            .background(colors.errorContainer)
+            .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.assistant_delete_confirm),
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.onErrorContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onErrorContainer.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.assistant_delete_cancel), tint = colors.onErrorContainer)
+        }
+        FilledIconButton(
+            onClick = onConfirm,
+            colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.error, contentColor = colors.onError),
+        ) {
+            Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_yes))
+        }
+    }
+}
+
 /** The name field while renaming: a pill, focused at once with the old name selected so typing replaces it. */
 @Composable
 private fun RenameField(
@@ -1291,12 +1544,12 @@ private fun ThinkingSection(reasoning: String, thinking: Boolean) {
         animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
         label = "thinkingPulse",
     )
-    Column(modifier = Modifier.padding(start = 36.dp).fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
                 .clickable(enabled = !thinking) { open = !open }
-                .padding(vertical = 4.dp, horizontal = 2.dp),
+                .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -1338,7 +1591,7 @@ private fun ThinkingSection(reasoning: String, thinking: Boolean) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
             )
         }
         AnimatedVisibility(visible = !thinking && open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {

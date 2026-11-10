@@ -744,12 +744,12 @@
     <string name="messages_detail_title">Nachricht</string>
 
     <!-- AI assistant, tutorial, AMOLED -->
-    <string name="assistant_title">KI-Assistent</string>
+    <string name="assistant_title">Dawn</string>
     <string name="assistant_subtitle">Beta · antwortet aus deinem Stundenplan</string>
     <string name="assistant_row_desc">Fragen zu Stunden, Prüfungen, Lernstoff und Hausaufgaben</string>
     <string name="assistant_new_chat">Neuer Chat</string>
     <string name="assistant_model">Modell wählen</string>
-    <string name="assistant_welcome_title">Frag Daybreak</string>
+    <string name="assistant_welcome_title">Frag Dawn</string>
     <string name="assistant_welcome_body">Frag in deinen Worten nach Stunden, Vertretungen, Prüfungen oder Lernstoff. Du kannst auch Fotos und Dateien anhängen.</string>
     <string name="assistant_suggestion_tomorrow">Was habe ich morgen?</string>
     <string name="assistant_suggestion_exam">Wann ist meine nächste Prüfung?</string>
@@ -757,6 +757,8 @@
     <string name="assistant_suggestion_changes">Fällt diese Woche etwas aus?</string>
     <string name="assistant_suggestion_absences">Wie viele Fehlstunden habe ich?</string>
     <string name="assistant_privacy_note">Frage, Anhänge und Stundenplan gehen an einen KI-Dienst.</string>
+    <string name="assistant_disclaimer">Dawn ist KI und kann Fehler machen. Wichtiges bitte prüfen.</string>
+    <string name="assistant_history_more">Mehr anzeigen (%1$d)</string>
     <string name="assistant_unavailable">Der Assistent ist in dieser Version nicht verfügbar.</string>
     <string name="assistant_input_hint">Frag etwas …</string>
     <string name="assistant_send">Senden</string>
@@ -770,6 +772,15 @@
     <string name="assistant_attach">Anhängen</string>
     <string name="assistant_attach_photo">Foto</string>
     <string name="assistant_attach_file">Datei (PDF oder Text)</string>
+    <string name="assistant_attach_camera">Kamera</string>
+    <string name="assistant_limit_title">Tageslimit erreicht</string>
+    <string name="assistant_limit_body">Das KI-Kontingent für heute ist aufgebraucht. Morgen steht der Assistent wieder zur Verfügung.</string>
+    <string name="assistant_limit_ok">Verstanden</string>
+    <string name="assistant_error_limit">Das Tageslimit ist für heute erreicht.</string>
+    <string name="assistant_delete_confirm">Chat löschen?</string>
+    <string name="assistant_delete_cancel">Abbrechen</string>
+    <string name="assistant_delete_yes">Löschen</string>
+    <string name="assistant_model_info">Beschreibung</string>
     <string name="assistant_attach_remove">Entfernen</string>
     <string name="assistant_attach_too_large">Die Datei ist zu groß (höchstens 5 MB).</string>
     <string name="assistant_attach_unsupported">Dieser Dateityp geht nicht. Möglich sind Fotos, PDFs und Textdateien.</string>
