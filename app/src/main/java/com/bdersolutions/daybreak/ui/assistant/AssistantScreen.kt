@@ -749,6 +749,22 @@ private fun AttachmentThumb(attachment: ChatAttachment, onRemove: (() -> Unit)? 
     }
 }
 
+/**
+ * One typing dot's hop: rest, up, back down, then rest until the loop starts again. Keyframes end on the
+ * animation's target value (1, the top) unless the end is given, so without the last line every dot crept
+ * back up after its hop and snapped down when the loop restarted.
+ */
+internal fun typingDotKeyframes(dot: Int) = keyframes {
+    durationMillis = TYPING_CYCLE_MS
+    0f at 0
+    0f at (dot * 160)
+    1f at (dot * 160 + 240)
+    0f at (dot * 160 + 480)
+    0f at TYPING_CYCLE_MS
+}
+
+internal const val TYPING_CYCLE_MS = 1200
+
 @Composable
 internal fun TypingIndicator(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "typing")
@@ -761,14 +777,7 @@ internal fun TypingIndicator(modifier: Modifier = Modifier) {
                     val lift by transition.animateFloat(
                         initialValue = 0f,
                         targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = keyframes {
-                                durationMillis = 1200
-                                0f at (dot * 160)
-                                1f at (dot * 160 + 240)
-                                0f at (dot * 160 + 480)
-                            },
-                        ),
+                        animationSpec = infiniteRepeatable(typingDotKeyframes(dot)),
                         label = "dot$dot",
                     )
                     Box(
