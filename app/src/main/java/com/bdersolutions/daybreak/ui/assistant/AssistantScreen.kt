@@ -5,6 +5,10 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -12,6 +16,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -125,6 +130,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
@@ -285,7 +291,8 @@ fun AssistantScreen(
                     }
                 },
                 actions = {
-                    if (state.history.isNotEmpty()) {
+                    // Both icons grow their own space as they appear, so the other one slides over instead of jumping.
+                    AnimatedVisibility(visible = state.history.isNotEmpty(), enter = barIconEnter, exit = barIconExit) {
                         IconButton(
                             onClick = {
                                 haptics.perform(HapticEvent.SHEET_OPEN)
@@ -295,11 +302,7 @@ fun AssistantScreen(
                             Icon(Icons.Outlined.History, contentDescription = stringResource(R.string.assistant_history))
                         }
                     }
-                    AnimatedVisibility(
-                        visible = state.messages.isNotEmpty(),
-                        enter = fadeIn() + scaleIn(initialScale = 0.6f),
-                        exit = fadeOut() + scaleOut(targetScale = 0.6f),
-                    ) {
+                    AnimatedVisibility(visible = state.messages.isNotEmpty(), enter = barIconEnter, exit = barIconExit) {
                         IconButton(
                             onClick = {
                                 haptics.perform(HapticEvent.TAP)
@@ -410,6 +413,20 @@ fun AssistantScreen(
 }
 
 private const val MAX_INPUT = 2000
+
+/** A top-bar icon appearing: its space opens with a spring while it fades and grows in. */
+private val barIconEnter =
+    expandHorizontally(spring(dampingRatio = 0.85f, stiffness = 420f), expandFrom = Alignment.Start) +
+        fadeIn(tween(220, delayMillis = 60)) +
+        scaleIn(spring(dampingRatio = 0.6f, stiffness = 420f), initialScale = 0.5f)
+
+private val barIconExit =
+    shrinkHorizontally(spring(dampingRatio = 1f, stiffness = 500f), shrinkTowards = Alignment.Start) +
+        fadeOut(tween(120)) +
+        scaleOut(tween(160), targetScale = 0.5f)
+
+/** How the history row and its buttons change between showing a chat and renaming it. */
+private val renameSpring = spring<IntSize>(dampingRatio = 0.85f, stiffness = 420f, visibilityThreshold = IntSize.VisibilityThreshold)
 
 /**
  * Rows fade in but never fade out. A removed row that fades out is kept and drawn where it was until its
@@ -1095,48 +1112,115 @@ private fun HistorySheet(
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             items(chats, key = { it.id }) { chat ->
-                val editing = renamingId == chat.id
-                AnimatedContent(
-                    targetState = editing,
-                    transitionSpec = { fadeIn(tween(160)).togetherWith(fadeOut(tween(110))) },
-                    label = "renameRow",
+                HistoryRow(
+                    chat = chat,
+                    current = chat.id == currentId,
+                    editing = renamingId == chat.id,
+                    onOpen = { onOpen(chat.id) },
+                    onStartRename = { renamingId = chat.id },
+                    onDelete = { onDelete(chat.id) },
+                    onSave = { name ->
+                        haptics.perform(HapticEvent.TAP)
+                        onRename(chat.id, name)
+                        renamingId = null
+                    },
+                    onCancel = { renamingId = null },
                     modifier = Modifier.animateItem(),
-                ) { isEditing ->
-                    if (isEditing) {
-                        RenameRow(
-                            title = chat.title,
-                            onSave = { name ->
-                                haptics.perform(HapticEvent.TAP)
-                                onRename(chat.id, name)
-                                renamingId = null
-                            },
-                            onCancel = { renamingId = null },
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (chat.id == currentId) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                                .clickable { onOpen(chat.id) }
-                                .padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    android.text.format.DateUtils.getRelativeTimeSpanString(chat.updatedAt).toString(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            IconButton(onClick = { renamingId = chat.id }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.assistant_rename))
-                            }
-                            IconButton(onClick = { onDelete(chat.id) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
-                            }
-                        }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One saved chat. Renaming happens in place: the name and date give way to a pill-shaped field (the row
+ * eases to its new height while the field fades and grows in), and the pencil and bin turn into cancel and
+ * save with a small pop. Cancel or save turns it back the same way.
+ */
+@Composable
+private fun HistoryRow(
+    chat: com.bdersolutions.daybreak.data.assistant.ChatSummary,
+    current: Boolean,
+    editing: Boolean,
+    onOpen: () -> Unit,
+    onStartRename: () -> Unit,
+    onDelete: () -> Unit,
+    onSave: (String) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val background by animateColorAsState(
+        when {
+            editing -> colors.surfaceContainerHigh
+            current -> colors.secondaryContainer
+            else -> Color.Transparent
+        },
+        tween(220),
+        label = "historyRow",
+    )
+    // The field's text lives here, so it survives the row changing shape.
+    var field by remember(editing) {
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(chat.title, androidx.compose.ui.text.TextRange(0, chat.title.length)))
+    }
+    val canSave = field.text.isNotBlank()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(background)
+            .clickable(enabled = !editing, onClick = onOpen)
+            .padding(start = if (editing) 8.dp else 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedContent(
+            targetState = editing,
+            transitionSpec = {
+                (fadeIn(tween(200, delayMillis = 60)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = 420f), initialScale = 0.96f))
+                    .togetherWith(fadeOut(tween(90)))
+                    .using(SizeTransform(clip = false) { _, _ -> renameSpring })
+            },
+            contentAlignment = Alignment.CenterStart,
+            label = "historyName",
+            modifier = Modifier.weight(1f),
+        ) { isEditing ->
+            if (isEditing) {
+                RenameField(value = field, onValueChange = { field = it }, onDone = { if (canSave) onSave(field.text) })
+            } else {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        android.text.format.DateUtils.getRelativeTimeSpanString(chat.updatedAt).toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        AnimatedContent(
+            targetState = editing,
+            transitionSpec = {
+                (fadeIn(tween(160, delayMillis = 40)) + scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f))
+                    .togetherWith(fadeOut(tween(90)) + scaleOut(tween(120), targetScale = 0.4f))
+                    .using(SizeTransform(clip = false) { _, _ -> renameSpring })
+            },
+            label = "historyButtons",
+        ) { isEditing ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isEditing) {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.assistant_rename_cancel))
+                    }
+                    FilledIconButton(onClick = { onSave(field.text) }, enabled = canSave) {
+                        Icon(Icons.Rounded.Check, contentDescription = stringResource(R.string.assistant_rename_save))
+                    }
+                } else {
+                    IconButton(onClick = onStartRename) {
+                        Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.assistant_rename))
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
                     }
                 }
             }
@@ -1144,47 +1228,35 @@ private fun HistorySheet(
     }
 }
 
-/** A chat's row while it is renamed: the name in a field, focused with the old name selected, then cancel or save. */
+/** The name field while renaming: a pill, focused at once with the old name selected so typing replaces it. */
 @Composable
-private fun RenameRow(title: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+private fun RenameField(
+    value: androidx.compose.ui.text.input.TextFieldValue,
+    onValueChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    onDone: () -> Unit,
+) {
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    var field by remember {
-        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(title, androidx.compose.ui.text.TextRange(0, title.length)))
-    }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    val canSave = field.text.isNotBlank()
-    Row(
+    TextField(
+        value = value,
+        onValueChange = { onValueChange(if (it.text.length <= 60) it else it.copy(text = it.text.take(60))) },
+        singleLine = true,
+        shape = CircleShape,
+        textStyle = MaterialTheme.typography.bodyLarge,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onDone() }),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextField(
-            value = field,
-            onValueChange = { field = if (it.text.length <= 60) it else it.copy(text = it.text.take(60)) },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            textStyle = MaterialTheme.typography.bodyLarge,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (canSave) onSave(field.text) }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focus),
-        )
-        IconButton(onClick = onCancel) {
-            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.assistant_rename_cancel))
-        }
-        FilledIconButton(onClick = { onSave(field.text) }, enabled = canSave) {
-            Icon(Icons.Rounded.Check, contentDescription = stringResource(R.string.assistant_rename_save))
-        }
-    }
+            .focusRequester(focus),
+    )
 }
+
 
 
 /**

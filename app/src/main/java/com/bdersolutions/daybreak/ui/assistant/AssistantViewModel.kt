@@ -124,7 +124,9 @@ class AssistantViewModel(
     private val supportStore: SupportStore,
     private val chatStore: ChatStore,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(AssistantUiState())
+    // The history the store already holds (it outlives this page), so the top bar's history icon is there
+    // from the first frame instead of growing in while the page slides open.
+    private val _state = MutableStateFlow(AssistantUiState(history = chatStore.chats.value))
     val state: StateFlow<AssistantUiState> = _state.asStateFlow()
 
     val available: Boolean get() = api != null
