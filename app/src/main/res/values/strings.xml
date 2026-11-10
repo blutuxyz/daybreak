@@ -781,6 +781,41 @@
     <string name="assistant_tool_absences">Abwesenheiten nachgesehen</string>
     <string name="assistant_tool_teachers">Lehrkräfte nachgesehen</string>
     <string name="assistant_tool_draft">Nachricht entworfen</string>
+    <string name="assistant_tool_timetable">Stundenplan gezeigt</string>
+    <string name="assistant_card_today">Heute</string>
+    <string name="assistant_card_tomorrow">Morgen</string>
+    <string name="assistant_card_no_lessons">An diesem Tag sind keine Stunden eingetragen.</string>
+    <string name="assistant_card_free">Freistunde</string>
+    <string name="assistant_card_exam">Prüfung</string>
+    <string name="assistant_card_double">Doppelstunde</string>
+    <string name="assistant_card_teacher_change">%1$s statt %2$s</string>
+    <plurals name="assistant_card_cancelled">
+        <item quantity="one">%d entfällt</item>
+        <item quantity="other">%d entfallen</item>
+    </plurals>
+    <string name="assistant_card_instead">Statt</string>
+    <string name="assistant_tool_exams_card">Prüfungen gezeigt</string>
+    <string name="assistant_tool_absences_card">Abwesenheiten gezeigt</string>
+    <string name="assistant_card_exams_title">Prüfungen</string>
+    <string name="assistant_card_exams_none">Keine Prüfungen in diesem Zeitraum.</string>
+    <string name="assistant_card_yesterday">Gestern</string>
+    <plurals name="assistant_card_in_days">
+        <item quantity="one">in %d Tag</item>
+        <item quantity="other">in %d Tagen</item>
+    </plurals>
+    <plurals name="assistant_card_days_ago">
+        <item quantity="one">vor %d Tag</item>
+        <item quantity="other">vor %d Tagen</item>
+    </plurals>
+    <string name="assistant_card_absences_title">Abwesenheiten</string>
+    <string name="assistant_card_absences_year">Dieses Schuljahr</string>
+    <string name="assistant_card_absences_none">In diesem Schuljahr ist keine Abwesenheit eingetragen.</string>
+    <string name="assistant_card_absences_clipped">Ganze Tage zählen nur mit ihren Stunden, wie im Tab Abwesenheiten.</string>
+    <plurals name="assistant_card_more">
+        <item quantity="one">%d weiterer</item>
+        <item quantity="other">%d weitere</item>
+    </plurals>
+    <string name="assistant_card_less">Weniger</string>
     <string name="assistant_draft_title">Nachricht an eine Lehrkraft</string>
     <string name="assistant_draft_to">An: %1$s</string>
     <string name="assistant_draft_subject">Betreff: %1$s</string>
@@ -864,7 +899,6 @@
     <string name="settings_licenses">Open-Source-Lizenzen</string>
     <string name="licenses_intro">Daybreak baut auf diesen Open-Source-Bausteinen auf. Tippe auf einen Eintrag, um den vollständigen Lizenztext zu lesen.</string>
     <string name="assistant_rename">Umbenennen</string>
-    <string name="assistant_rename_title">Chat umbenennen</string>
     <string name="assistant_rename_save">Speichern</string>
     <string name="assistant_rename_cancel">Abbrechen</string>
     <string name="assistant_thinking">Denkt nach …</string>

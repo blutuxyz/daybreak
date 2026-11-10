@@ -773,6 +773,41 @@
     <string name="assistant_tool_absences">Checked the absences</string>
     <string name="assistant_tool_teachers">Looked up the teachers</string>
     <string name="assistant_tool_draft">Drafted a message</string>
+    <string name="assistant_tool_timetable">Showed the timetable</string>
+    <string name="assistant_card_today">Today</string>
+    <string name="assistant_card_tomorrow">Tomorrow</string>
+    <string name="assistant_card_no_lessons">No lessons on this day.</string>
+    <string name="assistant_card_free">Free period</string>
+    <string name="assistant_card_exam">Exam</string>
+    <string name="assistant_card_double">Double lesson</string>
+    <string name="assistant_card_teacher_change">%1$s instead of %2$s</string>
+    <plurals name="assistant_card_cancelled">
+        <item quantity="one">%d cancelled</item>
+        <item quantity="other">%d cancelled</item>
+    </plurals>
+    <string name="assistant_card_instead">Instead of</string>
+    <string name="assistant_tool_exams_card">Showed the exams</string>
+    <string name="assistant_tool_absences_card">Showed the absences</string>
+    <string name="assistant_card_exams_title">Exams</string>
+    <string name="assistant_card_exams_none">No exams in this period.</string>
+    <string name="assistant_card_yesterday">Yesterday</string>
+    <plurals name="assistant_card_in_days">
+        <item quantity="one">in %d day</item>
+        <item quantity="other">in %d days</item>
+    </plurals>
+    <plurals name="assistant_card_days_ago">
+        <item quantity="one">%d day ago</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
+    <string name="assistant_card_absences_title">Absences</string>
+    <string name="assistant_card_absences_year">This school year</string>
+    <string name="assistant_card_absences_none">No absences recorded this school year.</string>
+    <string name="assistant_card_absences_clipped">Whole days count only their lessons, as on the Absences tab.</string>
+    <plurals name="assistant_card_more">
+        <item quantity="one">%d more</item>
+        <item quantity="other">%d more</item>
+    </plurals>
+    <string name="assistant_card_less">Show less</string>
     <string name="assistant_draft_title">Message to a teacher</string>
     <string name="assistant_draft_to">To: %1$s</string>
     <string name="assistant_draft_subject">Subject: %1$s</string>
@@ -856,7 +891,6 @@
     <string name="settings_licenses">Open-source licences</string>
     <string name="licenses_intro">Daybreak is built on these open-source components. Tap an entry to read the full licence text.</string>
     <string name="assistant_rename">Rename</string>
-    <string name="assistant_rename_title">Rename chat</string>
     <string name="assistant_rename_save">Save</string>
     <string name="assistant_rename_cancel">Cancel</string>
     <string name="assistant_thinking">Thinking…</string>

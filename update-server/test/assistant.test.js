@@ -382,3 +382,23 @@ test('reasoning is streamed to the app as its own event and logged', async () =>
   ]);
   assert.equal((await store.logs())[0].content.reasoning, 'Erst die Prüfungen.');
 });
+
+test('the timetable card tool is offered and its calls and results are accepted', () => {
+  for (const name of ['show_exams', 'show_absences']) assert.ok(TOOLS.find((entry) => entry.name === name), name);
+  assert.match(SYSTEM_PROMPT, /call show_exams/);
+  assert.match(SYSTEM_PROMPT, /call show_absences/);
+  const tool = TOOLS.find((entry) => entry.name === 'show_timetable');
+  assert.ok(tool);
+  assert.deepEqual(tool.parameters.required, ['date']);
+  assert.match(SYSTEM_PROMPT, /call show_timetable/);
+  assert.match(SYSTEM_PROMPT, /never put formulas in code blocks/);
+  const parsed = parseAssistantRequest({
+    ...validBody,
+    messages: [
+      { role: 'user', text: 'Was habe ich heute?' },
+      { role: 'assistant', text: '', toolCalls: [{ id: 'c1', name: 'show_timetable', arguments: '{"date":"2026-11-09"}' }] },
+      { role: 'tool', toolCallId: 'c1', content: 'Shown to the student as a card for Mon 2026-11-09.' },
+    ],
+  });
+  assert.ok(parsed.value, parsed.error);
+});

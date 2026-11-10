@@ -315,7 +315,7 @@ private fun AbsenceList(
                             base.filter { option.matches(it) }.sumOf { lessonsByAbsence[it.id] ?: 0 },
                         )
                     } else {
-                        formatDuration(time)
+                        formatAbsenceDuration(time)
                     }
                     FilterChip(
                         selected = filter == option,
@@ -438,7 +438,7 @@ internal fun AbsenceSummary(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = formatDuration(total),
+                        text = formatAbsenceDuration(total),
                         style = MaterialTheme.typography.displaySmallEmphasized,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -479,7 +479,7 @@ internal fun AbsenceSummary(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = formatDuration(excusedTime),
+                        text = formatAbsenceDuration(excusedTime),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -492,7 +492,7 @@ internal fun AbsenceSummary(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = formatDuration(unexcusedTime),
+                        text = formatAbsenceDuration(unexcusedTime),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         // The unexcused time carries the accent, as in the filter chips.
@@ -584,7 +584,7 @@ private fun AbsenceCard(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = formatDuration(absence.countedDuration(windows)),
+                    text = formatAbsenceDuration(absence.countedDuration(windows)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -628,8 +628,9 @@ private fun ExcuseBadge(excused: Boolean) {
     }
 }
 
+/** A duration in the unit picked under More → Timetable (hours and minutes, or school lessons). The assistant's absence card uses it too. */
 @Composable
-private fun formatDuration(duration: Duration): String {
+internal fun formatAbsenceDuration(duration: Duration): String {
     val minutes = duration.toMinutes()
     if (LocalAbsenceUnit.current == AbsenceUnit.LESSONS) {
         val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()

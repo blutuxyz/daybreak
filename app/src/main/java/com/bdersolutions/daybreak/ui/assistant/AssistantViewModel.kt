@@ -7,6 +7,9 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.data.assistant.AppAssistantData
 import com.bdersolutions.daybreak.data.assistant.AssistantApi
 import com.bdersolutions.daybreak.data.assistant.AssistantContext
+import com.bdersolutions.daybreak.data.assistant.AssistantData
+import com.bdersolutions.daybreak.data.assistant.AssistantCard
+import com.bdersolutions.daybreak.untis.UntisAbsence
 import com.bdersolutions.daybreak.data.assistant.AssistantEvent
 import com.bdersolutions.daybreak.data.assistant.AssistantFailure
 import com.bdersolutions.daybreak.data.assistant.AssistantIdentity
@@ -14,6 +17,7 @@ import com.bdersolutions.daybreak.data.assistant.AssistantModels
 import com.bdersolutions.daybreak.data.assistant.AssistantToolRunner
 import com.bdersolutions.daybreak.data.assistant.ChatAttachment
 import com.bdersolutions.daybreak.data.assistant.ChatArchive
+import com.bdersolutions.daybreak.data.assistant.ChatSaving
 import com.bdersolutions.daybreak.data.assistant.ChatStore
 import com.bdersolutions.daybreak.data.assistant.ChatSummary
 import com.bdersolutions.daybreak.data.assistant.SavedChat
@@ -66,6 +70,8 @@ data class AssistantUiState(
     val failure: AssistantFailure? = null,
     /** Drafted messages by tool call id. */
     val drafts: Map<String, DraftState> = emptyMap(),
+    /** Cards the assistant showed (a day, exams, absences), by tool call id. */
+    val cards: Map<String, AssistantCard> = emptyMap(),
     /** Pictures and files waiting in the input bar. */
     val staged: List<ChatAttachment> = emptyList(),
     val models: AssistantModels? = null,
@@ -82,12 +88,39 @@ data class AssistantUiState(
     val pendingDraft: DraftState? get() = drafts.values.firstOrNull { it.status == DraftState.Status.PENDING || it.status == DraftState.Status.SENDING }
 }
 
+/** The chat as it would be saved, stamped [updatedAt]; null for a chat without a question yet. */
+internal fun AssistantUiState.toSavedChat(updatedAt: Long): SavedChat? {
+    val id = chatId ?: return null
+    if (messages.none { it.role == ChatRole.USER }) return null
+    return SavedChat(
+        id = id,
+        title = chatTitle ?: ChatArchive.titleFor(messages),
+        titleSource = titleSource,
+        updatedAt = updatedAt,
+        messages = messages,
+        drafts = drafts.mapValues { (_, state) -> SavedDraft(state.draft, state.status.name) },
+        cards = cards,
+    )
+}
+
 /**
  * The turn is over: the typing dots and the streaming cursor go away, whatever the last event was.
  * A provider may finish a round with "done" but without any text, and the newest answer may already
  * have been shown, so neither the dots nor a stale streaming id may be left behind.
  */
 internal fun AssistantUiState.turnFinished(): AssistantUiState = copy(waiting = false, streamingId = null)
+
+/**
+ * Asking again after a failure. The half answer of the failed round is dropped: it is never sent again
+ * (the request leaves trailing answers out), and keeping it would show the old half answer above the new one.
+ * Tool results end with a tool message, so an answer whose tools ran is kept.
+ */
+internal fun AssistantUiState.retrying(): AssistantUiState = copy(
+    messages = messages.dropLastWhile { it.role == ChatRole.ASSISTANT },
+    waiting = true,
+    streamingId = null,
+    failure = null,
+)
 
 /**
  * The assistant chat. The conversation lives only in this ViewModel: it is never written to disk and is
@@ -99,6 +132,7 @@ internal fun AssistantUiState.turnFinished(): AssistantUiState = copy(waiting = 
  */
 class AssistantViewModel(
     private val api: AssistantApi?,
+    private val data: AssistantData,
     private val identity: AssistantIdentity,
     private val timetable: TimetableRepository,
     private val schoolData: SchoolDataRepository,
@@ -106,12 +140,17 @@ class AssistantViewModel(
     private val supportStore: SupportStore,
     private val chatStore: ChatStore,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(AssistantUiState())
+    // The history the store already holds (it outlives this page), so the top bar's history icon is there
+    // from the first frame instead of growing in while the page slides open.
+    private val _state = MutableStateFlow(AssistantUiState(history = chatStore.chats.value))
     val state: StateFlow<AssistantUiState> = _state.asStateFlow()
 
     val available: Boolean get() = api != null
 
     private var nextId = 1L
+
+    /** The chat as last written (or as read when it was opened), to tell a real change from just opening it. */
+    private var lastSaved: SavedChat? = null
     private var answerJob: Job? = null
     private var draftDecision: CompletableDeferred<Boolean>? = null
 
@@ -120,6 +159,9 @@ class AssistantViewModel(
         val today = LocalDate.now()
         runCatching { schoolData.homework(today.minusDays(1), today.plusDays(HOMEWORK_DAYS)) }.getOrDefault(emptyList())
     }
+
+    // The school year's absences, asked for once like the homework; null when they could not be loaded.
+    private val absences: Deferred<List<UntisAbsence>?> = viewModelScope.async { data.absences() }
 
     init {
         viewModelScope.launch {
@@ -146,26 +188,16 @@ class AssistantViewModel(
         @OptIn(kotlinx.coroutines.FlowPreview::class)
         viewModelScope.launch {
             _state
-                .map { listOf(it.chatId, it.messages, it.drafts, it.chatTitle, it.titleSource) }
+                .map { listOf(it.chatId, it.messages, it.drafts, it.cards, it.chatTitle, it.titleSource) }
                 .distinctUntilChanged()
                 .debounce(SAVE_DELAY_MS)
                 .collect {
                     val current = _state.value
-                    val id = current.chatId
-                    val messages = current.messages
-                    val drafts = current.drafts
-                    if (id != null && messages.any { it.role == ChatRole.USER }) {
-                        chatStore.save(
-                            SavedChat(
-                                id = id,
-                                title = current.chatTitle ?: ChatArchive.titleFor(messages),
-                                titleSource = current.titleSource,
-                                updatedAt = System.currentTimeMillis(),
-                                messages = messages,
-                                drafts = drafts.mapValues { (_, state) -> SavedDraft(state.draft, state.status.name) },
-                            ),
-                        )
-                    }
+                    val candidate = current.toSavedChat(System.currentTimeMillis()) ?: return@collect
+                    // Only real changes are written; a chat that was only opened keeps its place and time.
+                    val chat = ChatSaving.toSave(lastSaved, candidate) ?: return@collect
+                    chatStore.save(chat)
+                    lastSaved = chat
                 }
         }
     }
@@ -192,6 +224,7 @@ class AssistantViewModel(
                 AssistantUiState(
                     messages = chat.messages,
                     drafts = drafts,
+                    cards = chat.cards,
                     chatId = chat.id,
                     chatTitle = chat.title.takeIf { chat.titleSource != TitleSource.AUTO },
                     titleSource = chat.titleSource,
@@ -201,6 +234,8 @@ class AssistantViewModel(
                     history = it.history,
                 )
             }
+            // What was read counts as saved, so opening the chat writes nothing.
+            lastSaved = _state.value.toSavedChat(chat.updatedAt)
         }
     }
 
@@ -273,7 +308,7 @@ class AssistantViewModel(
     fun retry(language: String) {
         val state = _state.value
         if (state.busy || state.messages.none { it.role == ChatRole.USER }) return
-        _state.update { it.copy(waiting = true, failure = null) }
+        _state.update { it.retrying() }
         ask(language)
     }
 
@@ -287,8 +322,9 @@ class AssistantViewModel(
         answerJob = viewModelScope.launch {
             // Homework makes answers better but must not hold the question up for long.
             val homeworkNow = withTimeoutOrNull(HOMEWORK_WAIT_MS) { homework.await() }.orEmpty()
+            val absencesNow = withTimeoutOrNull(HOMEWORK_WAIT_MS) { absences.await() }
             // One summary per question, so the follow-up rounds reuse the provider's prompt cache.
-            val context = AssistantContext.build(timetable.cache.value, LocalDateTime.now(), homeworkNow)
+            val context = AssistantContext.build(timetable.cache.value, LocalDateTime.now(), homeworkNow, absencesNow)
             val unlockCode = if (supportStore.paid.value) supportStore.unlockCode() else null
             repeat(MAX_ROUNDS) {
                 val calls = streamOneTurn(api, context, language, unlockCode) ?: return@launch
@@ -346,6 +382,10 @@ class AssistantViewModel(
             val content = when (val outcome = tools.run(call)) {
                 is ToolOutcome.Result -> outcome.content
                 is ToolOutcome.Confirm -> confirmAndMaybeSend(outcome.draft)
+                is ToolOutcome.Card -> {
+                    _state.update { it.copy(cards = it.cards + (call.id to outcome.card)) }
+                    outcome.content
+                }
             }
             _state.update { it.copy(messages = it.messages + ChatMessage(nextId++, ChatRole.TOOL, content, toolCallId = call.id)) }
         }
@@ -434,6 +474,7 @@ class AssistantViewModel(
             )
             return AssistantViewModel(
                 api = container.assistantApi,
+                data = data,
                 identity = container.assistantIdentity,
                 timetable = container.timetableRepository,
                 schoolData = container.schoolData,

@@ -84,7 +84,7 @@ class AssistantTest {
     @Test
     fun contextHoldsLessonsChangesExamsAndAbsences() {
         val homework = listOf(UntisHomework(1, "E", null, monday.plusDays(1), "Workbook p. 12", completed = true))
-        val text = AssistantContext.build(cache, now, homework)
+        val text = AssistantContext.build(cache, now, homework, absences = cache.absences)
         assertTrue(text.contains("Now: Mon 2026-11-09 10:15"))
         assertTrue(text.contains("Mon 2026-11-09 (today)"))
         assertTrue(text.contains("08:00-08:45 M, teacher MÜL, room R101"))
@@ -93,9 +93,16 @@ class AssistantTest {
         assertTrue(text.contains("Thu 2026-11-12 08:00-09:30 M: Schulaufgabe 2"))
         assertTrue(text.contains("due Tue 2026-11-10 E: Workbook p. 12 [done]"))
         assertTrue(text.contains("Weihnachtsferien"))
-        assertTrue(text.contains("1 entries, 90 minutes recorded, 1 not excused"))
+        assertTrue(text.contains("Absences this school year: 1 entries, 90 minutes recorded, 1 not excused"))
         assertFalse("holiday blocks are made for display only", text.contains("Ferien,"))
         assertFalse("weeks far from today are left out", text.contains("OLD"))
+    }
+
+    @Test
+    fun contextNeverTakesTheCachedWeeksForAllAbsences() {
+        // The cache holds an absence, but only the school-year list counts; unknown is not "none".
+        assertTrue(AssistantContext.build(cache, now).contains("Absences: not in this summary (call get_absences)."))
+        assertTrue(AssistantContext.build(cache, now, absences = emptyList()).contains("Absences this school year: none recorded."))
     }
 
     @Test
@@ -207,7 +214,9 @@ class AssistantTest {
         override suspend fun lessons(from: LocalDate, to: LocalDate) = lessons.filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
         override suspend fun exams(from: LocalDate, to: LocalDate) = cache.exams.filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
         override suspend fun homework(from: LocalDate, to: LocalDate) = emptyList<UntisHomework>()
-        override fun absences() = cache.absences
+        override suspend fun absences(): List<UntisAbsence>? = cache.absences
+        override suspend fun lessonTopics(lessons: List<UntisLesson>) =
+            lessons.filter { it.id == 6L }.associate { it.id to "Brüche erweitern und kürzen" }
         override suspend fun teachers() = listOf(
             UntisRecipient(42, "Müller", RecipientGroup.TEACHER, listOf("M")),
             UntisRecipient(7, "Hausmeister", RecipientGroup.OTHER),
@@ -229,8 +238,9 @@ class AssistantTest {
         val notes = resultOf(runTool("get_lesson_notes", """{"subject":"m"}"""))
         assertTrue(notes.contains("SA am 12.11.: Bruchrechnung, Buch S. 40-52"))
         assertTrue(notes.indexOf("Bruchrechnung") < notes.indexOf("Einführung Brüche"))
+        assertTrue("class register topics are read", notes.contains("topic: Brüche erweitern und kürzen"))
         assertTrue(resultOf(runTool("get_lesson_notes", """{"subject":"Physik"}""")).contains("Subjects in the timetable"))
-        assertTrue(resultOf(runTool("get_absences")).contains("1 entries, 90 minutes recorded"))
+        assertTrue(resultOf(runTool("get_absences")).contains("Absences this school year: 1 entries"))
         assertTrue(resultOf(runTool("nope")).startsWith("Unknown tool"))
     }
 
@@ -247,5 +257,82 @@ class AssistantTest {
         assertTrue(resultOf(runTool("draft_message", """{"recipient_user_id":42,"subject":"","body":"y"}""")).contains("Nothing was sent"))
         val off = runTool("draft_message", """{"recipient_user_id":42,"subject":"x","body":"y"}""", FakeData(canSendMessages = false))
         assertTrue(resultOf(off).contains("switched off"))
+    }
+
+    @Test
+    fun absencesThatCouldNotBeLoadedAreNotReportedAsNone() {
+        val offline = object : AssistantData by FakeData() {
+            override suspend fun absences(): List<UntisAbsence>? = null
+        }
+        val text = resultOf(runTool("get_absences", data = offline))
+        assertTrue(text.startsWith("Error"))
+        assertFalse(text.contains("No absences"))
+    }
+
+    @Test
+    fun showTimetableMakesACardFromTheRealLessons() {
+        val day = monday.plusDays(3)
+        val data = object : AssistantData by FakeData() {
+            override suspend fun lessons(from: LocalDate, to: LocalDate) = listOf(
+                lesson(20, day, "08:00", "08:45", "M"),
+                lesson(21, day, "08:45", "09:30", "M"),
+                lesson(22, day, "09:45", "10:30", "E", status = LessonStatus.CANCELLED),
+                lesson(23, day, "10:30", "11:15", "D", room = "R201", originalRoom = "R102"),
+            )
+        }
+        val outcome = runTool("show_timetable", """{"date":"2026-11-12"}""", data) as ToolOutcome.Card
+        val entries = (outcome.card as DayCard).entries
+        assertEquals(day, (outcome.card as DayCard).date)
+        assertEquals(3, entries.size)
+        assertEquals(2, entries[0].periods)
+        assertEquals(LocalTime.of(9, 30), entries[0].end)
+        assertEquals("Schulaufgabe 2", entries[0].exam)
+        assertTrue(entries[1].cancelled)
+        assertEquals("R102", entries[2].originalRoom)
+        assertTrue(outcome.content.contains("Do not list the lessons again"))
+        assertTrue(outcome.content.contains("Cancelled with nothing in their place"))
+    }
+    @Test
+    fun aSchoolEventShowsOnceWithTheLessonsItReplacesUnderIt() {
+        // Like a real day: an event from 07:55 to 13:15 instead of four lessons (one of them double), then
+        // a lesson in the afternoon and one cancelled lesson that nothing replaces.
+        val day = monday.plusDays(2)
+        val cancelled = LessonStatus.CANCELLED
+        val data = object : AssistantData by FakeData() {
+            override suspend fun lessons(from: LocalDate, to: LocalDate) = listOf(
+                lesson(30, day, "07:55", "08:45", "TMB", status = cancelled),
+                lesson(31, day, "07:55", "13:15", "SV", status = LessonStatus.IRREGULAR, info = "SV"),
+                lesson(32, day, "08:45", "09:35", "TMB", status = cancelled),
+                lesson(33, day, "09:50", "10:40", "FI", status = cancelled),
+                lesson(34, day, "12:25", "13:15", "D", status = cancelled),
+                lesson(35, day, "14:05", "14:55", "GGP"),
+                lesson(36, day, "15:00", "15:50", "KOP", status = cancelled),
+            )
+        }
+        val card = (runTool("show_timetable", """{"date":"2026-11-11"}""", data) as ToolOutcome.Card).card as DayCard
+        assertEquals(listOf("SV", "GGP", "KOP"), card.entries.map { it.subject })
+        val event = card.entries[0]
+        assertEquals(LocalTime.of(13, 15), event.end)
+        assertEquals("the double lesson stays one entry", listOf("TMB", "FI", "D"), event.replaces.map { it.subject })
+        assertEquals(LocalTime.of(9, 35), event.replaces[0].end)
+        assertEquals("a note that only repeats the subject is dropped", "", event.note)
+        assertTrue(card.entries[2].cancelled)
+        assertTrue(card.entries[2].replaces.isEmpty())
+    }
+
+    @Test
+    fun examAndAbsenceCardsComeFromTheTools() {
+        val exams = runTool("show_exams") as ToolOutcome.Card
+        val card = exams.card as ExamCard
+        assertEquals(listOf("M"), card.exams.map { it.subject })
+        assertEquals("Schulaufgabe 2", card.exams[0].name)
+        assertTrue(exams.content.contains("Do not list the exams again"))
+
+        val absences = runTool("show_absences") as ToolOutcome.Card
+        // The absence is on a Friday whose week is known and has no lessons that day, so nothing counts.
+        assertEquals(90L, (absences.card as AbsenceCard).recordedMinutes)
+        assertEquals(0L, (absences.card as AbsenceCard).countedMinutes)
+        assertTrue(absences.content.contains("Time that counts"))
+        assertTrue(resultOf(runTool("get_absences")).contains("Time that counts"))
     }
 }

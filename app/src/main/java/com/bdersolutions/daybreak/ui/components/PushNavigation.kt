@@ -28,8 +28,15 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+/**
+ * Where the slide counts as arrived. The progress runs from 0 to 1 across the whole screen width, and a
+ * spring stops (and jumps to its target) once it is this close. The default of 0.01 is about 11 px on a
+ * phone, which showed as a jump over the last few millimetres; this is under a pixel even on a tablet.
+ */
+internal const val PROGRESS_THRESHOLD = 0.0004f
+
 /** No bounce, about the pace of an iOS push: most of the way in 0.2 s, settled after about 0.45 s. */
-private val PushSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 260f)
+internal val PushSpring = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 260f, visibilityThreshold = PROGRESS_THRESHOLD)
 
 /** How far the screen underneath moves to the left while a page covers it, as a share of the width. */
 private const val BASE_SHIFT = 0.28f
@@ -57,7 +64,7 @@ fun <T : Any> PushHost(
     // The last page is kept while it slides out, after [page] went back to null.
     var shown by remember { mutableStateOf(page) }
     if (page != null && page != shown) shown = page
-    val progress = remember { Animatable(if (page != null) 1f else 0f) }
+    val progress = remember { Animatable(if (page != null) 1f else 0f, visibilityThreshold = PROGRESS_THRESHOLD) }
     val scope = rememberCoroutineScope()
     val animationsEnabled = motionAnimationsEnabled()
 

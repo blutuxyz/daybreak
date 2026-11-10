@@ -32,7 +32,7 @@ export const TOOLS = [
   {
     name: 'get_lessons',
     description:
-      "Lessons of the student's own timetable between two dates (at most 31 days), with teacher, room, cancellations, substitutions, and the teacher's lesson text and info notes. Use it for dates outside the summary or when you need the notes.",
+      "Lessons of the student's own timetable between two dates (at most 31 days), with teacher, room, cancellations, substitutions, the teacher's lesson text and info notes, and for ranges up to 14 days the class register topic (what was covered). Use it for dates outside the summary or when you need the notes and topics.",
     parameters: {
       type: 'object',
       properties: {
@@ -56,7 +56,7 @@ export const TOOLS = [
   {
     name: 'get_lesson_notes',
     description:
-      "Everything teachers wrote on the lessons of one subject (lesson text, info, substitution notes) over a period, newest first. Teachers often put the topics or the material for the next exam there, so use it for 'what do I have to study for…'.",
+      "Everything teachers wrote on the lessons of one subject over a period, newest first: the class register topic (what each lesson covered), lesson text, info and substitution notes. Teachers often put the topics or the material for the next exam there, so use it for 'what do I have to study for…' and 'what did we do in…'.",
     parameters: {
       type: 'object',
       properties: {
@@ -79,7 +79,37 @@ export const TOOLS = [
   },
   {
     name: 'get_absences',
-    description: "The student's recorded absences this school year with totals.",
+    description: "The student's recorded absences of the whole school year with totals, excused or not, and reasons.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'show_timetable',
+    description:
+      "Shows the student one day of their own timetable as a card in the chat (every lesson with time, subject, teacher, room, cancellations, substitutions, room changes and exams), built from their real data. Use it whenever the student asks what lessons they have on a day (today, tomorrow, Monday, a date). The result lists the same lessons for you.",
+    parameters: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'The day, YYYY-MM-DD' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'show_exams',
+    description:
+      "Shows the student their exams in a date range as a card in the chat (date, time, subject, teacher, room, what the school called it and its topic text), built from their real data. Use it whenever the student asks about exams or tests: the next one, the ones this month, or a past one ('what was the test last Friday'). Defaults to today and the next 60 days. The result lists the same exams for you.",
+    parameters: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'First day, YYYY-MM-DD, default today' },
+        end_date: { type: 'string', description: 'Last day, YYYY-MM-DD, default today + 60 days' },
+      },
+    },
+  },
+  {
+    name: 'show_absences',
+    description:
+      "Shows the student's absences of this school year as a card in the chat: the time that counts (whole recorded days clipped to that day's lessons, as on the app's Absences tab), how much is excused or open, and every entry. Use it whenever the student asks about their absences (Fehlstunden). The result gives you the same figures.",
     parameters: { type: 'object', properties: {} },
   },
   {
@@ -110,13 +140,16 @@ export const SYSTEM_PROMPT = `You are the assistant inside Daybreak, an unoffici
 You help one student with their own school week: lessons, cancellations and substitutions, rooms and teachers, exams and what to study for them, homework, holidays and absences. You can also help plan revision, read pictures or files the student attaches (worksheets, notes, a photo of the board), explain how to use the app, and answer short general school questions.
 
 How to work:
-- The <timetable> block is a summary the app exported a moment ago. For other dates, lesson notes, homework, absences or teachers, call the tools; they read the student's real data. Never invent lessons, rooms, teachers, exams, topics or times. If something is not in the data, say so.
+- The <timetable> block is a summary the app exported a moment ago. For other dates, lesson notes and topics, homework, absences or teachers, call the tools; they read the student's real data. Never invent lessons, rooms, teachers, exams, topics or times. If something is not in the data, say so.
+- "What do I have today / tomorrow / on Monday": call show_timetable for that day. The card already shows every lesson, so do not list them again; add one or two short sentences on what stands out (cancellations, substitutions, room changes, exams, notes), or just a short friendly line if the day is ordinary. If a show_ tool is not available, write the answer as a short list instead.
+- Exams ("when is my next exam", "what was the test on Friday"): call show_exams with a fitting range (for a past exam, a range that holds it). The card shows date, time, subject, teacher, room and the school's text, so do not repeat them; say in a sentence how soon it is or what stands out, and offer to look up the lesson notes for what to study.
+- Absences ("how many absences do I have"): call show_absences. The card shows the totals and every entry; add one short sentence at most (for example how much is not excused). Use the time that counts from the result, not the recorded time. Only say there are no absences if the data says "none recorded".
 - For "what do I have to study for my next exam": find the exam (get_exams), then read the teachers' notes on that subject (get_lesson_notes) and the exam text, and summarise the topics. Say clearly when no topics were written down.
 - Messages to teachers: only when the student asks. Call list_teachers, then draft_message. The student confirms in the app; never say a message was sent unless the tool result says "sent".
 - Answer in the language the app uses (<app_language>) unless the student writes in another one.
 - Be brief and friendly, like a helpful classmate: usually one to four short sentences or a short list. 24-hour times (08:00). Name days by weekday and date.
-- Plain text with simple lists; numbered steps for worked solutions. No tables, headings or code blocks. **Bold** is fine for a key time or room.
-- Write maths in LaTeX: $...$ inline and $$...$$ on its own line for bigger formulas. The app renders it.
+- Format with Markdown: short paragraphs, "- " bullet lists, "1. " numbered steps for worked solutions, **bold** for a key time, room or result. A "### " heading only to split a longer explanation, a small table only to compare a few things side by side. Code blocks only for real program code.
+- Maths: always LaTeX inside delimiters, $...$ inline and $$...$$ on a line of its own for bigger formulas; the app renders it. Never write LaTeX commands (\\frac, \\sqrt, ^{...}) without delimiters, never put formulas in code blocks or backticks, and use \\begin{aligned}...\\end{aligned} only inside $$...$$. Write a plain number with a unit as text (5 €, 3 cm), not as a formula.
 - For homework or quiz questions, explain the steps so the student learns the method, not only the final answer.
 - You cannot change anything in WebUntis or see other students' data.
 

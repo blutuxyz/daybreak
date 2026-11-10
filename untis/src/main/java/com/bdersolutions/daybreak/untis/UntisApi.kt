@@ -137,6 +137,34 @@ class UntisApi(
     }
 
     /**
+     * The class register topics ("Lehrstoff") of periods, by period id. Not every school shows them to
+     * students and the call is unverified against every server: an empty answer gives an empty map, a
+     * refusal throws like any other call. The raw response is written to the debug log.
+     */
+    suspend fun fetchLessonTopics(session: UntisSession, periodIds: List<Long>): Map<Long, String> {
+        val ids = periodIds.filter { it > 0 }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")
+        val topics = mutableMapOf<Long, String>()
+        for (chunk in ids.chunked(PERIOD_DATA_CHUNK)) {
+            val params = JsonArray().apply {
+                add(JsonObject().apply {
+                    add("ttIds", JsonArray().also { array -> chunk.forEach { array.add(it) } })
+                    add("auth", auth(session.username, session.secret))
+                })
+            }
+            val result = try {
+                rpc.call(safeServer, session.school, "getPeriodData2017", params)
+            } catch (_: UntisNoDataException) {
+                continue
+            }
+            topics += PeriodDataParser.topics(result)
+        }
+        return topics
+    }
+
+    /**
      * The student's exams (Prüfungen) in a date range. Unverified against every server:
      * the raw response is written to the debug log, so the shape can be checked there.
      */
@@ -677,3 +705,6 @@ class UntisApi(
         }
     }
 }
+
+/** Period ids per `getPeriodData2017` request; a week of lessons fits in one. */
+private const val PERIOD_DATA_CHUNK = 50

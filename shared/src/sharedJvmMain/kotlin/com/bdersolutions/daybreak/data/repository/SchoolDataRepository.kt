@@ -56,6 +56,10 @@ class SchoolDataRepository(
     suspend fun absences(startDate: LocalDate, endDate: LocalDate): List<UntisAbsence> =
         api.fetchAbsences(requireSession(), startDate, endDate)
 
+    /** The class register topics ("Lehrstoff") of these lessons, by lesson id. */
+    suspend fun lessonTopics(lessonIds: List<Long>): Map<Long, String> =
+        api.fetchLessonTopics(requireSession(), lessonIds)
+
     suspend fun homework(startDate: LocalDate, endDate: LocalDate): List<UntisHomework> =
         api.fetchHomework(requireSession(), startDate, endDate)
 
