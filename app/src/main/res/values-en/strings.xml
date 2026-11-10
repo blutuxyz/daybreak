@@ -869,7 +869,6 @@
     <string name="settings_licenses">Open-source licences</string>
     <string name="licenses_intro">Daybreak is built on these open-source components. Tap an entry to read the full licence text.</string>
     <string name="assistant_rename">Rename</string>
-    <string name="assistant_rename_title">Rename chat</string>
     <string name="assistant_rename_save">Save</string>
     <string name="assistant_rename_cancel">Cancel</string>
     <string name="assistant_thinking">Thinking…</string>

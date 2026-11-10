@@ -74,6 +74,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
@@ -109,6 +110,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1060,7 +1062,10 @@ private fun effortLabel(effort: String): String = when (effort) {
     else -> effort
 }
 
-/** The saved chats, newest first. Tap opens one; the bin deletes it. */
+/**
+ * The saved chats, newest first. Tap opens one; the bin deletes it; the pencil turns that row itself into a
+ * name field (no dialog over the sheet), with the old name selected so typing replaces it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HistorySheet(
@@ -1071,36 +1076,8 @@ private fun HistorySheet(
     onRename: (Long, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var renaming by remember { mutableStateOf<com.bdersolutions.daybreak.data.assistant.ChatSummary?>(null) }
-    renaming?.let { chat ->
-        var name by remember(chat.id) { mutableStateOf(chat.title) }
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { renaming = null },
-            title = { Text(stringResource(R.string.assistant_rename_title)) },
-            text = {
-                androidx.compose.material3.OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it.take(60) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onRename(chat.id, name)
-                        renaming = null
-                    }),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onRename(chat.id, name)
-                        renaming = null
-                    },
-                    enabled = name.isNotBlank(),
-                ) { Text(stringResource(R.string.assistant_rename_save)) }
-            },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.assistant_rename_cancel)) } },
-        )
-    }
+    val haptics = LocalHaptics.current
+    var renamingId by remember { mutableStateOf<Long?>(null) }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
         Text(
             text = stringResource(R.string.assistant_history),
@@ -1118,32 +1095,93 @@ private fun HistorySheet(
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             items(chats, key = { it.id }) { chat ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateItem()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (chat.id == currentId) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                        .clickable { onOpen(chat.id) }
-                        .padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            android.text.format.DateUtils.getRelativeTimeSpanString(chat.updatedAt).toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                val editing = renamingId == chat.id
+                AnimatedContent(
+                    targetState = editing,
+                    transitionSpec = { fadeIn(tween(160)).togetherWith(fadeOut(tween(110))) },
+                    label = "renameRow",
+                    modifier = Modifier.animateItem(),
+                ) { isEditing ->
+                    if (isEditing) {
+                        RenameRow(
+                            title = chat.title,
+                            onSave = { name ->
+                                haptics.perform(HapticEvent.TAP)
+                                onRename(chat.id, name)
+                                renamingId = null
+                            },
+                            onCancel = { renamingId = null },
                         )
-                    }
-                    IconButton(onClick = { renaming = chat }) {
-                        Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.assistant_rename))
-                    }
-                    IconButton(onClick = { onDelete(chat.id) }) {
-                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (chat.id == currentId) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                .clickable { onOpen(chat.id) }
+                                .padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    android.text.format.DateUtils.getRelativeTimeSpanString(chat.updatedAt).toString(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { renamingId = chat.id }) {
+                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.assistant_rename))
+                            }
+                            IconButton(onClick = { onDelete(chat.id) }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/** A chat's row while it is renamed: the name in a field, focused with the old name selected, then cancel or save. */
+@Composable
+private fun RenameRow(title: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var field by remember {
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(title, androidx.compose.ui.text.TextRange(0, title.length)))
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val canSave = field.text.isNotBlank()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextField(
+            value = field,
+            onValueChange = { field = if (it.text.length <= 60) it else it.copy(text = it.text.take(60)) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            textStyle = MaterialTheme.typography.bodyLarge,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { if (canSave) onSave(field.text) }),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focus),
+        )
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.assistant_rename_cancel))
+        }
+        FilledIconButton(onClick = { onSave(field.text) }, enabled = canSave) {
+            Icon(Icons.Rounded.Check, contentDescription = stringResource(R.string.assistant_rename_save))
         }
     }
 }
