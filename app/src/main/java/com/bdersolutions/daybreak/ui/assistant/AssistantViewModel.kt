@@ -17,6 +17,7 @@ import com.bdersolutions.daybreak.data.assistant.AssistantModels
 import com.bdersolutions.daybreak.data.assistant.AssistantToolRunner
 import com.bdersolutions.daybreak.data.assistant.ChatAttachment
 import com.bdersolutions.daybreak.data.assistant.ChatArchive
+import com.bdersolutions.daybreak.data.assistant.ChatSaving
 import com.bdersolutions.daybreak.data.assistant.ChatStore
 import com.bdersolutions.daybreak.data.assistant.ChatSummary
 import com.bdersolutions.daybreak.data.assistant.SavedChat
@@ -87,6 +88,21 @@ data class AssistantUiState(
     val pendingDraft: DraftState? get() = drafts.values.firstOrNull { it.status == DraftState.Status.PENDING || it.status == DraftState.Status.SENDING }
 }
 
+/** The chat as it would be saved, stamped [updatedAt]; null for a chat without a question yet. */
+internal fun AssistantUiState.toSavedChat(updatedAt: Long): SavedChat? {
+    val id = chatId ?: return null
+    if (messages.none { it.role == ChatRole.USER }) return null
+    return SavedChat(
+        id = id,
+        title = chatTitle ?: ChatArchive.titleFor(messages),
+        titleSource = titleSource,
+        updatedAt = updatedAt,
+        messages = messages,
+        drafts = drafts.mapValues { (_, state) -> SavedDraft(state.draft, state.status.name) },
+        cards = cards,
+    )
+}
+
 /**
  * The turn is over: the typing dots and the streaming cursor go away, whatever the last event was.
  * A provider may finish a round with "done" but without any text, and the newest answer may already
@@ -132,6 +148,9 @@ class AssistantViewModel(
     val available: Boolean get() = api != null
 
     private var nextId = 1L
+
+    /** The chat as last written (or as read when it was opened), to tell a real change from just opening it. */
+    private var lastSaved: SavedChat? = null
     private var answerJob: Job? = null
     private var draftDecision: CompletableDeferred<Boolean>? = null
 
@@ -174,22 +193,11 @@ class AssistantViewModel(
                 .debounce(SAVE_DELAY_MS)
                 .collect {
                     val current = _state.value
-                    val id = current.chatId
-                    val messages = current.messages
-                    val drafts = current.drafts
-                    if (id != null && messages.any { it.role == ChatRole.USER }) {
-                        chatStore.save(
-                            SavedChat(
-                                id = id,
-                                title = current.chatTitle ?: ChatArchive.titleFor(messages),
-                                titleSource = current.titleSource,
-                                updatedAt = System.currentTimeMillis(),
-                                messages = messages,
-                                drafts = drafts.mapValues { (_, state) -> SavedDraft(state.draft, state.status.name) },
-                                cards = current.cards,
-                            ),
-                        )
-                    }
+                    val candidate = current.toSavedChat(System.currentTimeMillis()) ?: return@collect
+                    // Only real changes are written; a chat that was only opened keeps its place and time.
+                    val chat = ChatSaving.toSave(lastSaved, candidate) ?: return@collect
+                    chatStore.save(chat)
+                    lastSaved = chat
                 }
         }
     }
@@ -226,6 +234,8 @@ class AssistantViewModel(
                     history = it.history,
                 )
             }
+            // What was read counts as saved, so opening the chat writes nothing.
+            lastSaved = _state.value.toSavedChat(chat.updatedAt)
         }
     }
 

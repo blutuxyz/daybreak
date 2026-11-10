@@ -24,6 +24,28 @@ enum class TitleSource { AUTO, AI, MANUAL }
 
 data class SavedDraft(val draft: MessageDraft, val status: String)
 
+/**
+ * What of a chat has to be written, given what was last saved. Opening a chat must not count as using it:
+ * otherwise every chat you only looked at jumped to the top of the history as "just now".
+ */
+object ChatSaving {
+    /**
+     * [candidate] is the chat as it is now, stamped with the current time. Returns what to save, or null
+     * when nothing changed. A new name alone keeps the old time, so renaming does not reorder the history
+     * (as renaming from the history list already does); new messages, drafts or cards take the new time.
+     */
+    fun toSave(lastSaved: SavedChat?, candidate: SavedChat): SavedChat? {
+        if (lastSaved == null || lastSaved.id != candidate.id) return candidate
+        val sameContent = lastSaved.messages == candidate.messages && lastSaved.drafts == candidate.drafts && lastSaved.cards == candidate.cards
+        val sameName = lastSaved.title == candidate.title && lastSaved.titleSource == candidate.titleSource
+        return when {
+            sameContent && sameName -> null
+            sameContent -> candidate.copy(updatedAt = lastSaved.updatedAt)
+            else -> candidate
+        }
+    }
+}
+
 /** A line of the chat history. */
 data class ChatSummary(val id: Long, val title: String, val updatedAt: Long)
 

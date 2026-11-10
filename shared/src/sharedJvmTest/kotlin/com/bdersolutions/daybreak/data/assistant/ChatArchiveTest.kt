@@ -76,4 +76,26 @@ class ChatArchiveTest {
         )
         assertEquals(chat, ChatArchive.decode(ChatArchive.encode(chat)))
     }
+
+    @Test
+    fun openingAChatSavesNothingAndRenamingKeepsItsPlace() {
+        val saved = SavedChat(
+            id = 3,
+            title = "Was habe ich morgen?",
+            updatedAt = 1_000,
+            messages = listOf(ChatMessage(1, ChatRole.USER, "Was habe ich morgen?"), ChatMessage(2, ChatRole.ASSISTANT, "Mathe.")),
+        )
+        // Just opened: the same chat, only stamped with the time now.
+        assertNull(ChatSaving.toSave(saved, saved.copy(updatedAt = 9_000)))
+
+        val renamed = ChatSaving.toSave(saved, saved.copy(title = "Morgen", titleSource = TitleSource.MANUAL, updatedAt = 9_000))!!
+        assertEquals("Morgen", renamed.title)
+        assertEquals("a new name keeps the chat where it is", 1_000L, renamed.updatedAt)
+
+        val asked = saved.copy(messages = saved.messages + ChatMessage(3, ChatRole.USER, "Und übermorgen?"), updatedAt = 9_000)
+        assertEquals("a new question moves it to the top", 9_000L, ChatSaving.toSave(saved, asked)!!.updatedAt)
+
+        assertEquals("a chat not saved yet is saved", asked, ChatSaving.toSave(null, asked))
+        assertEquals("another chat is saved as it is", asked, ChatSaving.toSave(saved.copy(id = 4), asked))
+    }
 }
