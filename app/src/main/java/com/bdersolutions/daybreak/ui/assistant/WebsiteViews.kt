@@ -29,7 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.animation.Crossfade
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.delay
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -90,12 +95,53 @@ val LocalOpenWebsite = compositionLocalOf<(WebsiteSource) -> Unit> { {} }
 /** Whether the server allows live HTML previews. Off, HTML code blocks get no Preview button. */
 val LocalLivePreviews = compositionLocalOf { true }
 
-/** Copies [text] to the clipboard and says so. */
+/** Copies [text] to the clipboard. */
 internal fun copyToClipboard(context: Context, text: String) {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     manager.setPrimaryClip(ClipData.newPlainText("Daybreak", text))
-    Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
 }
+
+/**
+ * A copy button. For a moment after it copied, the icon turns into a check mark, so the press is confirmed.
+ * [iconSize] sets the icon; the touch target stays the button's own size unless [modifier] changes it.
+ */
+@Composable
+internal fun CopyButton(text: String, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(COPIED_FEEDBACK_MS)
+            copied = false
+        }
+    }
+    IconButton(
+        onClick = {
+            copyToClipboard(context, text)
+            copied = true
+        },
+        modifier = modifier,
+    ) {
+        Crossfade(targetState = copied, label = "copyIcon") { done ->
+            if (done) {
+                Icon(
+                    Icons.Outlined.Check,
+                    contentDescription = stringResource(R.string.assistant_copied),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(iconSize),
+                )
+            } else {
+                Icon(
+                    Icons.Outlined.ContentCopy,
+                    contentDescription = stringResource(R.string.assistant_copy),
+                    modifier = Modifier.size(iconSize),
+                )
+            }
+        }
+    }
+}
+
+private const val COPIED_FEEDBACK_MS = 1500L
 
 /** The card a website leaves in the chat: "Generating code" while it is written, its title once it is done. */
 @Composable
@@ -210,9 +256,7 @@ private fun CodeView(code: String, language: String, generating: Boolean) {
                 color = colors.onSurfaceVariant,
             )
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = { copyToClipboard(context, code) }) {
-                Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.assistant_code_copy))
-            }
+            CopyButton(text = code)
         }
         Box(
             modifier = Modifier
@@ -259,9 +303,7 @@ internal fun CodeBlock(language: String, code: String) {
                         Text(stringResource(R.string.assistant_code_preview))
                     }
                 }
-                IconButton(onClick = { copyToClipboard(context, code) }) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.assistant_code_copy), modifier = Modifier.size(18.dp))
-                }
+                CopyButton(text = code, iconSize = 18.dp)
             }
             HighlightedCode(
                 code = code,

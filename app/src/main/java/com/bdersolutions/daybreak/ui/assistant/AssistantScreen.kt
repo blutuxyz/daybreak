@@ -94,7 +94,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.ContentCopy
+
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Delete
@@ -218,15 +218,13 @@ private fun WebsiteHost(source: WebsiteSource, state: AssistantUiState, onDismis
 
 /** Copy always; edit (a question) or regenerate (an answer) only while nothing is running. */
 @Composable
-private fun MessageActions(message: ChatMessage, canChange: Boolean, onCopy: () -> Unit, onEdit: () -> Unit, onRegenerate: () -> Unit) {
+private fun MessageActions(message: ChatMessage, canChange: Boolean, onEdit: () -> Unit, onRegenerate: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (message.role == ChatRole.USER) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.assistant_copy), modifier = Modifier.size(16.dp))
-        }
+        CopyButton(text = message.text, modifier = Modifier.size(32.dp), iconSize = 16.dp)
         if (canChange) {
             if (message.role == ChatRole.USER) {
                 IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
@@ -530,7 +528,6 @@ internal fun AssistantScreenContent(
                                     MessageActions(
                                         message = message,
                                         canChange = !state.busy,
-                                        onCopy = { copyToClipboard(context, message.text) },
                                         onEdit = { editing = message },
                                         onRegenerate = { viewModel.regenerate(message.id, language) },
                                     )
