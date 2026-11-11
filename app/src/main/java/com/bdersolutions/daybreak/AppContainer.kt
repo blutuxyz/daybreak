@@ -62,6 +62,9 @@ class AppContainer(context: Context) {
 
     val settingsRepository = SettingsRepository(preferences(SettingsRepository.PREFS_NAME))
 
+    // Whether the phone is online now; screens that need the server ask again when it comes back.
+    val networkMonitor = com.bdersolutions.daybreak.data.network.NetworkMonitor(appContext)
+
     // One haptics engine for the whole app. It reads the settings on every call, so edits apply at once.
     val haptics = Haptics(
         settings = { settingsRepository.current().haptics },

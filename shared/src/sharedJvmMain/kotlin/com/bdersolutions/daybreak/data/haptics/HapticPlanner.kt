@@ -116,6 +116,8 @@ object HapticPlanner {
             HapticStep(HapticPrimitive.SLOW_RISE, 0.5f),
             HapticStep(HapticPrimitive.CLICK, 0.9f, delayMs = 30),
         )
+        // Heavy on purpose: the assistant's answer arrives piece by piece, and each piece lands with weight.
+        HapticEvent.ANSWER_TOKEN -> listOf(HapticStep(HapticPrimitive.THUD, 0.85f))
         HapticEvent.DEBUG_TAP -> listOf(HapticStep(HapticPrimitive.TICK, 0.8f))
         HapticEvent.DEBUG_UNLOCK -> listOf(
             HapticStep(HapticPrimitive.THUD, 1f),

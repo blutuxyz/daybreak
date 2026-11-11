@@ -87,9 +87,7 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier, onOpenLes
     // Every cancelled lesson, whether something replaces it or not.
     val cancelledCount = card.entries.sumOf { entry -> entry.replaces.size + if (entry.cancelled) 1 else 0 }
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 36.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = colors.surfaceContainer,
         border = BorderStroke(1.dp, colors.outlineVariant),

@@ -21,6 +21,10 @@ import com.bdersolutions.daybreak.data.schedule.NowAndNext
 import java.time.format.DateTimeParseException
 import kotlin.coroutines.cancellation.CancellationException
 
+/** An amount of minutes as hours for the model and the summary: "20 hours", or "1.5 hours" when not whole. */
+internal fun hoursText(minutes: Long): String =
+    if (minutes % 60 == 0L) "${minutes / 60} hours" else String.format(java.util.Locale.ROOT, "%.1f hours", minutes / 60.0)
+
 /** The student's data the tools read. The app backs it with the repositories; tests with a fake. */
 interface AssistantData {
     /** Lessons between two days (both included), loading weeks that are not cached; null if none could be loaded. */
@@ -126,6 +130,7 @@ class AssistantToolRunner(
             "show_timetable" -> showTimetable(args)
             "show_exams" -> showExams(args)
             "show_absences" -> showAbsences()
+            "show_website" -> showWebsite(args)
             else -> ToolOutcome.Result("Unknown tool ${call.name}.")
         }
     } catch (error: CancellationException) {
@@ -243,11 +248,24 @@ class AssistantToolRunner(
         return ToolOutcome.Card(card, content)
     }
 
+    /** A website the model wrote, shown as a card with its preview and code. Nothing is run here. */
+    private fun showWebsite(args: JsonObject): ToolOutcome {
+        val html = args.string("html")?.trim().orEmpty()
+        if (html.isEmpty()) {
+            return ToolOutcome.Result("Error: no html was given, so nothing was shown. Call show_website again with the complete page.")
+        }
+        val title = args.string("title")?.replace(Regex("\\s+"), " ")?.trim()?.take(60)?.ifBlank { null } ?: "Website"
+        return ToolOutcome.Card(
+            WebsiteCard(title, html),
+            "Shown to the student as a website card, which opens a preview and the code. Do not repeat the code. Say in one or two short sentences what the page does.",
+        )
+    }
+
     private fun absenceText(card: AbsenceCard): String = buildString {
         append("Absences this school year: ${card.excusedCount + card.openCount} entries. ")
-        append("Time that counts (clipped to the lessons of each day, as on the Absences tab): ${card.countedMinutes} minutes")
-        append(" (${card.excusedMinutes} excused, ${card.openMinutes} not excused in ${card.openCount} entries)")
-        if (card.recordedMinutes != card.countedMinutes) append("; recorded by the school: ${card.recordedMinutes} minutes, since whole days are entered longer than the lessons")
+        append("Time that counts (clipped to the lessons of each day, as on the Absences tab): ${hoursText(card.countedMinutes)}")
+        append(" (${hoursText(card.excusedMinutes)} excused, ${hoursText(card.openMinutes)} not excused in ${card.openCount} entries)")
+        if (card.recordedMinutes != card.countedMinutes) append("; recorded by the school: ${hoursText(card.recordedMinutes)}, since whole days are entered longer than the lessons")
         appendLine(". One school lesson is 50 minutes.")
         card.entries.forEach { appendLine(AbsenceCards.line(it)) }
     }.trimEnd()

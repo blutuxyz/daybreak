@@ -62,6 +62,7 @@ import com.bdersolutions.daybreak.data.assistant.AbsenceCard
 import com.bdersolutions.daybreak.data.assistant.AssistantCard
 import com.bdersolutions.daybreak.data.assistant.DayCard
 import com.bdersolutions.daybreak.data.assistant.ExamCard
+import com.bdersolutions.daybreak.data.assistant.WebsiteCard
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.ui.absences.formatAbsenceDuration
 import com.bdersolutions.daybreak.ui.components.AccentBadge
@@ -88,6 +89,10 @@ internal fun AssistantCardView(card: AssistantCard, onOpenLesson: ((LessonFocus)
         is DayCard -> DayCardView(card, onOpenLesson = onOpenLesson)
         is ExamCard -> ExamCardView(card, onOpenLesson)
         is AbsenceCard -> AbsenceCardView(card)
+        is WebsiteCard -> {
+            val open = LocalOpenWebsite.current
+            WebsiteCardView(title = card.title, generating = false, onOpen = { open(WebsiteSource.Static(card.title, card.html)) })
+        }
     }
 }
 
@@ -99,9 +104,7 @@ private fun appLocale(): Locale = if (currentAppLanguage() == AppLanguage.GERMAN
 private fun CardFrame(icon: ImageVector, title: String, subtitle: String?, content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 36.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = colors.surfaceContainer,
         border = BorderStroke(1.dp, colors.outlineVariant),
@@ -345,14 +348,6 @@ internal fun AbsenceCardView(card: AbsenceCard) {
         AbsenceTotals(card)
         val locale = appLocale()
         CollapsibleRows(card.entries) { entry -> AbsenceRow(entry, locale) }
-        if (card.recordedMinutes != card.countedMinutes) {
-            Text(
-                stringResource(R.string.assistant_card_absences_clipped),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
-            )
-        }
     }
 }
 

@@ -106,6 +106,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBarDefaults
 import com.bdersolutions.daybreak.ui.assistant.DaybreakMark
+import com.bdersolutions.daybreak.ui.assistant.LaunchShine
 import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -501,6 +502,8 @@ fun TimetableScreen(
                                     size = 24,
                                     plain = true,
                                     tint = Color(0xFFF59E0B),
+                                    // Shines three times when the app starts (the first time it is shown in this process).
+                                    pulses = remember { if (LaunchShine.claim()) 3 else 0 },
                                     modifier = Modifier.semantics { contentDescription = assistantLabel },
                                 )
                             }

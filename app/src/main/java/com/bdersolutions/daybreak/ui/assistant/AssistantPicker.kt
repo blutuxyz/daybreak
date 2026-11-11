@@ -167,15 +167,24 @@ internal fun PickerChip(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(Modifier.width(6.dp))
-                        ModelTagBadge(
-                            text = lastTag,
-                            alarm = lastAlarm,
-                            onClick = {
-                                haptics.perform(HapticEvent.TAP)
-                                open = true
+                        // A new tag animates like the name: the old one slides out and the new one slides in, and the
+                        // chip's width springs to fit. Without this, a tag swapped for another tag jumped.
+                        AnimatedContent(
+                            targetState = lastTag,
+                            transitionSpec = {
+                                (fadeIn(tween(200, delayMillis = 60)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) { it / 2 })
+                                    .togetherWith(fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 2 })
+                                    .using(SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 0.85f, stiffness = 380f) })
                             },
-                            onLongClick = onTagLongClick,
-                        )
+                            label = "chipTag",
+                        ) { tagText ->
+                            // A plain label: the whole chip takes the tap and the long press, so the press shade covers
+                            // the chip, not only the badge.
+                            ModelTagBadge(
+                                text = tagText,
+                                alarm = lastAlarm,
+                            )
+                        }
                     }
                 }
                 AnimatedVisibility(

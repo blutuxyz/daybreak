@@ -554,6 +554,7 @@ private fun hapticEventLabel(event: HapticEvent): String = when (event) {
     HapticEvent.REFRESH_DONE -> stringResource(R.string.haptics_event_refresh_done)
     HapticEvent.ERROR -> stringResource(R.string.haptics_event_error)
     HapticEvent.LOGIN_SUCCESS -> stringResource(R.string.haptics_event_login_success)
+    HapticEvent.ANSWER_TOKEN -> stringResource(R.string.haptics_event_answer_token)
     HapticEvent.MESSAGE_SENT -> stringResource(R.string.haptics_event_message_sent)
     HapticEvent.UPDATE_READY -> stringResource(R.string.haptics_event_update_ready)
     HapticEvent.DEBUG_TAP -> stringResource(R.string.haptics_event_debug_tap)

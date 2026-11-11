@@ -93,7 +93,7 @@ class AssistantTest {
         assertTrue(text.contains("Thu 2026-11-12 08:00-09:30 M: Schulaufgabe 2"))
         assertTrue(text.contains("due Tue 2026-11-10 E: Workbook p. 12 [done]"))
         assertTrue(text.contains("Weihnachtsferien"))
-        assertTrue(text.contains("Absences this school year: 1 entries, 90 minutes recorded, 1 not excused"))
+        assertTrue(text.contains("Absences this school year: 1 entries, 1.5 hours recorded, 1 not excused"))
         assertFalse("holiday blocks are made for display only", text.contains("Ferien,"))
         assertFalse("weeks far from today are left out", text.contains("OLD"))
     }

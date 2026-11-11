@@ -193,6 +193,7 @@ ${modelRows(settings.models, settings.providers)}
 <p><label>Provider routing (OpenRouter) <select name="providerSort">${sortOptions}</select></label></p>
 <p>${checkbox('aiTitles', settings.aiTitles, 'Name new chats with a short AI title (one extra small request per chat, counted in the budget)')}</p>
 <p>${checkbox('showEffortSelector', settings.showEffortSelector, 'Show the reasoning-effort picker in the app')}</p>
+<p>${checkbox('livePreviews', settings.livePreviews, 'Live HTML previews: a website the assistant writes opens as a card with a Preview and its code. Off, websites come as HTML code blocks only, and the app shows no Preview.')}</p>
 <p><label>Levels the app offers <span class="hint">(${efforts.join(', ')}; not every model takes every level)</span> <input name="efforts" value="${escapeHtml(settings.efforts.join(', '))}" size="24"></label></p>
 <p><label>Default effort <select name="defaultEffort">${effortOptions}</select></label></p>
 <p>${checkbox('allowFallbacks', settings.allowFallbacks, 'Allow a fallback to another provider when one fails (OpenRouter)')}</p>

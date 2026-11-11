@@ -156,11 +156,17 @@ object ChatArchive {
         is DayCard -> encodeCard(card).apply { addProperty("kind", "day") }
         is ExamCard -> encodeExams(card).apply { addProperty("kind", "exams") }
         is AbsenceCard -> encodeAbsences(card).apply { addProperty("kind", "absences") }
+        is WebsiteCard -> JsonObject().apply {
+            addProperty("kind", "website")
+            addProperty("title", card.title)
+            addProperty("html", card.html)
+        }
     }
 
     private fun decodeAnyCard(o: JsonObject): AssistantCard = when (o.get("kind")?.asString) {
         "exams" -> decodeExams(o)
         "absences" -> decodeAbsences(o)
+        "website" -> WebsiteCard(o.get("title")?.asString.orEmpty(), o.get("html")?.asString.orEmpty())
         else -> decodeCard(o)
     }
 

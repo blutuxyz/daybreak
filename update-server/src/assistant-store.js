@@ -57,6 +57,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   aiTitles: true,
   /** Whether the app shows the reasoning-effort picker, which levels it offers, and the default ('' = the model's own). */
   showEffortSelector: false,
+  /**
+   * Live HTML previews: a website the assistant writes is shown as a card with a Preview and its code. Off, the
+   * assistant answers with the page as an HTML code block, and the app shows no Preview.
+   */
+  livePreviews: true,
   efforts: ['low', 'medium', 'high'],
   defaultEffort: '',
   /**
@@ -168,7 +173,7 @@ export function readSettings(value) {
   if (HIDDEN_ROUTINGS.some((routing) => routing.id === stored.hiddenRouting)) settings.hiddenRouting = stored.hiddenRouting;
   if (Array.isArray(stored.efforts)) settings.efforts = EFFORTS.filter((effort) => stored.efforts.includes(effort));
   if (typeof stored.defaultEffort === 'string') settings.defaultEffort = EFFORTS.includes(stored.defaultEffort) ? stored.defaultEffort : '';
-  for (const key of ['allowFallbacks', 'denyDataCollection', 'logContent', 'showModelSwitcher', 'showEffortSelector', 'aiTitles']) {
+  for (const key of ['allowFallbacks', 'denyDataCollection', 'logContent', 'showModelSwitcher', 'showEffortSelector', 'aiTitles', 'livePreviews']) {
     if (typeof stored[key] === 'boolean') settings[key] = stored[key];
   }
   for (const key of ['freeCentsPerDay', 'paidCentsPerDay', 'assistantPerMinute', 'updateChecksPerMinute', 'downloadsPerHour', 'logRetentionDays']) {
@@ -256,6 +261,7 @@ export function parseSettingsForm(body, current = DEFAULT_SETTINGS) {
       enabled: form.enabled !== undefined,
       showModelSwitcher: form.showModelSwitcher !== undefined,
       showEffortSelector: form.showEffortSelector !== undefined,
+      livePreviews: form.livePreviews !== undefined,
       aiTitles: form.aiTitles !== undefined,
       efforts: String(form.efforts ?? '').split(/[\s,]+/).filter(Boolean),
       defaultEffort: String(form.defaultEffort ?? ''),

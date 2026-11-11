@@ -109,16 +109,7 @@ internal fun AnswerText(blocks: List<Block>, streaming: Boolean, modifier: Modif
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
-                is Block.Code -> Surface(shape = RoundedCornerShape(10.dp), color = colors.surfaceContainerHighest) {
-                    Text(
-                        text = block.code,
-                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp),
-                        softWrap = false,
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
-                }
+                is Block.Code -> CodeBlock(language = block.language, code = block.code)
                 is Block.Math -> Text(
                     text = block.tex,
                     style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 20.sp),

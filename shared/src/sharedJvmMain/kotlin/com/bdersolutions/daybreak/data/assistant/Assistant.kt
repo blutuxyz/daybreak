@@ -72,6 +72,8 @@ data class AssistantModels(
     val showEffort: Boolean = false,
     val efforts: List<String> = emptyList(),
     val defaultEffort: String? = null,
+    /** Live HTML previews: websites open as a card with a Preview. Off, the app shows no Preview at all. */
+    val livePreviews: Boolean = true,
 )
 
 /** What the server streams back, one event at a time. */
@@ -79,6 +81,9 @@ sealed interface AssistantEvent {
     data class Text(val text: String) : AssistantEvent
     data class Reasoning(val text: String) : AssistantEvent
     data class ToolCalls(val calls: List<ToolCall>) : AssistantEvent
+
+    /** A piece of a tool call's arguments while the model writes them; [index] tells parallel calls apart. */
+    data class ToolDelta(val index: Int, val id: String, val name: String, val delta: String) : AssistantEvent
     data object Done : AssistantEvent
     data class Failure(val reason: AssistantFailure) : AssistantEvent
 }
@@ -166,7 +171,7 @@ object AssistantProtocol {
                                 JsonObject().apply {
                                     addProperty("id", call.id)
                                     addProperty("name", call.name)
-                                    addProperty("arguments", call.arguments.take(8000))
+                                    addProperty("arguments", call.arguments.take(64_000))
                                 },
                             )
                         }
@@ -260,6 +265,9 @@ object AssistantProtocol {
                 }.orEmpty()
                 if (calls.isEmpty()) null else AssistantEvent.ToolCalls(calls)
             }
+            "tool_delta" -> json.string("delta")?.let { delta ->
+                AssistantEvent.ToolDelta(json.get("index")?.asInt ?: 0, json.string("id").orEmpty(), json.string("name").orEmpty(), delta)
+            }
             "done" -> AssistantEvent.Done
             "error" -> AssistantEvent.Failure(failureFor(json.string("code")))
             else -> null
@@ -321,6 +329,7 @@ object AssistantProtocol {
             showEffort = (json.get("showEffort")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: false) && efforts.isNotEmpty(),
             efforts = efforts,
             defaultEffort = json.string("defaultEffort"),
+            livePreviews = json.get("livePreviews")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: true,
         )
     }
 
@@ -427,7 +436,7 @@ object AssistantContext {
                 val total = absences.fold(Duration.ZERO) { sum, absence -> sum + absence.duration }
                 val unexcused = absences.count { !it.excused }
                 out.appendLine(
-                    "Absences this school year: ${absences.size} entries, ${total.toMinutes()} minutes recorded, $unexcused not excused (details: get_absences).",
+                    "Absences this school year: ${absences.size} entries, ${hoursText(total.toMinutes())} recorded, $unexcused not excused (details: get_absences).",
                 )
             }
         }

@@ -177,8 +177,10 @@ fun DaybreakApp(
     // Like every other network call, the server is asked only after the terms are accepted, and again
     // each time the app comes back to the front, so a new minimum version reaches a phone that is open.
     val scope = rememberCoroutineScope()
-    LaunchedEffect(termsAccepted) {
-        if (termsAccepted) container.serverNotices.refresh()
+    // Asked again whenever the phone comes online, so a start without a connection heals itself.
+    val online by container.networkMonitor.online.collectAsStateWithLifecycle()
+    LaunchedEffect(termsAccepted, online) {
+        if (termsAccepted && online) container.serverNotices.refresh()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         if (termsAccepted) scope.launch { container.serverNotices.refresh() }
@@ -355,7 +357,13 @@ private fun LoggedInContent(
 
     // The assistant shows when the server offers it and the developer's switch ("assistant") is on.
     var assistantOffered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { assistantOffered = container.assistantApi?.models() != null }
+    val online by container.networkMonitor.online.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    // Asked when the app starts, whenever the phone comes online, and when the app comes back to the front.
+    LaunchedEffect(online) { assistantOffered = container.assistantApi?.models() != null }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        scope.launch { assistantOffered = container.assistantApi?.models() != null }
+    }
     val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
     val openAssistant: (() -> Unit)? = if (assistantShown) {
         { destination = Destination.Main(MainPage.ASSISTANT) }
