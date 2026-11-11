@@ -86,6 +86,18 @@ class AppContainer(context: Context) {
         AssistantApi(it, installId = { assistantIdentity.installId })
     }
 
+    // The assistant's settings tools. Lazy, because the schedulers it uses are declared further down.
+    val assistantSettings: com.bdersolutions.daybreak.data.settings.SettingsAssistantPort by lazy {
+        com.bdersolutions.daybreak.data.settings.SettingsAssistantPort(
+            settings = settingsRepository,
+            paid = { supportStore.paid.value },
+            syncScheduler = syncScheduler,
+            reminderScheduler = reminderScheduler,
+            updateScheduler = updateScheduler,
+            ensureNotificationChannel = { lessonNotificationManager.ensureChannel() },
+        )
+    }
+
     // Whether the introduction was finished (see TutorialStore). Kept apart from the session.
     val tutorialStore = TutorialStore(appContext)
     val secretVault = SecretVault(appContext)

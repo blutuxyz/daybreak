@@ -801,6 +801,11 @@
     <string name="assistant_tool_exams_card">Showed the exams</string>
     <string name="assistant_tool_absences_card">Showed the absences</string>
     <string name="assistant_tool_website">Made a website</string>
+    <string name="assistant_tool_settings_read">Read the settings</string>
+    <string name="assistant_tool_settings_change">Changed the settings</string>
+    <string name="assistant_settings_title">Settings changed</string>
+    <string name="assistant_settings_undo">Undo</string>
+    <string name="assistant_settings_undone">Undone</string>
     <string name="assistant_copy">Copy</string>
     <string name="assistant_copied">Copied</string>
     <string name="assistant_edit_message">Edit message</string>

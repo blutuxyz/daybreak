@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.data.assistant
 
+import com.bdersolutions.daybreak.data.settings.SettingChange
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -161,12 +162,39 @@ object ChatArchive {
             addProperty("title", card.title)
             addProperty("html", card.html)
         }
+        is SettingsChangeCard -> JsonObject().apply {
+            addProperty("kind", "settings")
+            addProperty("callId", card.callId)
+            addProperty("undone", card.undone)
+            add(
+                "changes",
+                JsonArray().also { array ->
+                    card.changes.forEach { change ->
+                        array.add(
+                            JsonObject().apply {
+                                addProperty("path", change.path)
+                                addProperty("from", change.from)
+                                addProperty("to", change.to)
+                            },
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun decodeAnyCard(o: JsonObject): AssistantCard = when (o.get("kind")?.asString) {
         "exams" -> decodeExams(o)
         "absences" -> decodeAbsences(o)
         "website" -> WebsiteCard(o.get("title")?.asString.orEmpty(), o.get("html")?.asString.orEmpty())
+        "settings" -> SettingsChangeCard(
+            callId = o.get("callId")?.asString.orEmpty(),
+            changes = o.getAsJsonArray("changes")?.map { element ->
+                val change = element.asJsonObject
+                SettingChange(change.get("path").asString, change.get("from").asString, change.get("to").asString)
+            }.orEmpty(),
+            undone = o.get("undone")?.asBoolean ?: false,
+        )
         else -> decodeCard(o)
     }
 

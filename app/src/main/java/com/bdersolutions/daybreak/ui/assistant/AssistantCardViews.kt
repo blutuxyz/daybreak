@@ -33,6 +33,9 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +65,7 @@ import com.bdersolutions.daybreak.data.assistant.AbsenceCard
 import com.bdersolutions.daybreak.data.assistant.AssistantCard
 import com.bdersolutions.daybreak.data.assistant.DayCard
 import com.bdersolutions.daybreak.data.assistant.ExamCard
+import com.bdersolutions.daybreak.data.assistant.SettingsChangeCard
 import com.bdersolutions.daybreak.data.assistant.WebsiteCard
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.ui.absences.formatAbsenceDuration
@@ -89,6 +93,7 @@ internal fun AssistantCardView(card: AssistantCard, onOpenLesson: ((LessonFocus)
         is DayCard -> DayCardView(card, onOpenLesson = onOpenLesson)
         is ExamCard -> ExamCardView(card, onOpenLesson)
         is AbsenceCard -> AbsenceCardView(card)
+        is SettingsChangeCard -> SettingsChangeCardView(card)
         is WebsiteCard -> {
             val open = LocalOpenWebsite.current
             WebsiteCardView(title = card.title, generating = false, onOpen = { open(WebsiteSource.Static(card.title, card.html)) })
@@ -451,6 +456,36 @@ private fun AbsenceRow(entry: AbsenceCard.Entry, locale: Locale) {
                 containerColor = if (entry.excused) colors.secondaryContainer else colors.errorContainer,
                 contentColor = if (entry.excused) colors.onSecondaryContainer else colors.onErrorContainer,
             )
+        }
+    }
+}
+
+/** Undoes the settings change of one card by its tool call id. Provided by the assistant screen. */
+internal val LocalUndoSettings = compositionLocalOf<(String) -> Unit> { {} }
+
+/** The settings a change_settings call changed, with an Undo until the student has used it. */
+@Composable
+private fun SettingsChangeCardView(card: SettingsChangeCard) {
+    val undo = LocalUndoSettings.current
+    CardFrame(
+        icon = Icons.Outlined.Settings,
+        title = stringResource(if (card.undone) R.string.assistant_settings_undone else R.string.assistant_settings_title),
+        subtitle = null,
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            card.changes.forEach { change ->
+                Text(
+                    text = "${change.path}: ${change.from} → ${change.to}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!card.undone) {
+                TextButton(onClick = { undo(card.callId) }) { Text(stringResource(R.string.assistant_settings_undo)) }
+            }
         }
     }
 }

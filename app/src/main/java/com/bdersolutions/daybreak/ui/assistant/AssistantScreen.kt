@@ -185,9 +185,11 @@ fun AssistantScreen(
     // A website opens over the whole chat: from a card, or from a code block's Preview.
     var website by remember { mutableStateOf<WebsiteSource?>(null) }
     val openWebsite: (WebsiteSource) -> Unit = { website = it }
+    val undoSettings: (String) -> Unit = { viewModel.undoSettings(it) }
     CompositionLocalProvider(
         LocalOpenWebsite provides openWebsite,
         LocalLivePreviews provides (state.models?.livePreviews ?: true),
+        LocalUndoSettings provides undoSettings,
     ) {
         AssistantScreenContent(viewModel = viewModel, onBack = onBack, modifier = modifier, onOpenLesson = onOpenLesson)
     }
@@ -621,7 +623,7 @@ private const val GROW_STAGGER_MS = 45
 
 
 /** Tools that show a card; the card says what they did, so they get no "looked it up" line. */
-private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences", WEBSITE_TOOL)
+private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences", WEBSITE_TOOL, "change_settings")
 
 /** A top-bar icon appearing: its space opens with a spring while it fades and grows in. */
 private val barIconEnter =
@@ -1021,6 +1023,8 @@ private fun toolLabel(name: String): String = when (name) {
     "show_timetable" -> stringResource(R.string.assistant_tool_timetable)
     "show_exams" -> stringResource(R.string.assistant_tool_exams_card)
     "show_absences" -> stringResource(R.string.assistant_tool_absences_card)
+    "get_settings" -> stringResource(R.string.assistant_tool_settings_read)
+    "change_settings" -> stringResource(R.string.assistant_tool_settings_change)
     "show_website" -> stringResource(R.string.assistant_tool_website)
     else -> name
 }

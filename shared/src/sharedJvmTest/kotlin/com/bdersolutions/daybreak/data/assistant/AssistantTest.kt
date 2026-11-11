@@ -224,7 +224,7 @@ class AssistantTest {
     }
 
     private fun runTool(name: String, args: String = "{}", data: AssistantData = FakeData()) =
-        runBlocking { AssistantToolRunner(data) { monday }.run(ToolCall("c1", name, args)) }
+        runBlocking { AssistantToolRunner(data, today = { monday }).run(ToolCall("c1", name, args)) }
 
     private fun resultOf(outcome: ToolOutcome) = (outcome as ToolOutcome.Result).content
 

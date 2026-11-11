@@ -270,6 +270,13 @@ test('the website tool takes a title and a whole page, and the prompt asks for o
   assert.match(SYSTEM_PROMPT, /one HTML file/);
 });
 
+test('the settings tools are offered and the prompt tells the agent when to use them', () => {
+  for (const name of ['get_settings', 'change_settings']) assert.ok(TOOLS.find((entry) => entry.name === name), name);
+  assert.deepEqual(TOOLS.find((entry) => entry.name === 'change_settings').parameters.required, ['changes']);
+  assert.match(SYSTEM_PROMPT, /call change_settings/);
+  assert.match(systemPromptFor(false), /call change_settings/);
+});
+
 test('with live previews off the website tool is not offered and websites come as HTML code blocks', () => {
   assert.ok(toolsFor(true).some((entry) => entry.name === 'show_website'));
   assert.ok(!toolsFor(false).some((entry) => entry.name === 'show_website'));

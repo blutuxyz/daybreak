@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.bdersolutions.daybreak.data.assistant.ChatMessage
 import com.bdersolutions.daybreak.data.assistant.ChatRole
+import com.bdersolutions.daybreak.data.assistant.SettingsChangeCard
+import com.bdersolutions.daybreak.data.settings.AssistantSettingsPort
 import com.bdersolutions.daybreak.data.assistant.MessageDraft
 import com.bdersolutions.daybreak.data.assistant.ToolCall
 import com.bdersolutions.daybreak.data.assistant.ToolOutcome
@@ -175,7 +177,20 @@ class AssistantViewModel(
     private val chatStore: ChatStore,
     /** Felt for each piece of an answer as it arrives; null where there is no motor (tests). */
     private val haptics: Haptics? = null,
+    /** Puts back the settings a change_settings call changed (the card's Undo). Null where there are none. */
+    private val settingsPort: AssistantSettingsPort? = null,
 ) : ViewModel() {
+
+    /** Undoes the settings change of one card: the values it changed go back to what they were. */
+    fun undoSettings(callId: String) {
+        val card = _state.value.cards[callId] as? SettingsChangeCard ?: return
+        if (card.undone) return
+        val port = settingsPort ?: return
+        val plan = port.apply(card.changes.associate { it.path to it.from })
+        if (plan.accepted) {
+            _state.update { it.copy(cards = it.cards + (callId to card.copy(undone = true))) }
+        }
+    }
     // The history the store already holds (it outlives this page), so the top bar's history icon is there
     // from the first frame instead of growing in while the page slides open.
     private val _state = MutableStateFlow(AssistantUiState(history = chatStore.chats.value))
@@ -588,7 +603,8 @@ class AssistantViewModel(
                 identity = container.assistantIdentity,
                 timetable = container.timetableRepository,
                 schoolData = container.schoolData,
-                tools = AssistantToolRunner(data),
+                tools = AssistantToolRunner(data, settings = container.assistantSettings),
+                settingsPort = container.assistantSettings,
                 supportStore = container.supportStore,
                 chatStore = container.chatStore,
                 haptics = container.haptics,

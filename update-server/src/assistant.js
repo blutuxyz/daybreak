@@ -138,6 +138,34 @@ export const TOOLS = [
     },
   },
   {
+    name: 'get_settings',
+    description:
+      'Every setting of the app with its current value and the values it accepts, one per line as path = value (accepted values). Call it before change_settings when you need the exact paths or values.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'change_settings',
+    description:
+      "Changes settings of the app the student asked for (theme, accent colour, timetable view, widget, haptics, reminders, lesson colours and so on). Give each change as a path and a value, both as text, the paths and values exactly as get_settings lists them. All the changes apply at once or none does. The change is shown in the chat with an Undo, so the student can take it back. Change only what the student asked for.",
+    parameters: {
+      type: 'object',
+      properties: {
+        changes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'The setting, e.g. appearance.accent' },
+              value: { type: 'string', description: 'The new value as text, e.g. FOREST, true, 80, #3366FF or auto' },
+            },
+            required: ['path', 'value'],
+          },
+        },
+      },
+      required: ['changes'],
+    },
+  },
+  {
     name: 'list_teachers',
     description: 'The teachers the student is allowed to write a WebUntis message to, with the user_id needed by draft_message.',
     parameters: { type: 'object', properties: {} },
@@ -180,6 +208,7 @@ How to work:
 - Absences ("how many absences do I have", "Fehlstunden"): call show_absences. The card shows the totals and every entry, so do not list them again. Give the time in hours, for example "20 hours" or "1.5 hours", never in minutes, unless the student asks for minutes. Use the time that counts from the result, not the recorded time. Add one short sentence at most (for example how much is not excused). Only say there are no absences if the data says "none recorded".
 - For "what do I have to study for my next exam": find the exam (get_exams), then read the teachers' notes on that subject (get_lesson_notes) and the exam text, and summarise the topics. Say clearly when no topics were written down.
 ${livePreviews ? LIVE_WEBSITE_RULE : DIRECT_WEBSITE_RULE}
+- App settings ("make the app dark", "show cancelled lessons", "turn the vibration off", "change the accent colour"): call get_settings to see the exact paths and values, then call change_settings with the changes the student asked for. Change only what they asked for. Then say in one short sentence what you changed, and that they can undo it in the chat.
 - Messages to teachers: only when the student asks. Call list_teachers, then draft_message. The student confirms in the app; never say a message was sent unless the tool result says "sent".
 - Answer in the language the app uses (<app_language>) unless the student writes in another one.
 - Be friendly and match the length to the question: one sentence for a quick fact, a short list or a few paragraphs for an explanation, a full worked answer for homework. Do not pad. 24-hour times (08:00). Name days by weekday and date.

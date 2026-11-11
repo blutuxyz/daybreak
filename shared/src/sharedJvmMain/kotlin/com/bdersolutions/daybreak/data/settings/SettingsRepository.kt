@@ -201,6 +201,11 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         update(_settings.value.copy(lessonColors = transform(_settings.value.lessonColors)))
     }
 
+    /** Replaces every setting at once, for the assistant's settings tool. The caller runs the side effects. */
+    fun replaceAll(value: AppSettings) {
+        update(value)
+    }
+
     fun updateAbsenceCategories(transform: (List<AbsenceCategory>) -> List<AbsenceCategory>) {
         update(_settings.value.copy(absenceCategories = transform(_settings.value.absenceCategories)))
     }

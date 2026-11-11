@@ -809,6 +809,11 @@
     <string name="assistant_tool_exams_card">Prüfungen gezeigt</string>
     <string name="assistant_tool_absences_card">Abwesenheiten gezeigt</string>
     <string name="assistant_tool_website">Webseite erstellt</string>
+    <string name="assistant_tool_settings_read">Einstellungen gelesen</string>
+    <string name="assistant_tool_settings_change">Einstellungen geändert</string>
+    <string name="assistant_settings_title">Einstellungen geändert</string>
+    <string name="assistant_settings_undo">Rückgängig</string>
+    <string name="assistant_settings_undone">Rückgängig gemacht</string>
     <string name="assistant_copy">Kopieren</string>
     <string name="assistant_copied">Kopiert</string>
     <string name="assistant_edit_message">Nachricht bearbeiten</string>
