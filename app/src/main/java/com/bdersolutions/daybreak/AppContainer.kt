@@ -100,6 +100,7 @@ class AppContainer(context: Context) {
 
     // Whether the introduction was finished (see TutorialStore). Kept apart from the session.
     val tutorialStore = TutorialStore(appContext)
+    val dawnIntroStore = com.bdersolutions.daybreak.data.assistant.DawnIntroStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(preferences(SessionStore.PREFS_NAME), secretVault)
     val rawLogStore = RawLogStore(appContext)

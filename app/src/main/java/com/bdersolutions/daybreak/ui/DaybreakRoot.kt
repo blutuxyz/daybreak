@@ -1,5 +1,7 @@
 package com.bdersolutions.daybreak.ui
 
+import com.bdersolutions.daybreak.ui.components.DaybreakBottomBar
+import com.bdersolutions.daybreak.ui.assistant.DawnIntroOverlay
 import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.runtime.saveable.Saver
 import com.bdersolutions.daybreak.ui.components.PushHost
@@ -213,7 +215,11 @@ fun DaybreakApp(
 
                     AppStage.TUTORIAL -> TutorialScreen(
                         settingsRepository = container.settingsRepository,
-                        onFinish = { container.tutorialStore.complete() },
+                        onFinish = {
+                            container.tutorialStore.complete()
+                            // New users meet the new name in the introduction, so the notice is not needed for them.
+                            container.dawnIntroStore.markShown()
+                        },
                     )
 
                     AppStage.APP -> DaybreakRoot(
@@ -365,6 +371,8 @@ private fun LoggedInContent(
         scope.launch { assistantOffered = container.assistantApi?.models() != null }
     }
     val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
+    // The one-time notice "Daylight AI is now Dawn" for people who already used the app.
+    var showDawnIntro by remember { mutableStateOf(!container.dawnIntroStore.shown()) }
     val openAssistant: (() -> Unit)? = if (assistantShown) {
         { destination = Destination.Main(MainPage.ASSISTANT) }
     } else {
@@ -580,6 +588,19 @@ private fun LoggedInContent(
                 },
             )
         }
+        if (showDawnIntro && assistantShown) {
+            DawnIntroOverlay(
+                onTry = {
+                    container.dawnIntroStore.markShown()
+                    showDawnIntro = false
+                    openAssistant?.invoke()
+                },
+                onLater = {
+                    container.dawnIntroStore.markShown()
+                    showDawnIntro = false
+                },
+            )
+        }
     }
 }
 
@@ -615,135 +636,3 @@ private val DestinationSaver = Saver<Destination?, String>(
         }
     },
 )
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun DaybreakBottomBar(
-    selectedTab: Int,
-    onSelect: (Int) -> Unit,
-) {
-    // A floating pill, like the Material 3 Expressive toolbar: the selected tab opens into a filled
-    // pill with its label, the others are round icon buttons.
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BottomBarItem(
-                selected = selectedTab == 0,
-                icon = Icons.Outlined.CalendarMonth,
-                selectedIcon = Icons.Filled.CalendarMonth,
-                label = stringResource(R.string.nav_timetable),
-                onClick = { onSelect(0) },
-            )
-            BottomBarItem(
-                selected = selectedTab == 1,
-                icon = Icons.Outlined.EventBusy,
-                selectedIcon = Icons.Filled.EventBusy,
-                label = stringResource(R.string.nav_absences),
-                onClick = { onSelect(1) },
-            )
-            BottomBarItem(
-                selected = selectedTab == 2,
-                icon = Icons.Outlined.MoreHoriz,
-                selectedIcon = Icons.Filled.MoreHoriz,
-                label = stringResource(R.string.nav_settings),
-                onClick = { onSelect(2) },
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun BottomBarItem(
-    selected: Boolean,
-    icon: ImageVector,
-    selectedIcon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    val motion = MaterialTheme.motionScheme
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            Color.Transparent
-        },
-        animationSpec = motion.defaultEffectsSpec(),
-        label = "bottomBarContainer",
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = motion.defaultEffectsSpec(),
-        label = "bottomBarContent",
-    )
-    val iconFade = motion.fastEffectsSpec<Float>()
-    val iconScale = motion.defaultSpatialSpec<Float>()
-    val labelSize = motion.defaultSpatialSpec<IntSize>()
-    Surface(
-        onClick = onClick,
-        // A 50 % corner is a full pill at any width; the surface's size animates when the label opens.
-        shape = RoundedCornerShape(50),
-        color = container,
-        contentColor = content,
-        modifier = Modifier
-            .height(56.dp)
-            .animateContentSize(labelSize),
-    ) {
-        Row(
-            modifier = Modifier
-                .height(56.dp)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AnimatedContent(
-                targetState = selected,
-                transitionSpec = {
-                    (
-                        fadeIn(iconFade) +
-                            scaleIn(iconScale, initialScale = 0.7f)
-                        )
-                        .togetherWith(
-                            fadeOut(iconFade) +
-                                scaleOut(iconScale, targetScale = 0.7f),
-                        )
-                        .using(SizeTransform(clip = false))
-                },
-                label = "bottomBarIcon",
-            ) { isSelected ->
-                Icon(
-                    imageVector = if (isSelected) selectedIcon else icon,
-                    contentDescription = if (isSelected) null else label,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            AnimatedVisibility(
-                visible = selected,
-                enter = fadeIn(iconFade) + expandHorizontally(labelSize),
-                exit = fadeOut(iconFade) + shrinkHorizontally(labelSize),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
-}

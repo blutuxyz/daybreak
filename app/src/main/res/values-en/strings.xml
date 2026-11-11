@@ -869,13 +869,13 @@
     <string name="tutorial_week_body">The week view shows all days side by side. Pinch with two fingers to zoom in and out.</string>
     <string name="tutorial_absences_title">Keep track of absences</string>
     <string name="tutorial_absences_body">The Absences tab adds up the time you missed and shows what still needs an excuse.</string>
-    <string name="tutorial_assistant_title">Ask the AI assistant</string>
-    <string name="tutorial_assistant_body">Tap the sparkle at the top and just ask – about exams, study topics or lessons. Messages only go out when you send them.</string>
+    <string name="tutorial_assistant_title">Ask Dawn</string>
+    <string name="tutorial_assistant_body">Tap the sparkle at the top and just ask – about exams, study topics or lessons. Dawn can also build websites and set up the app for you. Messages only go out when you send them.</string>
     <string name="tutorial_more_title">Make it yours</string>
-    <string name="tutorial_more_body">More has colours, AMOLED black, the widget and reminders. You can replay this tour there any time.</string>
+    <string name="tutorial_more_body">More has colours, AMOLED black, the widget and reminders. Or tell Dawn what you want, and Dawn sets up the app for you.</string>
     <string name="tutorial_pill_timetable">Timetable</string>
     <string name="tutorial_pill_exams">Exams</string>
-    <string name="tutorial_pill_assistant">AI assistant</string>
+    <string name="tutorial_pill_assistant">Dawn</string>
     <string name="tutorial_demo_math">Maths</string>
     <string name="tutorial_demo_german">German</string>
     <string name="tutorial_demo_english">English</string>
@@ -926,4 +926,8 @@
     <string name="assistant_thinking">Thinking…</string>
     <string name="assistant_thoughts_show">Show thoughts</string>
     <string name="assistant_thoughts_hide">Hide thoughts</string>
+    <string name="dawn_intro_title">Daylight AI is now Dawn</string>
+    <string name="dawn_intro_body">Same assistant, new name. Ask it about your week, or let it set up the app for you.</string>
+    <string name="dawn_intro_try">Try it</string>
+    <string name="dawn_intro_later">Later</string>
 </resources>

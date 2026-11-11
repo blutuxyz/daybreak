@@ -877,13 +877,13 @@
     <string name="tutorial_week_body">In der Wochenansicht stehen alle Tage nebeneinander. Mit zwei Fingern zoomst du hinein und heraus.</string>
     <string name="tutorial_absences_title">Abwesenheiten im Blick</string>
     <string name="tutorial_absences_body">Der Tab Fehlstunden zählt deine Fehlzeiten und zeigt, was noch entschuldigt werden muss.</string>
-    <string name="tutorial_assistant_title">Frag den KI-Assistenten</string>
-    <string name="tutorial_assistant_body">Tippe oben auf das Funkeln und frag einfach – nach Prüfungen, Lernstoff oder Stunden. Nachrichten sendest nur du.</string>
+    <string name="tutorial_assistant_title">Frag Dawn</string>
+    <string name="tutorial_assistant_body">Tippe oben auf das Funkeln und frag einfach – nach Prüfungen, Lernstoff oder Stunden. Dawn kann auch Webseiten bauen und die App für dich einstellen. Nachrichten sendest nur du.</string>
     <string name="tutorial_more_title">Mach sie zu deiner App</string>
-    <string name="tutorial_more_body">Unter Mehr: Farben, AMOLED-Schwarz, Widget und Erinnerungen. Dort kannst du diese Tour jederzeit wiederholen.</string>
+    <string name="tutorial_more_body">Unter Mehr: Farben, AMOLED-Schwarz, Widget und Erinnerungen. Oder sag Dawn, was du willst, und Dawn stellt die App für dich ein.</string>
     <string name="tutorial_pill_timetable">Stundenplan</string>
     <string name="tutorial_pill_exams">Prüfungen</string>
-    <string name="tutorial_pill_assistant">KI-Assistent</string>
+    <string name="tutorial_pill_assistant">Dawn</string>
     <string name="tutorial_demo_math">Mathe</string>
     <string name="tutorial_demo_german">Deutsch</string>
     <string name="tutorial_demo_english">Englisch</string>
@@ -934,4 +934,8 @@
     <string name="assistant_thinking">Denkt nach …</string>
     <string name="assistant_thoughts_show">Gedanken anzeigen</string>
     <string name="assistant_thoughts_hide">Gedanken ausblenden</string>
+    <string name="dawn_intro_title">Daylight AI heißt jetzt Dawn</string>
+    <string name="dawn_intro_body">Gleicher Assistent, neuer Name. Frag ihn nach deiner Woche oder lass ihn die App für dich einstellen.</string>
+    <string name="dawn_intro_try">Ausprobieren</string>
+    <string name="dawn_intro_later">Später</string>
 </resources>
