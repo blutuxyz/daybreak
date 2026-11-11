@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.assistant
 
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -32,8 +33,10 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +65,8 @@ import com.bdersolutions.daybreak.data.assistant.AbsenceCard
 import com.bdersolutions.daybreak.data.assistant.AssistantCard
 import com.bdersolutions.daybreak.data.assistant.DayCard
 import com.bdersolutions.daybreak.data.assistant.ExamCard
+import com.bdersolutions.daybreak.data.assistant.SettingsChangeCard
+import com.bdersolutions.daybreak.data.assistant.WebsiteCard
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.ui.absences.formatAbsenceDuration
 import com.bdersolutions.daybreak.ui.components.AccentBadge
@@ -88,6 +93,11 @@ internal fun AssistantCardView(card: AssistantCard, onOpenLesson: ((LessonFocus)
         is DayCard -> DayCardView(card, onOpenLesson = onOpenLesson)
         is ExamCard -> ExamCardView(card, onOpenLesson)
         is AbsenceCard -> AbsenceCardView(card)
+        is SettingsChangeCard -> SettingsChangeCardView(card)
+        is WebsiteCard -> {
+            val open = LocalOpenWebsite.current
+            WebsiteCardView(title = card.title, generating = false, onOpen = { open(WebsiteSource.Static(card.title, card.html)) })
+        }
     }
 }
 
@@ -99,9 +109,7 @@ private fun appLocale(): Locale = if (currentAppLanguage() == AppLanguage.GERMAN
 private fun CardFrame(icon: ImageVector, title: String, subtitle: String?, content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 36.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = colors.surfaceContainer,
         border = BorderStroke(1.dp, colors.outlineVariant),
@@ -345,14 +353,6 @@ internal fun AbsenceCardView(card: AbsenceCard) {
         AbsenceTotals(card)
         val locale = appLocale()
         CollapsibleRows(card.entries) { entry -> AbsenceRow(entry, locale) }
-        if (card.recordedMinutes != card.countedMinutes) {
-            Text(
-                stringResource(R.string.assistant_card_absences_clipped),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
-            )
-        }
     }
 }
 
@@ -456,6 +456,36 @@ private fun AbsenceRow(entry: AbsenceCard.Entry, locale: Locale) {
                 containerColor = if (entry.excused) colors.secondaryContainer else colors.errorContainer,
                 contentColor = if (entry.excused) colors.onSecondaryContainer else colors.onErrorContainer,
             )
+        }
+    }
+}
+
+/** Undoes the settings change of one card by its tool call id. Provided by the assistant screen. */
+internal val LocalUndoSettings = compositionLocalOf<(String) -> Unit> { {} }
+
+/** The settings a change_settings call changed, with an Undo until the student has used it. */
+@Composable
+private fun SettingsChangeCardView(card: SettingsChangeCard) {
+    val undo = LocalUndoSettings.current
+    CardFrame(
+        icon = Icons.Outlined.Settings,
+        title = stringResource(if (card.undone) R.string.assistant_settings_undone else R.string.assistant_settings_title),
+        subtitle = null,
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            card.changes.forEach { change ->
+                Text(
+                    text = "${change.path}: ${change.from} → ${change.to}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!card.undone) {
+                TextButton(onClick = { undo(card.callId) }) { Text(stringResource(R.string.assistant_settings_undo)) }
+            }
         }
     }
 }

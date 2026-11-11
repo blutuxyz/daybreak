@@ -1,5 +1,17 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Today
+import androidx.compose.material3.ToggleButtonDefaults
+import com.bdersolutions.daybreak.ui.components.pressTint
+import com.bdersolutions.daybreak.ui.components.TextButton
+import com.bdersolutions.daybreak.ui.components.IconButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
@@ -81,7 +93,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -91,12 +102,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import com.bdersolutions.daybreak.ui.assistant.DaybreakMark
+import com.bdersolutions.daybreak.ui.assistant.LaunchShine
 import com.bdersolutions.daybreak.ui.haptics.HapticPullToRefreshBox
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
@@ -492,6 +502,8 @@ fun TimetableScreen(
                                     size = 24,
                                     plain = true,
                                     tint = Color(0xFFF59E0B),
+                                    // Shines three times when the app starts (the first time it is shown in this process).
+                                    pulses = remember { if (LaunchShine.claim()) 3 else 0 },
                                     modifier = Modifier.semantics { contentDescription = assistantLabel },
                                 )
                             }
@@ -532,7 +544,7 @@ fun TimetableScreen(
                         modifier = Modifier.graphicsLayer {
                             scaleX = todayScale
                             scaleY = todayScale
-                        },
+                        }.pressTint(todayInteraction, RoundedCornerShape(50)),
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                         icon = { Icon(Icons.Outlined.Today, contentDescription = null) },
@@ -704,10 +716,10 @@ private fun lessonDetailParts(lesson: UntisLesson, targetType: ElementType?): Li
     ElementType.CLASS, null -> listOf(lesson.room, lesson.teacher)
 }.filter { it.isNotBlank() }
 
-// The newer overflow-aware ButtonGroup overload takes a non-composable scope
-// and cannot host ToggleButtons directly. Keep the expressive composable-child
-// overload so the toggle shape morph and spring motion stay intact.
-@Suppress("DEPRECATION")
+/**
+ * Day / Week switch, built like the bottom bar: a floating pill tray. The selected view is a filled pill
+ * with its icon and label; the other one shows only its icon. Presses use the same shade as the rest.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ViewModeSwitcher(
@@ -715,40 +727,102 @@ private fun ViewModeSwitcher(
     onModeChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dayInteraction = remember { MutableInteractionSource() }
-    val weekInteraction = remember { MutableInteractionSource() }
-    val dayScale by rememberPressScale(dayInteraction)
-    val weekScale by rememberPressScale(weekInteraction)
-    ButtonGroup(
-        modifier = modifier.fillMaxWidth(),
+    val haptics = LocalHaptics.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        ToggleButton(
-            checked = mode == 0,
-            onCheckedChange = { if (it) onModeChange(0) },
-            interactionSource = dayInteraction,
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .graphicsLayer {
-                    scaleX = dayScale
-                    scaleY = dayScale
-                },
+        ViewModeItem(
+            modifier = Modifier.weight(1f),
+            selected = mode == 0,
+            icon = Icons.Outlined.Today,
+            selectedIcon = Icons.Filled.Today,
+            label = stringResource(R.string.timetable_day),
+            onClick = {
+                if (mode != 0) haptics.perform(HapticEvent.TAB_SWITCH)
+                onModeChange(0)
+            },
+        )
+        ViewModeItem(
+            modifier = Modifier.weight(1f),
+            selected = mode == 1,
+            icon = Icons.Outlined.DateRange,
+            selectedIcon = Icons.Filled.DateRange,
+            label = stringResource(R.string.timetable_week),
+            onClick = {
+                if (mode != 1) haptics.perform(HapticEvent.TAB_SWITCH)
+                onModeChange(1)
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ViewModeItem(
+    modifier: Modifier,
+    selected: Boolean,
+    icon: ImageVector,
+    selectedIcon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    val motion = MaterialTheme.motionScheme
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "viewModeContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "viewModeContent",
+    )
+    // A calm spring (no overshoot) for the pill's width, and a short fade for the label, so the switch glides.
+    val size = spring<IntSize>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+    val fade = tween<Float>(durationMillis = 160, easing = FastOutSlowInEasing)
+    // The active view fills its half of the tray as a pill; the other stays a round icon button in the middle.
+    Row(
+        modifier = modifier
+            .fillMaxHeight()
+            .then(if (selected) Modifier.fillMaxWidth() else Modifier.width(56.dp))
+            .animateContentSize(size)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (selected) selectedIcon else icon,
+            contentDescription = if (selected) null else label,
+            tint = content,
+            modifier = Modifier.size(20.dp),
+        )
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(fade) + expandHorizontally(size),
+            exit = fadeOut(fade) + shrinkHorizontally(size),
         ) {
-            Text(stringResource(R.string.timetable_day))
-        }
-        ToggleButton(
-            checked = mode == 1,
-            onCheckedChange = { if (it) onModeChange(1) },
-            interactionSource = weekInteraction,
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .graphicsLayer {
-                    scaleX = weekScale
-                    scaleY = weekScale
-                },
-        ) {
-            Text(stringResource(R.string.timetable_week))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    color = content,
+                )
+            }
         }
     }
 }
@@ -979,7 +1053,7 @@ private fun DayStripRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(60.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 days.forEach { day ->
@@ -1042,16 +1116,11 @@ private fun DayChip(
     val pressScale by rememberPressScale(interactionSource)
     Column(
         modifier = modifier
-            .height(50.dp)
+            .height(60.dp)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                onClick = onClick,
-            ),
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -1075,28 +1144,41 @@ private fun DayChip(
             }
         }
         Spacer(Modifier.height(2.dp))
-        Surface(
-            shape = CircleShape,
-            color = container,
-            contentColor = content,
-            border = if (isToday && !selected) {
-                BorderStroke(1.dp, scheme.primary)
-            } else {
-                null
-            },
+        // The press shade is a circle around the date, not the whole cell.
+        Box(
             modifier = Modifier
-                .size(30.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
+                .size(38.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
+                    onClick = onClick,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = date.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+            Surface(
+                shape = CircleShape,
+                color = container,
+                contentColor = content,
+                border = if (isToday && !selected) {
+                    BorderStroke(1.dp, scheme.primary)
+                } else {
+                    null
+                },
+                modifier = Modifier
+                    .size(30.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }
@@ -1663,7 +1745,7 @@ private fun WeekPage(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .verticalScroll(rememberScrollState())
-                                    .padding(start = WEEK_GRID_START_PADDING, end = WEEK_GRID_END_PADDING)
+                                    .padding(start = WEEK_GRID_START_PADDING, end = WEEK_GRID_END_PADDING, top = WEEK_CHIP_BAND)
                                     .graphicsLayer { alpha = gridReveal.value },
                             ) {
                                 TimelineAxis(
@@ -1894,12 +1976,10 @@ private fun WeekDayColumn(
                     )
                 }
             }
-            OverflowChips(
+            ColumnOverflowChip(
                 overflows = layout.overflows,
-                range = range,
-                pxPerMinute = pxPerMinute,
-                chipHeight = 20.dp,
-                chipWidth = 28.dp,
+                chipHeight = 22.dp,
+                chipWidth = 36.dp,
                 onClick = onOverflowClick,
             )
         }
@@ -1946,21 +2026,21 @@ private fun BoxScope.OverflowChips(
 ) {
     overflows.forEach { overflow ->
         val top = pxPerMinute * minutesBetween(range.start, overflow.start)
-        // The bottom of the run's first 50 minutes: the text of a block sits at its top, so the chip
-        // covers the emptier part.
-        val slot = minOf(minutesBetween(overflow.start, overflow.end), 50)
-        val y = maxOf(top, top + pxPerMinute * slot - chipHeight - 3.dp)
+        // At the bottom of the run, where the text of the block does not reach, so no title is covered.
+        val span = minutesBetween(overflow.start, overflow.end)
+        val y = maxOf(top, top + pxPerMinute * span - chipHeight - 4.dp)
         val count = overflow.hidden.size
         val description = stringResource(R.string.timetable_overflow_description, count)
         Surface(
             onClick = { onClick(overflow) },
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowElevation = 2.dp,
+            // Neutral and outlined, so it reads as "more lessons here" and not as a selected item.
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset(x = (-2).dp, y = y)
+                .offset(x = (-4).dp, y = y)
                 .size(width = chipWidth, height = chipHeight)
                 .semantics { contentDescription = description },
         ) {
@@ -1978,6 +2058,56 @@ private fun BoxScope.OverflowChips(
     }
 }
 
+/** Room above the first lesson of the week grid, for the "+N" chip of each column. */
+private val WEEK_CHIP_BAND = 28.dp
+
+/**
+ * One "+N" chip for a whole day column, in the bottom corner: every lesson that did not fit, counted
+ * together and opened as one list. Replaces a chip per run, which was hard to follow in a busy week.
+ */
+@Composable
+private fun BoxScope.ColumnOverflowChip(
+    overflows: List<TimelineOverflow>,
+    chipHeight: Dp,
+    chipWidth: Dp,
+    onClick: (TimelineOverflow) -> Unit,
+) {
+    if (overflows.isEmpty()) return
+    val combined = remember(overflows) {
+        TimelineOverflow(
+            start = overflows.minOf { it.start },
+            end = overflows.maxOf { it.end },
+            hidden = overflows.flatMap { it.hidden },
+            concurrent = overflows.flatMap { it.concurrent }.distinct(),
+        )
+    }
+    val count = combined.hidden.size
+    val description = stringResource(R.string.timetable_overflow_description, count)
+    Surface(
+        onClick = { onClick(combined) },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .offset(y = 3.dp)
+            .size(width = chipWidth, height = chipHeight)
+            .semantics { contentDescription = description },
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = "+$count",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 /** Every lesson that runs in the span of a "+N" chip, to pick one from. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1987,6 +2117,7 @@ private fun OverflowSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -2004,14 +2135,17 @@ private fun OverflowSheet(
                 text = stringResource(R.string.timetable_overflow_title),
                 style = MaterialTheme.typography.titleLarge,
             )
-            Text(
-                text = "${formatTime(overflow.start)} – ${formatTime(overflow.end)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Spacer(Modifier.height(4.dp))
             overflow.concurrent.forEach { block ->
-                OverflowRow(block = block, onClick = { onLessonClick(block.detailLesson) })
+                OverflowRow(
+                    block = block,
+                    onClick = {
+                        // Slide the list away first, then open the lesson, so the two never stack.
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            onLessonClick(block.detailLesson)
+                        }
+                    },
+                )
             }
         }
     }
@@ -2855,25 +2989,34 @@ private fun NameRow(
             ) {
                 parts.forEach { name ->
                     val element = findElement(type, name)
-                    Surface(
-                        onClick = { element?.let(onOpen) },
-                        enabled = element != null,
-                        shape = CircleShape,
-                        color = if (element != null) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        },
-                        contentColor = if (element != null) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
+                    // A plain clipped box, not a Material surface: Material pads those to a 48 dp touch area,
+                    // which made the press shade bigger than the pill. The default press effect fills this pill exactly.
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(
+                                if (element != null) {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHighest
+                                },
+                            )
+                            .clickable(
+                                enabled = element != null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = LocalIndication.current,
+                                onClick = { element?.let(onOpen) },
+                            ),
                     ) {
                         Text(
                             text = name,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (element != null) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (element != null) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                         )
                     }

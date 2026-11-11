@@ -23,7 +23,7 @@ data class TimetableDisplay(
     val weekScale: Int = 100,
     /** The week view squeezes the whole school day into the screen instead of scrolling. */
     val weekFitsScreen: Boolean = false,
-    val concurrent: ConcurrentLessons = ConcurrentLessons.COMBINED,
+    val concurrent: ConcurrentLessons = ConcurrentLessons.SIDE_BY_SIDE,
     val showCancelled: Boolean = true,
     /** Free periods between lessons get a band with "Frei". */
     val showFreeBands: Boolean = true,

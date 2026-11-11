@@ -201,6 +201,11 @@ class SettingsRepository(private val preferences: KeyValueStore) {
         update(_settings.value.copy(lessonColors = transform(_settings.value.lessonColors)))
     }
 
+    /** Replaces every setting at once, for the assistant's settings tool. The caller runs the side effects. */
+    fun replaceAll(value: AppSettings) {
+        update(value)
+    }
+
     fun updateAbsenceCategories(transform: (List<AbsenceCategory>) -> List<AbsenceCategory>) {
         update(_settings.value.copy(absenceCategories = transform(_settings.value.absenceCategories)))
     }
@@ -333,7 +338,7 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             dayScale = preferences.getInt(KEY_DISPLAY_DAY_SCALE, 100),
             weekScale = preferences.getInt(KEY_DISPLAY_WEEK_SCALE, 100),
             weekFitsScreen = preferences.getBoolean(KEY_DISPLAY_WEEK_FITS, false),
-            concurrent = enumOrDefault(preferences.getString(KEY_DISPLAY_CONCURRENT, null), ConcurrentLessons.COMBINED),
+            concurrent = enumOrDefault(preferences.getString(KEY_DISPLAY_CONCURRENT, null), ConcurrentLessons.SIDE_BY_SIDE),
             showCancelled = preferences.getBoolean(KEY_DISPLAY_CANCELLED, true),
             showFreeBands = preferences.getBoolean(KEY_DISPLAY_FREE_BANDS, true),
             weekDetail = enumOrDefault(preferences.getString(KEY_DISPLAY_WEEK_DETAIL, null), WeekDetail.ROOM),

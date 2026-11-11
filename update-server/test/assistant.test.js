@@ -5,6 +5,8 @@ import {
   AssistantService,
   SYSTEM_PROMPT,
   TOOLS,
+  systemPromptFor,
+  toolsFor,
   buildOpenRouterBody,
   parseAssistantRequest,
 } from '../src/assistant.js';
@@ -249,9 +251,39 @@ test('tool calls are collected from the stream and passed to the app', async () 
   ];
   const { app, store } = await setup({ fetchImpl: fakeOpenRouter({ chunks }) });
   const list = events((await post(app, validBody)).body);
-  assert.deepEqual(list[0], { type: 'tool_calls', calls: [{ id: 'call_1', name: 'get_exams', arguments: '{"start_date":"2026-11-09"}' }] });
+  // The pieces of the arguments reach the app while they are written (a website's code is shown that way).
+  assert.deepEqual(
+    list.filter((e) => e.type === 'tool_delta').map((e) => e.delta),
+    ['{"start_date":', '"2026-11-09"}'],
+  );
+  assert.deepEqual(list.find((e) => e.type === 'tool_calls'), { type: 'tool_calls', calls: [{ id: 'call_1', name: 'get_exams', arguments: '{"start_date":"2026-11-09"}' }] });
   assert.deepEqual(list.at(-1), { type: 'done' });
   assert.equal((await store.logs())[0].status, 'tool_calls');
+});
+
+test('the website tool takes a title and a whole page, and the prompt asks for one single file', () => {
+  const tool = TOOLS.find((entry) => entry.name === 'show_website');
+  assert.ok(tool);
+  assert.deepEqual(tool.parameters.required, ['title', 'html']);
+  assert.match(tool.description, /single|one file|complete page/);
+  assert.match(SYSTEM_PROMPT, /call show_website/);
+  assert.match(SYSTEM_PROMPT, /one HTML file/);
+});
+
+test('the settings tools are offered and the prompt tells the agent when to use them', () => {
+  for (const name of ['get_settings', 'change_settings']) assert.ok(TOOLS.find((entry) => entry.name === name), name);
+  assert.deepEqual(TOOLS.find((entry) => entry.name === 'change_settings').parameters.required, ['changes']);
+  assert.match(SYSTEM_PROMPT, /call change_settings/);
+  assert.match(systemPromptFor(false), /call change_settings/);
+});
+
+test('with live previews off the website tool is not offered and websites come as HTML code blocks', () => {
+  assert.ok(toolsFor(true).some((entry) => entry.name === 'show_website'));
+  assert.ok(!toolsFor(false).some((entry) => entry.name === 'show_website'));
+  assert.ok(toolsFor(false).some((entry) => entry.name === 'get_exams'));
+  assert.doesNotMatch(systemPromptFor(false), /call show_website/);
+  assert.match(systemPromptFor(false), /```html/);
+  assert.match(systemPromptFor(true), /call show_website/);
 });
 
 test('a wrongly configured model ends in an upstream error, logged with the reason', async () => {
@@ -342,7 +374,7 @@ test('a hidden model switcher ignores the pick and routes to the default or a ra
   const models = [{ id: 'a/one', label: 'One' }, { id: 'b/two', label: 'Two' }];
   const fixed = await setup({ settings: { models, defaultModel: 'a/one', showModelSwitcher: false, hiddenRouting: 'fixed' } });
   const listed = (await fixed.app.inject({ method: 'GET', url: '/v1/assistant/models' })).json();
-  assert.deepEqual(listed, { showEffort: false, efforts: [], defaultEffort: null, showSwitcher: false, models: [], defaultModel: null });
+  assert.deepEqual(listed, { showEffort: false, efforts: [], defaultEffort: null, showSwitcher: false, livePreviews: true, models: [], defaultModel: null });
   await post(fixed.app, { ...validBody, model: 'b/two' });
   assert.equal(fixed.fetchImpl.calls.find((c) => c.url.endsWith('/chat/completions')).body.model, 'a/one');
 

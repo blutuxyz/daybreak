@@ -1,5 +1,9 @@
 package com.bdersolutions.daybreak.ui.tutorial
 
+import com.bdersolutions.daybreak.ui.components.TextButton
+import com.bdersolutions.daybreak.ui.components.Button
+import com.bdersolutions.daybreak.ui.components.IconButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -74,15 +78,11 @@ import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -132,6 +132,13 @@ import androidx.compose.ui.unit.sp
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
+import com.bdersolutions.daybreak.ui.components.DaybreakBottomBar
+import com.bdersolutions.daybreak.ui.assistant.DaybreakMark
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.SwapHoriz
 import com.bdersolutions.daybreak.ui.components.rememberSubjectTone
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.settings.AccentColor
@@ -585,39 +592,29 @@ private fun MockTopBar(title: String, subtitle: String, actions: List<ImageVecto
     }
 }
 
+/** The timetable's top bar as in the app: the icons on top (search, share, upcoming, target, Dawn), the title below. */
+@Composable
+private fun MockTimetableTopBar(subtitle: String) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Search, contentDescription = null, tint = muted, modifier = Modifier.padding(horizontal = 10.dp).size(22.dp))
+            Icon(Icons.Outlined.Share, contentDescription = null, tint = muted, modifier = Modifier.padding(horizontal = 10.dp).size(22.dp))
+            Icon(Icons.Outlined.Checklist, contentDescription = null, tint = muted, modifier = Modifier.padding(horizontal = 10.dp).size(22.dp))
+            Icon(Icons.Outlined.SwapHoriz, contentDescription = null, tint = muted, modifier = Modifier.padding(horizontal = 10.dp).size(22.dp))
+            DaybreakMark(size = 24, plain = true, tint = Color(0xFFF59E0B), modifier = Modifier.padding(horizontal = 8.dp))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("Daybreak", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = muted, maxLines = 1)
+    }
+}
+
 @Composable
 private fun MockBottomBar(selected: Int) {
-    val items = listOf(
-        Triple(Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, R.string.nav_timetable),
-        Triple(Icons.Outlined.EventBusy, Icons.Filled.EventBusy, R.string.nav_absences),
-        Triple(Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz, R.string.nav_settings),
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items.forEachIndexed { index, (icon, selectedIcon, label) ->
-            val isSelected = index == selected
-            val container by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                spring(stiffness = 400f),
-                label = "tab$index",
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(container)
-                    .padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(if (isSelected) selectedIcon else icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text(stringResource(label), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
+    // The app's own bottom bar, so the demo is the same floating pill as the app.
+    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        DaybreakBottomBar(selectedTab = selected, onSelect = {})
     }
 }
 
@@ -759,11 +756,7 @@ private fun DayScene(step: TutorialStep, registry: SpotRegistry, onOpenLesson: (
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        MockTopBar(
-            title = "Daybreak",
-            subtitle = stringResource(R.string.tutorial_demo_week_label),
-            actions = listOf(Icons.Outlined.AutoAwesome, Icons.Outlined.Search, Icons.Outlined.Checklist),
-        )
+        MockTimetableTopBar(subtitle = stringResource(R.string.tutorial_demo_week_label))
         Column(modifier = Modifier.weight(1f).spot(Target.DAY_AREA, registry)) {
         // Weekday strip
         Row(
@@ -1046,7 +1039,7 @@ private fun WeekScene(registry: SpotRegistry) {
         listOf(-1, -1, 2, 4, -1),
     )
     Column(modifier = Modifier.fillMaxSize()) {
-        MockTopBar(title = "Daybreak", subtitle = stringResource(R.string.tutorial_demo_week_label), actions = listOf(Icons.Outlined.AutoAwesome, Icons.Outlined.Search))
+        MockTimetableTopBar(subtitle = stringResource(R.string.tutorial_demo_week_label))
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -1227,7 +1220,7 @@ private fun AssistantScene(registry: SpotRegistry) {
         }
     }
     Column(modifier = Modifier.fillMaxSize()) {
-        MockTopBar(title = stringResource(R.string.assistant_title), subtitle = stringResource(R.string.assistant_subtitle))
+        MockDawnTopBar()
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -1256,9 +1249,8 @@ private fun AssistantScene(registry: SpotRegistry) {
                         Text(stringResource(R.string.assistant_tool_exams), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                     }
                     Row(verticalAlignment = Alignment.Top) {
-                        MiniOrb()
-                        Spacer(Modifier.width(6.dp))
-                        Surface(shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        // The answer sits in the chat without a bubble, as in the app.
+                        Surface(color = Color.Transparent) {
                             val shown = answerWords.take(words).joinToString(" ")
                             Text(
                                 text = if (thinking) AnnotatedString("• • •") else boldMarkdown(shown),
@@ -1286,17 +1278,19 @@ private fun AssistantScene(registry: SpotRegistry) {
     }
 }
 
+/** Dawn's top bar as in the app: back, the sparkle with its name, and the history and new-chat icons. */
 @Composable
-private fun MiniOrb() {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .drawBehind { drawCircle(Brush.sweepGradient(listOf(colors.primary, colors.tertiary, colors.secondary, colors.primary))) },
-        contentAlignment = Alignment.Center,
+private fun MockDawnTopBar() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(12.dp))
+        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.padding(12.dp).size(24.dp))
+        DaybreakMark(size = 24, plain = true)
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.assistant_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.padding(12.dp).size(24.dp))
+        Icon(Icons.Outlined.EditNote, contentDescription = null, modifier = Modifier.padding(12.dp).size(24.dp))
     }
 }
 

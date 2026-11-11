@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.assistant
 
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -109,16 +110,7 @@ internal fun AnswerText(blocks: List<Block>, streaming: Boolean, modifier: Modif
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
-                is Block.Code -> Surface(shape = RoundedCornerShape(10.dp), color = colors.surfaceContainerHighest) {
-                    Text(
-                        text = block.code,
-                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp),
-                        softWrap = false,
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
-                }
+                is Block.Code -> CodeBlock(language = block.language, code = block.code)
                 is Block.Math -> Text(
                     text = block.tex,
                     style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 20.sp),
@@ -195,6 +187,9 @@ internal const val FADE_NANOS = 380_000_000L
 /** The share of the waiting text released each frame: a small backlog drains slowly, a big one faster. */
 private const val RELEASE_SHARE = 0.15f
 
+/** How often the streamed answer releases more of its text: about every frame. */
+private const val REVEAL_STEP_MS = 16L
+
 /** The most characters released in one frame, so a long burst still reads as a stream. */
 private const val MAX_CHARS_PER_FRAME = 12
 
@@ -214,7 +209,9 @@ internal fun rememberRevealedLength(length: Int, streaming: Boolean): Int {
         }
         if (shown > length) shown = length
         while (shown < length) {
-            withFrameNanos { }
+            // A timer, not a frame: frames come only when something redraws, and while a tool's arguments stream
+            // the state changes only a few times a second, so a frame wait let the text fall far behind.
+            delay(REVEAL_STEP_MS)
             val backlog = length - shown
             shown += (backlog * RELEASE_SHARE).roundToInt().coerceIn(1, MAX_CHARS_PER_FRAME)
         }

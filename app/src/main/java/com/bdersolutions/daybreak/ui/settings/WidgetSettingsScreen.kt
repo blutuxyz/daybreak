@@ -1,5 +1,7 @@
 package com.bdersolutions.daybreak.ui.settings
 
+import com.bdersolutions.daybreak.ui.components.FilledTonalButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import androidx.compose.animation.animateColorAsState
@@ -32,10 +34,8 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

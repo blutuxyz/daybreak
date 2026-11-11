@@ -1,0 +1,81 @@
+name: Dev build APK
+
+# Builds a debug APK from any branch, for testing on a phone. It is started by hand
+# (Actions > Dev build APK > Run workflow): type the branch to build in the "branch" field, or leave
+# it empty to build the branch the workflow was started from.
+#
+# The build uses the same real settings as a release: the update server address comes from the
+# repository variable UPDATE_API_URL, so updates and the Ko-fi check reach the production server.
+# Debug builds still skip the server's minimum-version and message checks (see app/build.gradle.kts),
+# so a dev build with a low version code is never blocked by the production minimum.
+#
+# The APK is signed with the debug key (not the release key), so it cannot install over a release
+# build. It is attached to the run as the artifact "daybreak-dev-<branch>-<commit>".
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build, for example feat/new-widget. Empty means the branch this workflow runs from.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dev-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Name the build
+        id: info
+        run: |
+          branch="${{ inputs.branch || github.ref_name }}"
+          commit="$(git rev-parse --short HEAD)"
+          safe_branch="$(echo "$branch" | tr -c 'A-Za-z0-9._-' '-' | sed 's/-*$//')"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "artifact=daybreak-dev-$safe_branch-$commit" >> "$GITHUB_OUTPUT"
+          echo "Building $branch at $commit" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # The runner already has the Android SDK. Accepting the licences lets Gradle download the
+      # platform and build tools the project asks for.
+      - name: Accept the Android SDK licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the debug APK
+        env:
+          UPDATE_API_URL: ${{ vars.UPDATE_API_URL }}
+        run: |
+          if [ -z "$UPDATE_API_URL" ]; then
+            echo "The repository variable UPDATE_API_URL is not set, so the dev build would have no update server." >&2
+            exit 1
+          fi
+          ./gradlew :app:assembleDebug --no-daemon \
+            -Pdaybreak.updateApiUrl="$UPDATE_API_URL"
+
+      - name: Check the APK
+        run: |
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs "$apk" > /dev/null
+          echo "APK built: $(stat -c %s "$apk") bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.info.outputs.artifact }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error

@@ -1,5 +1,9 @@
 package com.bdersolutions.daybreak.ui.timetable
 
+import com.bdersolutions.daybreak.ui.components.pressTint
+import com.bdersolutions.daybreak.ui.components.SegmentedButton
+import com.bdersolutions.daybreak.ui.components.IconButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -52,14 +56,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -463,7 +464,8 @@ private fun TargetRow(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-            },
+            }
+            .pressTint(interaction, RoundedCornerShape(corner)),
     ) {
         Row(
             modifier = Modifier.padding(

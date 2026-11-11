@@ -1,5 +1,8 @@
 package com.bdersolutions.daybreak.ui.legal
 
+import com.bdersolutions.daybreak.ui.components.TextButton
+import com.bdersolutions.daybreak.ui.components.Button
+import com.bdersolutions.daybreak.ui.components.Surface
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -18,12 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PrivacyTip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment

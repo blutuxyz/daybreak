@@ -28,11 +28,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.bdersolutions.daybreak.data.assistant.ChatMessage
 import com.bdersolutions.daybreak.data.assistant.ChatRole
+import com.bdersolutions.daybreak.data.assistant.SettingsChangeCard
+import com.bdersolutions.daybreak.data.settings.AssistantSettingsPort
 import com.bdersolutions.daybreak.data.assistant.MessageDraft
 import com.bdersolutions.daybreak.data.assistant.ToolCall
 import com.bdersolutions.daybreak.data.assistant.ToolOutcome
 import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
+import com.bdersolutions.daybreak.data.haptics.HapticEvent
+import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.untis.UntisHomework
 import java.time.LocalDate
@@ -57,6 +61,15 @@ data class DraftState(
     enum class Status { PENDING, SENDING, SENT, CANCELLED, FAILED }
 }
 
+/** The tool that shows a website. Its arguments are read while the model writes them. */
+internal const val WEBSITE_TOOL = "show_website"
+
+/**
+ * A website whose code is still being written: the arguments so far, for the card's "Generating code" and the
+ * code view. Gone when the answer's tools run, and the finished website is a card then.
+ */
+data class LiveWebsite(val messageId: Long, val callId: String, val arguments: String)
+
 /** What the chat shows. */
 data class AssistantUiState(
     /** Every message, tool results included; the screen shows only questions and answers. */
@@ -70,8 +83,10 @@ data class AssistantUiState(
     val failure: AssistantFailure? = null,
     /** Drafted messages by tool call id. */
     val drafts: Map<String, DraftState> = emptyMap(),
-    /** Cards the assistant showed (a day, exams, absences), by tool call id. */
+    /** Cards the assistant showed (a day, exams, absences, websites), by tool call id. */
     val cards: Map<String, AssistantCard> = emptyMap(),
+    /** The website being written right now, or null. */
+    val live: LiveWebsite? = null,
     /** Pictures and files waiting in the input bar. */
     val staged: List<ChatAttachment> = emptyList(),
     val models: AssistantModels? = null,
@@ -110,7 +125,26 @@ internal fun AssistantUiState.toSavedChat(updatedAt: Long): SavedChat? {
  * A provider may finish a round with "done" but without any text, and the newest answer may already
  * have been shown, so neither the dots nor a stale streaming id may be left behind.
  */
-internal fun AssistantUiState.turnFinished(): AssistantUiState = copy(waiting = false, streamingId = null)
+internal fun AssistantUiState.turnFinished(): AssistantUiState = copy(waiting = false, streamingId = null, live = null)
+
+/**
+ * The chat up to (not including) the message at [index]: what a copy of the question or answer is resent from.
+ * Cards and drafts that belong to dropped tool calls go with it.
+ */
+internal fun AssistantUiState.truncatedAt(index: Int): AssistantUiState {
+    val kept = messages.take(index)
+    val callIds = kept.flatMap { message -> message.toolCalls.map { it.id } }.toSet()
+    return copy(
+        messages = kept,
+        cards = cards.filterKeys { it in callIds },
+        drafts = drafts.filterKeys { it in callIds },
+        live = null,
+        streamingId = null,
+        waiting = false,
+        runningTools = emptyList(),
+        failure = null,
+    )
+}
 
 /**
  * Asking again after a failure. The half answer of the failed round is dropped: it is never sent again
@@ -141,7 +175,22 @@ class AssistantViewModel(
     private val tools: AssistantToolRunner,
     private val supportStore: SupportStore,
     private val chatStore: ChatStore,
+    /** Felt for each piece of an answer as it arrives; null where there is no motor (tests). */
+    private val haptics: Haptics? = null,
+    /** Puts back the settings a change_settings call changed (the card's Undo). Null where there are none. */
+    private val settingsPort: AssistantSettingsPort? = null,
 ) : ViewModel() {
+
+    /** Undoes the settings change of one card: the values it changed go back to what they were. */
+    fun undoSettings(callId: String) {
+        val card = _state.value.cards[callId] as? SettingsChangeCard ?: return
+        if (card.undone) return
+        val port = settingsPort ?: return
+        val plan = port.apply(card.changes.associate { it.path to it.from })
+        if (plan.accepted) {
+            _state.update { it.copy(cards = it.cards + (callId to card.copy(undone = true))) }
+        }
+    }
     // The history the store already holds (it outlives this page), so the top bar's history icon is there
     // from the first frame instead of growing in while the page slides open.
     private val _state = MutableStateFlow(AssistantUiState(history = chatStore.chats.value))
@@ -166,22 +215,7 @@ class AssistantViewModel(
     private val absences: Deferred<List<UntisAbsence>?> = viewModelScope.async { data.absences() }
 
     init {
-        viewModelScope.launch {
-            val models = api?.models() ?: return@launch
-            val saved = identity.model
-            val selected = when {
-                !models.showSwitcher -> null
-                models.models.any { it.id == saved } -> saved
-                else -> models.defaultModel
-            }
-            val savedEffort = identity.effort
-            val effort = when {
-                !models.showEffort -> null
-                savedEffort in models.efforts -> savedEffort
-                else -> models.defaultEffort
-            }
-            _state.update { it.copy(models = models, selectedModel = selected, selectedEffort = effort) }
-        }
+        viewModelScope.launch { loadModels() }
         viewModelScope.launch {
             chatStore.load()
             chatStore.chats.collect { list -> _state.update { it.copy(history = list) } }
@@ -202,6 +236,32 @@ class AssistantViewModel(
                     lastSaved = chat
                 }
         }
+    }
+
+    /**
+     * Asks the server which models and options it offers now, and keeps the student's pick when it is still
+     * there. Called when the assistant opens, so a change on the server shows without restarting the app.
+     */
+    fun refreshModels() {
+        viewModelScope.launch { loadModels() }
+    }
+
+    /** An offline or failed request keeps the models shown before. */
+    private suspend fun loadModels() {
+        val models = api?.models() ?: return
+        val saved = identity.model
+        val selected = when {
+            !models.showSwitcher -> null
+            models.models.any { it.id == saved } -> saved
+            else -> models.defaultModel
+        }
+        val savedEffort = identity.effort
+        val effort = when {
+            !models.showEffort -> null
+            savedEffort in models.efforts -> savedEffort
+            else -> models.defaultEffort
+        }
+        _state.update { it.copy(models = models, selectedModel = selected, selectedEffort = effort) }
     }
 
     fun selectEffort(effort: String) {
@@ -321,6 +381,30 @@ class AssistantViewModel(
         ask(language)
     }
 
+    /**
+     * Sends [text] in place of the question [id], and asks again: that question and everything after it are
+     * replaced. Its pictures and files are sent again with the new text. Only when nothing is running.
+     */
+    fun editMessage(id: Long, text: String, language: String) {
+        val state = _state.value
+        if (state.busy) return
+        val index = state.messages.indexOfFirst { it.id == id && it.role == ChatRole.USER }
+        if (index < 0) return
+        val attachments = state.messages[index].attachments
+        _state.update { it.truncatedAt(index).copy(staged = attachments) }
+        send(text, language)
+    }
+
+    /** Asks again for the answer [id]: that answer and everything after it are replaced by a new one. */
+    fun regenerate(id: Long, language: String) {
+        val state = _state.value
+        if (state.busy) return
+        val index = state.messages.indexOfFirst { it.id == id && it.role == ChatRole.ASSISTANT }
+        if (index <= 0) return
+        _state.update { it.truncatedAt(index).copy(waiting = true) }
+        ask(language)
+    }
+
     /** The student's answer to a drafted message. Only `true` sends it. */
     fun decideDraft(send: Boolean) {
         draftDecision?.complete(send)
@@ -355,10 +439,19 @@ class AssistantViewModel(
         val answerId = nextId++
         var calls: List<ToolCall> = emptyList()
         var failed = false
+        // A website's code arrives in pieces: the arguments are kept per tool call (by stream index) for the live view.
+        val liveArgs = HashMap<Int, StringBuilder>()
+        val liveNames = HashMap<Int, String>()
+        val liveIds = HashMap<Int, String>()
+        var lastLive = 0L
         api.ask(_state.value.messages, context, language, _state.value.selectedModel, unlockCode, _state.value.selectedEffort).collect { event ->
             when (event) {
-                is AssistantEvent.Text -> _state.update { current ->
-                    current.copy(messages = current.messages.upsert(answerId) { it.copy(text = it.text + event.text) }, waiting = false, streamingId = answerId)
+                is AssistantEvent.Text -> {
+                    // Each piece of the answer is felt as it arrives.
+                    haptics?.perform(HapticEvent.ANSWER_TOKEN)
+                    _state.update { current ->
+                        current.copy(messages = current.messages.upsert(answerId) { it.copy(text = it.text + event.text) }, waiting = false, streamingId = answerId)
+                    }
                 }
 
                 // The model's reasoning arrives before the answer: it fills the "thinking" section.
@@ -369,7 +462,30 @@ class AssistantViewModel(
                 is AssistantEvent.ToolCalls -> {
                     calls = event.calls
                     _state.update { current ->
-                        current.copy(messages = current.messages.upsert(answerId) { it.copy(toolCalls = event.calls) })
+                        current.copy(messages = current.messages.upsert(answerId) { it.copy(toolCalls = event.calls) }, live = null)
+                    }
+                }
+
+                is AssistantEvent.ToolDelta -> {
+                    if (event.name.isNotBlank()) liveNames[event.index] = event.name
+                    if (event.id.isNotBlank()) liveIds[event.index] = event.id
+                    if (liveNames[event.index] == WEBSITE_TOOL) {
+                        val arguments = liveArgs.getOrPut(event.index) { StringBuilder() }.append(event.delta)
+                        // The code comes in many small pieces; the screen gets a fresh copy about eight times a second.
+                        val now = System.nanoTime()
+                        if (now - lastLive >= 120_000_000L) {
+                            lastLive = now
+                            val callId = liveIds[event.index].orEmpty()
+                            val snapshot = arguments.toString()
+                            _state.update { current ->
+                                current.copy(
+                                    messages = current.messages.upsert(answerId) { it },
+                                    waiting = false,
+                                    streamingId = answerId,
+                                    live = LiveWebsite(answerId, callId, snapshot),
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -487,9 +603,11 @@ class AssistantViewModel(
                 identity = container.assistantIdentity,
                 timetable = container.timetableRepository,
                 schoolData = container.schoolData,
-                tools = AssistantToolRunner(data),
+                tools = AssistantToolRunner(data, settings = container.assistantSettings),
+                settingsPort = container.assistantSettings,
                 supportStore = container.supportStore,
                 chatStore = container.chatStore,
+                haptics = container.haptics,
             ) as T
         }
     }

@@ -144,7 +144,11 @@ export async function* streamChatCompletions({ fetchImpl = fetch, provider, conn
       const current = calls.get(key) ?? { id: '', name: '', arguments: '' };
       if (call.id) current.id = call.id;
       if (call.function?.name) current.name += call.function.name;
-      if (call.function?.arguments) current.arguments += call.function.arguments;
+      if (call.function?.arguments) {
+        current.arguments += call.function.arguments;
+        // The app shows a website while its code is still being written, so it gets each new piece as it comes.
+        yield { type: 'tool_delta', index: key, id: current.id, name: current.name, delta: call.function.arguments };
+      }
       calls.set(key, current);
     }
   }
@@ -283,7 +287,11 @@ export async function* streamAnthropic({ fetchImpl = fetch, conn, modelId, messa
           yield { type: 'text', text: event.delta.text };
         } else if (event.delta?.type === 'input_json_delta') {
           const block = blocks.get(event.index);
-          if (block) block.json += event.delta.partial_json ?? '';
+          if (block) {
+            const piece = event.delta.partial_json ?? '';
+            block.json += piece;
+            yield { type: 'tool_delta', index: event.index, id: block.id, name: block.name, delta: piece };
+          }
         }
         break;
       case 'message_delta':

@@ -1,5 +1,11 @@
 package com.bdersolutions.daybreak.ui.assistant
 
+import com.bdersolutions.daybreak.ui.components.TextButton
+import com.bdersolutions.daybreak.ui.components.OutlinedButton
+import com.bdersolutions.daybreak.ui.components.Button
+import com.bdersolutions.daybreak.ui.components.FilledIconButton
+import com.bdersolutions.daybreak.ui.components.IconButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.core.content.FileProvider
 import java.io.File
@@ -88,7 +94,9 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.History
+
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Lock
@@ -99,28 +107,23 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -158,6 +161,8 @@ import com.bdersolutions.daybreak.data.assistant.AssistantFailure
 import com.bdersolutions.daybreak.data.assistant.ChatAttachment
 import com.bdersolutions.daybreak.data.assistant.ChatMessage
 import com.bdersolutions.daybreak.data.assistant.ChatRole
+import com.bdersolutions.daybreak.data.assistant.PartialJson
+import com.bdersolutions.daybreak.data.assistant.WebsiteCard
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
@@ -174,11 +179,80 @@ fun AssistantScreen(
     viewModel: AssistantViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenLesson: ((LessonFocus) -> Unit)? = null,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    // A website opens over the whole chat: from a card, or from a code block's Preview.
+    var website by remember { mutableStateOf<WebsiteSource?>(null) }
+    val openWebsite: (WebsiteSource) -> Unit = { website = it }
+    val undoSettings: (String) -> Unit = { viewModel.undoSettings(it) }
+    CompositionLocalProvider(
+        LocalOpenWebsite provides openWebsite,
+        LocalLivePreviews provides (state.models?.livePreviews ?: true),
+        LocalUndoSettings provides undoSettings,
+    ) {
+        AssistantScreenContent(viewModel = viewModel, onBack = onBack, modifier = modifier, onOpenLesson = onOpenLesson)
+    }
+    website?.let { source -> WebsiteHost(source = source, state = state, onDismiss = { website = null }) }
+}
+
+/** The open website: a finished one from its card or code block, or the call that is still writing it. */
+@Composable
+private fun WebsiteHost(source: WebsiteSource, state: AssistantUiState, onDismiss: () -> Unit) {
+    when (source) {
+        is WebsiteSource.Static -> WebsiteDialog(source.title, source.html, generating = false, onDismiss = onDismiss)
+        is WebsiteSource.Call -> {
+            val live = state.live?.takeIf { it.callId == source.callId }
+            val card = state.cards[source.callId] as? WebsiteCard
+            val generating = live != null
+            val title = live?.let { liveTitle(it.arguments, stringResource(R.string.assistant_website_default_title)) }
+                ?: card?.title
+            val html = if (live != null) PartialJson.string(live.arguments, "html").orEmpty() else card?.html
+            if (title != null && html != null) {
+                // One dialog for both: switching from writing to done keeps the tab the student is on.
+                WebsiteDialog(title = title, html = html, generating = generating, onDismiss = onDismiss)
+            } else {
+                LaunchedEffect(source) { onDismiss() }
+            }
+        }
+    }
+}
+
+/** Copy always; edit (a question) or regenerate (an answer) only while nothing is running. */
+@Composable
+private fun MessageActions(message: ChatMessage, canChange: Boolean, onEdit: () -> Unit, onRegenerate: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (message.role == ChatRole.USER) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CopyButton(text = message.text, modifier = Modifier.size(32.dp), iconSize = 16.dp)
+        if (canChange) {
+            if (message.role == ChatRole.USER) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.assistant_edit_message), modifier = Modifier.size(16.dp))
+                }
+            } else {
+                IconButton(onClick = onRegenerate, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.assistant_regenerate), modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun AssistantScreenContent(
+    viewModel: AssistantViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     /** Shows a lesson from a card (an exam, a lesson of a day) in the timetable. */
     onOpenLesson: ((LessonFocus) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptics = LocalHaptics.current
+    val openWebsite = LocalOpenWebsite.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val language = if (currentAppLanguage() == AppLanguage.GERMAN) "de" else "en"
@@ -189,6 +263,48 @@ fun AssistantScreen(
     // The messages of each chat as they were last on screen, for a chat that is leaving.
     val chatSnapshots = remember { HashMap<String, List<ChatMessage>>() }
     var showHistory by remember { mutableStateOf(false) }
+    // The question being edited (its text is changed and sent again).
+    var editing by remember { mutableStateOf<ChatMessage?>(null) }
+    // Each time the assistant opens, it starts a new chat. The flag is saved, so a rotation keeps the open chat,
+    // and it is dropped when the screen leaves, so the next opening starts fresh again.
+    var startedFresh by rememberSaveable { mutableStateOf(false) }
+    // The models the server offers now (a change on the server shows on the next opening).
+    LaunchedEffect(Unit) { viewModel.refreshModels() }
+    LaunchedEffect(Unit) {
+        if (!startedFresh) {
+            startedFresh = true
+            viewModel.clear()
+        }
+    }
+    editing?.let { message ->
+        var draft by remember(message.id) {
+            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(message.text, androidx.compose.ui.text.TextRange(message.text.length)))
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(stringResource(R.string.assistant_edit_message)) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 8,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val text = draft.text.trim()
+                        if (text.isNotEmpty()) viewModel.editMessage(message.id, text, language)
+                        editing = null
+                    },
+                ) { Text(stringResource(R.string.assistant_edit_send)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = null }) { Text(stringResource(R.string.assistant_rename_cancel)) }
+            },
+        )
+    }
     if (state.failure == AssistantFailure.LIMIT) {
         UsageLimitSheet(onDismiss = viewModel::dismissFailure)
     }
@@ -305,7 +421,8 @@ fun AssistantScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        DaybreakMark(size = 24, plain = true)
+                        // Shines once each time the assistant opens, after the page has slid into place (PushSpring settles in about 0.45 s).
+                        DaybreakMark(size = 24, plain = true, pulses = 1, startDelayMillis = 520L)
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.assistant_title))
                     }
@@ -385,7 +502,12 @@ fun AssistantScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(messages, key = { "${state.chatId}-${it.id}" }) { message ->
-                            Column(modifier = Modifier.animateItem(fadeInSpec = rowFadeIn, fadeOutSpec = null), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // No placement spring: when a thinking section opens, the messages below must follow its growing
+                            // height frame by frame. A spring lets them lag behind and overlap the card above.
+                            Column(
+                                modifier = Modifier.animateItem(fadeInSpec = rowFadeIn, placementSpec = null, fadeOutSpec = null),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
                                 if (message.role == ChatRole.ASSISTANT && message.reasoning.isNotBlank()) {
                                     ThinkingSection(
                                         reasoning = message.reasoning,
@@ -403,6 +525,18 @@ fun AssistantScreen(
                                         streaming = message.id == state.streamingId,
                                         replay = message.id == replayId,
                                     )
+                                }
+                                if (message.text.isNotBlank() && message.id != state.streamingId) {
+                                    MessageActions(
+                                        message = message,
+                                        canChange = !state.busy,
+                                        onEdit = { editing = message },
+                                        onRegenerate = { viewModel.regenerate(message.id, language) },
+                                    )
+                                }
+                                // A website still being written: its card says "Generating code" until the tools have run.
+                                state.live?.takeIf { it.messageId == message.id }?.let { live ->
+                                    WebsiteCardView(title = "", generating = true, onOpen = { openWebsite(WebsiteSource.Call(live.callId)) })
                                 }
                                 message.toolCalls.forEach { call ->
                                     state.cards[call.id]?.let { card -> AssistantCardView(card, onOpenLesson) }
@@ -489,7 +623,7 @@ private const val GROW_STAGGER_MS = 45
 
 
 /** Tools that show a card; the card says what they did, so they get no "looked it up" line. */
-private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences")
+private val CARD_TOOLS = setOf("show_timetable", "show_exams", "show_absences", WEBSITE_TOOL, "change_settings")
 
 /** A top-bar icon appearing: its space opens with a spring while it fades and grows in. */
 private val barIconEnter =
@@ -889,6 +1023,9 @@ private fun toolLabel(name: String): String = when (name) {
     "show_timetable" -> stringResource(R.string.assistant_tool_timetable)
     "show_exams" -> stringResource(R.string.assistant_tool_exams_card)
     "show_absences" -> stringResource(R.string.assistant_tool_absences_card)
+    "get_settings" -> stringResource(R.string.assistant_tool_settings_read)
+    "change_settings" -> stringResource(R.string.assistant_tool_settings_change)
+    "show_website" -> stringResource(R.string.assistant_tool_website)
     else -> name
 }
 
@@ -900,9 +1037,7 @@ private fun toolLabel(name: String): String = when (name) {
 private fun DraftCard(state: DraftState, onSend: () -> Unit, onCancel: () -> Unit) {
     val draft = state.draft
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 36.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -1004,9 +1139,10 @@ private fun InputBar(
     val colors = MaterialTheme.colorScheme
     val currentModel = models?.models?.firstOrNull { it.id == selectedModel } ?: models?.models?.firstOrNull()
     val currentEffort = selectedEffort ?: models?.defaultEffort ?: models?.efforts?.firstOrNull()
-    // The model's description opens under the prompt when its tag is tapped; a new model closes it.
-    var describing by remember { mutableStateOf(false) }
-    LaunchedEffect(currentModel?.id) { describing = false }
+    // The selected model's description shows under the prompt all the time. Its small X hides it, and the
+    // info icon or a long press brings it back. Choosing another model starts with that model's description
+    // shown, so the hidden state belongs to the model it was closed for.
+    var descriptionHidden by remember(currentModel?.id) { mutableStateOf(false) }
     val description = currentModel?.description.orEmpty()
     Surface(color = colors.surface) {
         Column(
@@ -1026,7 +1162,7 @@ private fun InputBar(
                 }
             }
             AnimatedVisibility(
-                visible = describing && description.isNotBlank(),
+                visible = !descriptionHidden && description.isNotBlank(),
                 enter = expandVertically(tween(260, easing = FastOutSlowInEasing)) + fadeIn(tween(200)),
                 exit = shrinkVertically(tween(200, easing = LinearOutSlowInEasing)) + fadeOut(tween(140)),
             ) {
@@ -1036,11 +1172,20 @@ private fun InputBar(
                     color = colors.secondaryContainer,
                     contentColor = colors.onSecondaryContainer,
                 ) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
+                    Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f).padding(top = 4.dp, bottom = 4.dp),
+                        )
+                        IconButton(onClick = { descriptionHidden = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.action_close),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                 }
             }
             Surface(
@@ -1081,9 +1226,9 @@ private fun InputBar(
                                 onSelect = onSelectModel,
                                 tag = currentModel.tag,
                                 tagAlarm = currentModel.tagAlarm,
-                                onTagLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
-                                onChipLongClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
-                                onInfoClick = if (description.isNotBlank()) ({ describing = !describing }) else null,
+                                onTagLongClick = if (description.isNotBlank()) ({ descriptionHidden = !descriptionHidden }) else null,
+                                onChipLongClick = if (description.isNotBlank()) ({ descriptionHidden = !descriptionHidden }) else null,
+                                onInfoClick = if (description.isNotBlank()) ({ descriptionHidden = !descriptionHidden }) else null,
                             )
                         }
                         if (models != null && models.showEffort && currentEffort != null) {
@@ -1228,8 +1373,9 @@ private fun HistorySheet(
                     AnimatedContent(
                         targetState = deletingId == chat.id,
                         transitionSpec = {
-                            (fadeIn(tween(200, delayMillis = 60)) + scaleIn(spring(dampingRatio = 0.85f, stiffness = 420f), initialScale = 0.96f))
-                                .togetherWith(fadeOut(tween(90)))
+                            // The same jump as the edit buttons: a bouncy spring up from 0.4, so the confirmation pops in.
+                            (fadeIn(tween(160, delayMillis = 40)) + scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f))
+                                .togetherWith(fadeOut(tween(90)) + scaleOut(tween(120), targetScale = 0.4f))
                                 .using(SizeTransform(clip = false) { _, _ -> renameSpring })
                         },
                         label = "historyDelete",

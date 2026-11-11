@@ -31,7 +31,8 @@ export const ASSISTANT_LIMITS = Object.freeze({
   maxAttachments: 4,
   /** Base64 characters of all attachments in one request (about 9 MB of files). */
   maxAttachmentChars: 12_000_000,
-  maxOutputTokens: 2048,
+  // A whole single-file website can take several thousand tokens; the budget still counts what is used.
+  maxOutputTokens: 8192,
 });
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -124,6 +125,47 @@ export const TOOLS = [
     parameters: { type: 'object', properties: {} },
   },
   {
+    name: 'show_website',
+    description:
+      "Shows a website to the student as a card in the chat; the card opens a Preview of the page and its Code. Use it whenever the student asks for a website, a web page, HTML, a small web app or a browser game. The html is the complete page as one file: the CSS in a <style> tag and the JavaScript in a <script> tag, starting with <!DOCTYPE html>, with no links to other files, no images from the web and no CDN scripts, so it runs on its own. Give the title first: a short name of two to five words.",
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short name of the website, two to five words' },
+        html: { type: 'string', description: 'The complete single-file HTML document' },
+      },
+      required: ['title', 'html'],
+    },
+  },
+  {
+    name: 'get_settings',
+    description:
+      'Every setting of the app with its current value and the values it accepts, one per line as path = value (accepted values). Call it before change_settings when you need the exact paths or values.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'change_settings',
+    description:
+      "Changes settings of the app the student asked for (theme, accent colour, timetable view, widget, haptics, reminders, lesson colours and so on). Give each change as a path and a value, both as text, the paths and values exactly as get_settings lists them. All the changes apply at once or none does. The change is shown in the chat with an Undo, so the student can take it back. Change only what the student asked for.",
+    parameters: {
+      type: 'object',
+      properties: {
+        changes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'The setting, e.g. appearance.accent' },
+              value: { type: 'string', description: 'The new value as text, e.g. FOREST, true, 80, #3366FF or auto' },
+            },
+            required: ['path', 'value'],
+          },
+        },
+      },
+      required: ['changes'],
+    },
+  },
+  {
     name: 'list_teachers',
     description: 'The teachers the student is allowed to write a WebUntis message to, with the user_id needed by draft_message.',
     parameters: { type: 'object', properties: {} },
@@ -147,24 +189,43 @@ export const TOOLS = [
 const TOOL_NAMES = new Set(TOOLS.map((tool) => tool.name));
 const LANGUAGES = new Set(['de', 'en']);
 
-export const SYSTEM_PROMPT = `You are the assistant inside Daybreak, an unofficial WebUntis timetable app for school students.
-You help one student with their own school week: lessons, cancellations and substitutions, rooms and teachers, exams and what to study for them, homework, holidays and absences. You can also help plan revision, read pictures or files the student attaches (worksheets, notes, a photo of the board), explain how to use the app, and answer short general school questions.
+/** The website rule with the live preview: a card the app opens as a preview and code (show_website). */
+const LIVE_WEBSITE_RULE = `- Websites ("make me a website", a web page, HTML, a small web app or a browser game): call show_website. Put the whole page in that one call as one HTML file, with the CSS in a <style> tag and the JavaScript in a <script> tag, starting with <!DOCTYPE html>, so the preview runs on its own. Do not link other files, CDN libraries or images from the web. Do not paste the code into the chat as well: say in one or two short sentences what the page does and how to use it. If you show HTML in a code block for another reason, keep it to one file too.`;
+
+/** The website rule when live previews are off: the page goes into the answer as one HTML code block. */
+const DIRECT_WEBSITE_RULE = `- Websites ("make me a website", a web page, HTML, a small web app or a browser game): do not call any tool for it. Answer with the complete page as one HTML file in a single \`\`\`html code block, with the CSS in a <style> tag and the JavaScript in a <script> tag, starting with <!DOCTYPE html>, so it runs on its own. Do not link other files, CDN libraries or images from the web. Put one or two short sentences before or after the block saying what the page does and how to use it.`;
+
+/** The instructions for one chat. Live previews on: websites are shown as cards (show_website); off: as HTML blocks. */
+export function systemPromptFor(livePreviews = true) {
+  return `You are Dawn, the assistant inside Daybreak, an unofficial WebUntis timetable app for students.
+You are a capable, general-purpose assistant. Help with whatever the student asks: explanations in any subject, maths and science, writing and editing text, translations, planning and studying, coding, everyday problems, and how to use the app. Read pictures and files the student attaches (worksheets, notes, a photo of the board, a PDF). Treat the student as a capable adult: answer directly and in substance instead of hedging or refusing by default. Decline only what would really cause harm, briefly and without lecturing.
+Daybreak's own strength is the student's school data. For their school week (lessons, cancellations and substitutions, rooms and teachers, exams, homework, lesson notes and topics, holidays, absences, messages to teachers), use the tools; they read the student's real data. You have no internet access beyond these tools: for live information such as news, weather, prices or opening hours, say you cannot look it up here.
 
 How to work:
 - The <timetable> block is a summary the app exported a moment ago. For other dates, lesson notes and topics, homework, absences or teachers, call the tools; they read the student's real data. Never invent lessons, rooms, teachers, exams, topics or times. If something is not in the data, say so.
 - "What do I have today / tomorrow / on Monday": call show_timetable for that day. The card already shows every lesson, so do not list them again; add one or two short sentences on what stands out (cancellations, substitutions, room changes, exams, notes), or just a short friendly line if the day is ordinary. If a show_ tool is not available, write the answer as a short list instead.
 - Exams ("when is my next exam", "what was the test on Friday"): call show_exams with a fitting range (for a past exam, a range that holds it). The card shows date, time, subject, teacher, room and the school's text, so do not repeat them; say in a sentence how soon it is or what stands out, and offer to look up the lesson notes for what to study.
-- Absences ("how many absences do I have"): call show_absences. The card shows the totals and every entry; add one short sentence at most (for example how much is not excused). Use the time that counts from the result, not the recorded time. Only say there are no absences if the data says "none recorded".
+- Absences ("how many absences do I have", "Fehlstunden"): call show_absences. The card shows the totals and every entry, so do not list them again. Give the time in hours, for example "20 hours" or "1.5 hours", never in minutes, unless the student asks for minutes. Use the time that counts from the result, not the recorded time. Add one short sentence at most (for example how much is not excused). Only say there are no absences if the data says "none recorded".
 - For "what do I have to study for my next exam": find the exam (get_exams), then read the teachers' notes on that subject (get_lesson_notes) and the exam text, and summarise the topics. Say clearly when no topics were written down.
+${livePreviews ? LIVE_WEBSITE_RULE : DIRECT_WEBSITE_RULE}
+- App settings ("make the app dark", "show cancelled lessons", "turn the vibration off", "change the accent colour"): call get_settings to see the exact paths and values, then call change_settings with the changes the student asked for. Change only what they asked for. A custom accent colour only shows when the phone's wallpaper colours are off, so whenever the student asks for an accent colour, also set appearance.dynamicColor to false in the same change_settings call. Then say in one short sentence what you changed, and that they can undo it in the chat.
 - Messages to teachers: only when the student asks. Call list_teachers, then draft_message. The student confirms in the app; never say a message was sent unless the tool result says "sent".
 - Answer in the language the app uses (<app_language>) unless the student writes in another one.
-- Be brief and friendly, like a helpful classmate: usually one to four short sentences or a short list. 24-hour times (08:00). Name days by weekday and date.
+- Be friendly and match the length to the question: one sentence for a quick fact, a short list or a few paragraphs for an explanation, a full worked answer for homework. Do not pad. 24-hour times (08:00). Name days by weekday and date.
 - Format with Markdown: short paragraphs, "- " bullet lists, "1. " numbered steps for worked solutions, **bold** for a key time, room or result. A "### " heading only to split a longer explanation, a small table only to compare a few things side by side. Code blocks only for real program code.
 - Maths: write every formula in LaTeX between dollar signs: $x^{2}$ inline, and $$...$$ on a line of its own for bigger formulas, for example $$x = \\frac{-b \\pm \\sqrt{b^{2}-4ac}}{2a}$$. Close every brace, and keep one formula inside one $...$ or $$...$$ pair, never split across pairs. The app renders it as the answer streams. Never write LaTeX commands (\\frac, \\sqrt, ^{...}) without delimiters, never put formulas in code blocks or backticks, and use \\begin{aligned}...\\end{aligned} only inside $$...$$. Write a plain number with a unit as text (5 €, 3 cm), not as a formula.
 - For homework or quiz questions, explain the steps so the student learns the method, not only the final answer.
-- You cannot change anything in WebUntis or see other students' data.
+- You cannot change anything in WebUntis or see other students' data. You cannot send a message: a message to a teacher is only sent when the student confirms the draft in the app.
 
 About the app, for "how do I" questions: the Timetable tab shows days and weeks (swipe between days, pinch to zoom, tap a lesson for details, the arrows icon switches to class, teacher or room timetables); the checklist icon opens homework and exams; the Absences tab lists absences and totals; More holds settings (appearance, AMOLED black, lesson colours, widget, notifications, sync, language), the profile, messages, and "Tutorial" to replay the introduction.`;
+}
+
+export const SYSTEM_PROMPT = systemPromptFor(true);
+
+/** The tools offered for one chat: show_website only while live previews are on. */
+export function toolsFor(livePreviews = true) {
+  return TOOLS.filter((tool) => livePreviews || tool.name !== 'show_website');
+}
 
 export function contextBlock({ language, context, today }) {
   return [
@@ -235,7 +296,8 @@ export function parseAssistantRequest(body) {
       for (const call of Array.isArray(raw.toolCalls) ? raw.toolCalls : []) {
         const id = text(call?.id, 120);
         const name = call?.name;
-        const args = text(call?.arguments ?? '{}', 8000);
+        // A website's page is sent back with its call, so the arguments can be long.
+        const args = text(call?.arguments ?? '{}', 64_000);
         if (!id || !TOOL_NAMES.has(name) || args === undefined) return { error: 'bad_tool_call' };
         toolCalls.push({ id, name, arguments: args });
         pendingCalls.add(id);
@@ -260,13 +322,13 @@ export function parseAssistantRequest(body) {
 }
 
 /** The chat in the Chat Completions format OpenRouter takes. */
-export function toOpenRouterMessages(request) {
+export function toOpenRouterMessages(request, livePreviews = true) {
   const out = [
     {
       role: 'system',
       content: [
         // Cached by providers that support it (Anthropic, Gemini); the instructions never change.
-        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: systemPromptFor(livePreviews), cache_control: { type: 'ephemeral' } },
         { type: 'text', text: contextBlock(request) },
       ],
     },
@@ -326,8 +388,8 @@ export function buildOpenRouterBody({ model, request, settings }) {
     model,
     stream: true,
     max_tokens: ASSISTANT_LIMITS.maxOutputTokens,
-    messages: toOpenRouterMessages(request),
-    tools: TOOLS.map((tool) => ({ type: 'function', function: tool })),
+    messages: toOpenRouterMessages(request, settings.livePreviews !== false),
+    tools: toolsFor(settings.livePreviews !== false).map((tool) => ({ type: 'function', function: tool })),
     tool_choice: 'auto',
     provider,
     ...(pickEffort(settings, request.effort) ? { reasoning: { effort: pickEffort(settings, request.effort) } } : {}),
@@ -448,6 +510,8 @@ export class AssistantService {
       efforts: settings.showEffortSelector ? settings.efforts : [],
       defaultEffort: settings.showEffortSelector ? settings.defaultEffort || settings.efforts.at(-1) || null : null,
       showSwitcher: settings.showModelSwitcher,
+      // Off: the app shows no HTML Preview; websites come as code blocks.
+      livePreviews: settings.livePreviews !== false,
       models: settings.showModelSwitcher ? settings.models.map(publicModel) : [],
       defaultModel: settings.showModelSwitcher ? settings.defaultModel : null,
     };
@@ -567,6 +631,9 @@ Answer: ${request.answer}`,
         } else if (event.type === 'reasoning') {
           reasoning += event.text;
           send(event);
+        } else if (event.type === 'tool_delta') {
+          // A piece of a tool call's arguments while the model writes them (a website's code, for one).
+          send({ type: 'tool_delta', index: event.index, id: event.id, name: event.name, delta: event.delta });
         } else {
           toolCalls = event.toolCalls;
           entry.costCents = costCents(upstream, allowed, event.usage);
@@ -612,8 +679,9 @@ export function buildOpenAiBody({ model, messages, tools }) {
 
 /** Streams one answer from the provider a model is served by, in that provider's own format. */
 async function* streamProvider({ fetchImpl, provider, conn, modelId, request, settings, referer, signal }) {
-  const messages = toOpenRouterMessages(request);
-  const tools = TOOLS.map((tool) => ({ type: 'function', function: tool }));
+  const livePreviews = settings.livePreviews !== false;
+  const messages = toOpenRouterMessages(request, livePreviews);
+  const tools = toolsFor(livePreviews).map((tool) => ({ type: 'function', function: tool }));
   if (provider.type === 'anthropic') {
     yield* streamAnthropic({ fetchImpl, conn, modelId, messages, tools, maxTokens: ASSISTANT_LIMITS.maxOutputTokens, signal });
     return;

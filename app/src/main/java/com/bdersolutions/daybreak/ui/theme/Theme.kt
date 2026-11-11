@@ -3,6 +3,8 @@ package com.bdersolutions.daybreak.ui.theme
 import android.app.Activity
 import android.content.Context
 import android.os.Build
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -16,6 +18,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.runtime.CompositionLocalProvider
@@ -294,6 +297,8 @@ fun DaybreakTheme(
         fontScale = baseDensity.fontScale * settings.textScale.multiplier,
     )
 
+    val pressFeedback = remember(colorScheme.onSurface) { PressFeedback(colorScheme.onSurface) }
+
     CompositionLocalProvider(
         LocalDensity provides scaledDensity,
         LocalSubjectColorMode provides settings.subjectColorMode,
@@ -308,7 +313,14 @@ fun DaybreakTheme(
             },
             shapes = DaybreakShapes,
             typography = Typography,
-            content = content,
-        )
+        ) {
+            // Inside the M3 theme, so nothing there can replace the press feedback with a ripple.
+            // No Material ripple anywhere: Material 3 components read this and draw nothing when it is null.
+            CompositionLocalProvider(
+                LocalIndication provides pressFeedback,
+                LocalRippleConfiguration provides null,
+                content = content,
+            )
+        }
     }
 }

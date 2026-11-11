@@ -1,5 +1,8 @@
 package com.bdersolutions.daybreak.ui
 
+import com.bdersolutions.daybreak.ui.components.DaybreakBottomBar
+import com.bdersolutions.daybreak.ui.assistant.DawnIntroOverlay
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.runtime.saveable.Saver
 import com.bdersolutions.daybreak.ui.components.PushHost
 import android.Manifest
@@ -9,6 +12,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -23,11 +30,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,11 +52,9 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FlexibleBottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,13 +67,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
@@ -119,7 +127,6 @@ import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.LessonFocus
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
 import com.bdersolutions.daybreak.ui.components.LocalAppTitle
-import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import com.bdersolutions.daybreak.data.tutorial.TutorialProgress
@@ -172,8 +179,10 @@ fun DaybreakApp(
     // Like every other network call, the server is asked only after the terms are accepted, and again
     // each time the app comes back to the front, so a new minimum version reaches a phone that is open.
     val scope = rememberCoroutineScope()
-    LaunchedEffect(termsAccepted) {
-        if (termsAccepted) container.serverNotices.refresh()
+    // Asked again whenever the phone comes online, so a start without a connection heals itself.
+    val online by container.networkMonitor.online.collectAsStateWithLifecycle()
+    LaunchedEffect(termsAccepted, online) {
+        if (termsAccepted && online) container.serverNotices.refresh()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         if (termsAccepted) scope.launch { container.serverNotices.refresh() }
@@ -206,7 +215,11 @@ fun DaybreakApp(
 
                     AppStage.TUTORIAL -> TutorialScreen(
                         settingsRepository = container.settingsRepository,
-                        onFinish = { container.tutorialStore.complete() },
+                        onFinish = {
+                            container.tutorialStore.complete()
+                            // New users meet the new name in the introduction, so the notice is not needed for them.
+                            container.dawnIntroStore.markShown()
+                        },
                     )
 
                     AppStage.APP -> DaybreakRoot(
@@ -350,8 +363,16 @@ private fun LoggedInContent(
 
     // The assistant shows when the server offers it and the developer's switch ("assistant") is on.
     var assistantOffered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { assistantOffered = container.assistantApi?.models() != null }
+    val online by container.networkMonitor.online.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    // Asked when the app starts, whenever the phone comes online, and when the app comes back to the front.
+    LaunchedEffect(online) { assistantOffered = container.assistantApi?.models() != null }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        scope.launch { assistantOffered = container.assistantApi?.models() != null }
+    }
     val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
+    // The one-time notice "Daylight AI is now Dawn" for people who already used the app.
+    var showDawnIntro by remember { mutableStateOf(!container.dawnIntroStore.shown()) }
     val openAssistant: (() -> Unit)? = if (assistantShown) {
         { destination = Destination.Main(MainPage.ASSISTANT) }
     } else {
@@ -391,13 +412,34 @@ private fun LoggedInContent(
             containerColor = MaterialTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                DaybreakBottomBar(
-                    selectedTab = selectedTab,
-                    onSelect = {
-                        if (it != selectedTab) haptics.perform(HapticEvent.TAB_SWITCH)
-                        selectedTab = it
-                    },
-                )
+                // The content fades out just above the bar instead of ending in a straight edge.
+                val fadeColor = MaterialTheme.colorScheme.surface
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            val fade = 32.dp.toPx()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(fadeColor.copy(alpha = 0f), fadeColor),
+                                    startY = -fade,
+                                    endY = 0f,
+                                ),
+                                topLeft = Offset(0f, -fade),
+                                size = Size(size.width, fade),
+                            )
+                        }
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    DaybreakBottomBar(
+                        selectedTab = selectedTab,
+                        onSelect = {
+                            if (it != selectedTab) haptics.perform(HapticEvent.TAB_SWITCH)
+                            selectedTab = it
+                        },
+                    )
+                }
             },
         ) { innerPadding ->
             AnimatedContent(
@@ -546,6 +588,19 @@ private fun LoggedInContent(
                 },
             )
         }
+        if (showDawnIntro && assistantShown) {
+            DawnIntroOverlay(
+                onTry = {
+                    container.dawnIntroStore.markShown()
+                    showDawnIntro = false
+                    openAssistant?.invoke()
+                },
+                onLater = {
+                    container.dawnIntroStore.markShown()
+                    showDawnIntro = false
+                },
+            )
+        }
     }
 }
 
@@ -581,125 +636,3 @@ private val DestinationSaver = Saver<Destination?, String>(
         }
     },
 )
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun DaybreakBottomBar(
-    selectedTab: Int,
-    onSelect: (Int) -> Unit,
-) {
-    FlexibleBottomAppBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        BottomBarItem(
-            selected = selectedTab == 0,
-            icon = Icons.Outlined.CalendarMonth,
-            selectedIcon = Icons.Filled.CalendarMonth,
-            label = stringResource(R.string.nav_timetable),
-            onClick = { onSelect(0) },
-            modifier = Modifier.weight(1f),
-        )
-        BottomBarItem(
-            selected = selectedTab == 1,
-            icon = Icons.Outlined.EventBusy,
-            selectedIcon = Icons.Filled.EventBusy,
-            label = stringResource(R.string.nav_absences),
-            onClick = { onSelect(1) },
-            modifier = Modifier.weight(1f),
-        )
-        BottomBarItem(
-            selected = selectedTab == 2,
-            icon = Icons.Outlined.MoreHoriz,
-            selectedIcon = Icons.Filled.MoreHoriz,
-            label = stringResource(R.string.nav_settings),
-            onClick = { onSelect(2) },
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun RowScope.BottomBarItem(
-    selected: Boolean,
-    icon: ImageVector,
-    selectedIcon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val motion = MaterialTheme.motionScheme
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            Color.Transparent
-        },
-        animationSpec = motion.defaultEffectsSpec(),
-        label = "bottomBarContainer",
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = motion.defaultEffectsSpec(),
-        label = "bottomBarContent",
-    )
-    val iconFade = motion.fastEffectsSpec<Float>()
-    val iconScale = motion.defaultSpatialSpec<Float>()
-    val interactionSource = remember { MutableInteractionSource() }
-    val corner by rememberMorphCorner(
-        interactionSource = interactionSource,
-        selected = selected,
-        selectedRadius = 32.dp,
-        unselectedRadius = 22.dp,
-        pressedRadius = 14.dp,
-    )
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(64.dp),
-        shape = RoundedCornerShape(corner),
-        color = container,
-        contentColor = content,
-        interactionSource = interactionSource,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            AnimatedContent(
-                targetState = selected,
-                transitionSpec = {
-                    (
-                        fadeIn(iconFade) +
-                            scaleIn(iconScale, initialScale = 0.7f)
-                        )
-                        .togetherWith(
-                            fadeOut(iconFade) +
-                                scaleOut(iconScale, targetScale = 0.7f),
-                        )
-                        .using(SizeTransform(clip = false))
-                },
-                label = "bottomBarIcon",
-            ) { isSelected ->
-                Icon(
-                    imageVector = if (isSelected) selectedIcon else icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}

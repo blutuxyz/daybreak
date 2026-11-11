@@ -62,6 +62,9 @@ class AppContainer(context: Context) {
 
     val settingsRepository = SettingsRepository(preferences(SettingsRepository.PREFS_NAME))
 
+    // Whether the phone is online now; screens that need the server ask again when it comes back.
+    val networkMonitor = com.bdersolutions.daybreak.data.network.NetworkMonitor(appContext)
+
     // One haptics engine for the whole app. It reads the settings on every call, so edits apply at once.
     val haptics = Haptics(
         settings = { settingsRepository.current().haptics },
@@ -83,8 +86,21 @@ class AppContainer(context: Context) {
         AssistantApi(it, installId = { assistantIdentity.installId })
     }
 
+    // The assistant's settings tools. Lazy, because the schedulers it uses are declared further down.
+    val assistantSettings: com.bdersolutions.daybreak.data.settings.SettingsAssistantPort by lazy {
+        com.bdersolutions.daybreak.data.settings.SettingsAssistantPort(
+            settings = settingsRepository,
+            paid = { supportStore.paid.value },
+            syncScheduler = syncScheduler,
+            reminderScheduler = reminderScheduler,
+            updateScheduler = updateScheduler,
+            ensureNotificationChannel = { lessonNotificationManager.ensureChannel() },
+        )
+    }
+
     // Whether the introduction was finished (see TutorialStore). Kept apart from the session.
     val tutorialStore = TutorialStore(appContext)
+    val dawnIntroStore = com.bdersolutions.daybreak.data.assistant.DawnIntroStore(appContext)
     val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(preferences(SessionStore.PREFS_NAME), secretVault)
     val rawLogStore = RawLogStore(appContext)

@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.account
 
+import com.bdersolutions.daybreak.ui.components.FilledTonalButton
 import androidx.compose.runtime.remember
 import com.bdersolutions.daybreak.ui.components.schoolPlainText
 import com.bdersolutions.daybreak.ui.components.schoolRichText
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text

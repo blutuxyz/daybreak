@@ -37,6 +37,8 @@ enum class HapticEvent(val category: HapticCategory) {
     LOGIN_SUCCESS(HapticCategory.MOMENTS),
     MESSAGE_SENT(HapticCategory.MOMENTS),
     UPDATE_READY(HapticCategory.MOMENTS),
+    /** One piece of an assistant answer as it arrives: a heavy knock per token, so the answer can be felt. */
+    ANSWER_TOKEN(HapticCategory.MOMENTS),
     DEBUG_TAP(HapticCategory.MOMENTS),
     DEBUG_UNLOCK(HapticCategory.MOMENTS),
     ;

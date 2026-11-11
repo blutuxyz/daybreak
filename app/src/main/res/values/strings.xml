@@ -642,6 +642,7 @@
     <string name="haptics_event_login_success">Anmeldung erfolgreich</string>
     <string name="haptics_event_message_sent">Nachricht gesendet</string>
     <string name="haptics_event_update_ready">Update bereit</string>
+    <string name="haptics_event_answer_token">Antwort des Assistenten: jedes Stück</string>
     <string name="haptics_event_debug_tap">Debug-Freischaltung: Tippen</string>
     <string name="haptics_event_debug_unlock">Debug freigeschaltet</string>
 
@@ -807,6 +808,25 @@
     <string name="assistant_card_instead">Statt</string>
     <string name="assistant_tool_exams_card">Prüfungen gezeigt</string>
     <string name="assistant_tool_absences_card">Abwesenheiten gezeigt</string>
+    <string name="assistant_tool_website">Webseite erstellt</string>
+    <string name="assistant_tool_settings_read">Einstellungen gelesen</string>
+    <string name="assistant_tool_settings_change">Einstellungen geändert</string>
+    <string name="assistant_settings_title">Einstellungen geändert</string>
+    <string name="assistant_settings_undo">Rückgängig</string>
+    <string name="assistant_settings_undone">Rückgängig gemacht</string>
+    <string name="assistant_copy">Kopieren</string>
+    <string name="assistant_copied">Kopiert</string>
+    <string name="assistant_edit_message">Nachricht bearbeiten</string>
+    <string name="assistant_edit_send">Senden</string>
+    <string name="assistant_regenerate">Neu erzeugen</string>
+    <string name="assistant_code_copy">Code kopieren</string>
+    <string name="assistant_code_preview">Vorschau</string>
+    <string name="assistant_website_preview">Vorschau</string>
+    <string name="assistant_website_code">Code</string>
+    <string name="assistant_website_generating">Code wird erzeugt</string>
+    <string name="assistant_website_writing">Die Seite wird noch geschrieben …</string>
+    <string name="assistant_website_tap">Tippen für Vorschau und Code</string>
+    <string name="assistant_website_default_title">Webseite</string>
     <string name="assistant_card_exams_title">Prüfungen</string>
     <string name="assistant_card_exams_none">Keine Prüfungen in diesem Zeitraum.</string>
     <string name="assistant_card_yesterday">Gestern</string>
@@ -821,7 +841,6 @@
     <string name="assistant_card_absences_title">Abwesenheiten</string>
     <string name="assistant_card_absences_year">Dieses Schuljahr</string>
     <string name="assistant_card_absences_none">In diesem Schuljahr ist keine Abwesenheit eingetragen.</string>
-    <string name="assistant_card_absences_clipped">Ganze Tage zählen nur mit ihren Stunden, wie im Tab Abwesenheiten.</string>
     <plurals name="assistant_card_more">
         <item quantity="one">%d weiterer</item>
         <item quantity="other">%d weitere</item>
@@ -858,13 +877,13 @@
     <string name="tutorial_week_body">In der Wochenansicht stehen alle Tage nebeneinander. Mit zwei Fingern zoomst du hinein und heraus.</string>
     <string name="tutorial_absences_title">Abwesenheiten im Blick</string>
     <string name="tutorial_absences_body">Der Tab Fehlstunden zählt deine Fehlzeiten und zeigt, was noch entschuldigt werden muss.</string>
-    <string name="tutorial_assistant_title">Frag den KI-Assistenten</string>
-    <string name="tutorial_assistant_body">Tippe oben auf das Funkeln und frag einfach – nach Prüfungen, Lernstoff oder Stunden. Nachrichten sendest nur du.</string>
+    <string name="tutorial_assistant_title">Frag Dawn</string>
+    <string name="tutorial_assistant_body">Tippe oben auf das Funkeln und frag einfach – nach Prüfungen, Lernstoff oder Stunden. Dawn kann auch Webseiten bauen und die App für dich einstellen. Nachrichten sendest nur du.</string>
     <string name="tutorial_more_title">Mach sie zu deiner App</string>
-    <string name="tutorial_more_body">Unter Mehr: Farben, AMOLED-Schwarz, Widget und Erinnerungen. Dort kannst du diese Tour jederzeit wiederholen.</string>
+    <string name="tutorial_more_body">Unter Mehr: Farben, AMOLED-Schwarz, Widget und Erinnerungen. Oder sag Dawn, was du willst, und Dawn stellt die App für dich ein.</string>
     <string name="tutorial_pill_timetable">Stundenplan</string>
     <string name="tutorial_pill_exams">Prüfungen</string>
-    <string name="tutorial_pill_assistant">KI-Assistent</string>
+    <string name="tutorial_pill_assistant">Dawn</string>
     <string name="tutorial_demo_math">Mathe</string>
     <string name="tutorial_demo_german">Deutsch</string>
     <string name="tutorial_demo_english">Englisch</string>
@@ -915,4 +934,8 @@
     <string name="assistant_thinking">Denkt nach …</string>
     <string name="assistant_thoughts_show">Gedanken anzeigen</string>
     <string name="assistant_thoughts_hide">Gedanken ausblenden</string>
+    <string name="dawn_intro_title">Daylight AI heißt jetzt Dawn</string>
+    <string name="dawn_intro_body">Gleicher Assistent, neuer Name. Frag ihn nach deiner Woche oder lass ihn die App für dich einstellen.</string>
+    <string name="dawn_intro_try">Ausprobieren</string>
+    <string name="dawn_intro_later">Später</string>
 </resources>

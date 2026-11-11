@@ -11,6 +11,8 @@ import com.bdersolutions.daybreak.untis.UntisExam
 import com.bdersolutions.daybreak.untis.UntisHomework
 import com.bdersolutions.daybreak.untis.UntisLesson
 import com.bdersolutions.daybreak.untis.UntisRecipient
+import com.bdersolutions.daybreak.data.settings.AssistantSettingsPort
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.time.Duration
@@ -20,6 +22,10 @@ import com.bdersolutions.daybreak.data.schedule.LessonRun
 import com.bdersolutions.daybreak.data.schedule.NowAndNext
 import java.time.format.DateTimeParseException
 import kotlin.coroutines.cancellation.CancellationException
+
+/** An amount of minutes as hours for the model and the summary: "20 hours", or "1.5 hours" when not whole. */
+internal fun hoursText(minutes: Long): String =
+    if (minutes % 60 == 0L) "${minutes / 60} hours" else String.format(java.util.Locale.ROOT, "%.1f hours", minutes / 60.0)
 
 /** The student's data the tools read. The app backs it with the repositories; tests with a fake. */
 interface AssistantData {
@@ -112,6 +118,8 @@ data class DayCard(
 class AssistantToolRunner(
     private val data: AssistantData,
     private val today: () -> LocalDate = { LocalDate.now() },
+    /** The app's settings, for get_settings and change_settings. Null where there are none (tests). */
+    private val settings: AssistantSettingsPort? = null,
 ) {
     suspend fun run(call: ToolCall): ToolOutcome = try {
         val args = runCatching { JsonParser.parseString(call.arguments.ifBlank { "{}" }).asJsonObject }.getOrElse { JsonObject() }
@@ -126,6 +134,9 @@ class AssistantToolRunner(
             "show_timetable" -> showTimetable(args)
             "show_exams" -> showExams(args)
             "show_absences" -> showAbsences()
+            "show_website" -> showWebsite(args)
+            "get_settings" -> getSettings()
+            "change_settings" -> changeSettings(call, args)
             else -> ToolOutcome.Result("Unknown tool ${call.name}.")
         }
     } catch (error: CancellationException) {
@@ -243,11 +254,59 @@ class AssistantToolRunner(
         return ToolOutcome.Card(card, content)
     }
 
+    /** Every setting and its value, so the assistant knows what it can change. */
+    private fun getSettings(): ToolOutcome {
+        val port = settings ?: return ToolOutcome.Result("Settings cannot be read right now.")
+        return ToolOutcome.Result(port.describe())
+    }
+
+    /**
+     * Changes the settings the student asked for, all at once or none. The change is applied at once and shown in
+     * the chat with an Undo, so the student can take it back.
+     */
+    private fun changeSettings(call: ToolCall, args: JsonObject): ToolOutcome {
+        val port = settings ?: return ToolOutcome.Result("Error: settings cannot be changed right now. Nothing was changed.")
+        val list = args.get("changes") as? JsonArray
+        val changes = LinkedHashMap<String, String>()
+        list?.forEach { element ->
+            val item = element as? JsonObject ?: return@forEach
+            val path = item.string("path")?.trim().orEmpty()
+            val value = item.get("value")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+            if (path.isNotEmpty()) changes[path] = value
+        }
+        if (changes.isEmpty()) return ToolOutcome.Result("Error: no changes were given. Nothing was changed.")
+        val plan = port.apply(changes)
+        if (!plan.accepted) {
+            return ToolOutcome.Result(
+                "Error: nothing was changed. ${plan.errors.joinToString(" ")} Call get_settings for the accepted values, then call change_settings again.",
+            )
+        }
+        if (plan.changes.isEmpty()) return ToolOutcome.Result("Those settings already have these values. Nothing was changed.")
+        val summary = plan.changes.joinToString("; ") { "${it.path} from ${it.from} to ${it.to}" }
+        return ToolOutcome.Card(
+            SettingsChangeCard(call.id, plan.changes),
+            "Changed ${plan.changes.size} setting(s): $summary. The student can undo this in the chat. Say briefly, in one or two sentences, what changed.",
+        )
+    }
+
+    /** A website the model wrote, shown as a card with its preview and code. Nothing is run here. */
+    private fun showWebsite(args: JsonObject): ToolOutcome {
+        val html = args.string("html")?.trim().orEmpty()
+        if (html.isEmpty()) {
+            return ToolOutcome.Result("Error: no html was given, so nothing was shown. Call show_website again with the complete page.")
+        }
+        val title = args.string("title")?.replace(Regex("\\s+"), " ")?.trim()?.take(60)?.ifBlank { null } ?: "Website"
+        return ToolOutcome.Card(
+            WebsiteCard(title, html),
+            "Shown to the student as a website card, which opens a preview and the code. Do not repeat the code. Say in one or two short sentences what the page does.",
+        )
+    }
+
     private fun absenceText(card: AbsenceCard): String = buildString {
         append("Absences this school year: ${card.excusedCount + card.openCount} entries. ")
-        append("Time that counts (clipped to the lessons of each day, as on the Absences tab): ${card.countedMinutes} minutes")
-        append(" (${card.excusedMinutes} excused, ${card.openMinutes} not excused in ${card.openCount} entries)")
-        if (card.recordedMinutes != card.countedMinutes) append("; recorded by the school: ${card.recordedMinutes} minutes, since whole days are entered longer than the lessons")
+        append("Time that counts (clipped to the lessons of each day, as on the Absences tab): ${hoursText(card.countedMinutes)}")
+        append(" (${hoursText(card.excusedMinutes)} excused, ${hoursText(card.openMinutes)} not excused in ${card.openCount} entries)")
+        if (card.recordedMinutes != card.countedMinutes) append("; recorded by the school: ${hoursText(card.recordedMinutes)}, since whole days are entered longer than the lessons")
         appendLine(". One school lesson is 50 minutes.")
         card.entries.forEach { appendLine(AbsenceCards.line(it)) }
     }.trimEnd()

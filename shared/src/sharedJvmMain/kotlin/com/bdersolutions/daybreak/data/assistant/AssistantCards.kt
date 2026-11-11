@@ -18,6 +18,15 @@ import java.time.LocalTime
  */
 sealed interface AssistantCard
 
+/**
+ * A website the assistant wrote (show_website): one HTML file with its CSS and JavaScript inside. The student
+ * sees a card with the title, and a screen with a Preview and the Code.
+ */
+data class WebsiteCard(val title: String, val html: String) : AssistantCard {
+    // The page can be long; keep it out of logs and toString.
+    override fun toString(): String = "WebsiteCard($title, ${html.length} chars)"
+}
+
 /** Exams in a date range (show_exams), oldest first, with the lesson's teacher and room when one matches. */
 data class ExamCard(
     val from: LocalDate,

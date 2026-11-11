@@ -1,5 +1,12 @@
 package com.bdersolutions.daybreak.ui.absences
 
+import com.bdersolutions.daybreak.ui.components.pressTint
+import com.bdersolutions.daybreak.ui.components.SegmentedButton
+import com.bdersolutions.daybreak.ui.components.TextButton
+import com.bdersolutions.daybreak.ui.components.FilledTonalButton
+import com.bdersolutions.daybreak.ui.components.Button
+import com.bdersolutions.daybreak.ui.components.IconButton
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -53,25 +60,19 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import com.bdersolutions.daybreak.ui.haptics.HapticSlider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -599,7 +600,10 @@ private fun SubjectTile(
             color = container,
             contentColor = content,
             interactionSource = interaction,
-            modifier = Modifier.height(52.dp).widthIn(min = 72.dp),
+            modifier = Modifier
+                .height(52.dp)
+                .widthIn(min = 72.dp)
+                .pressTint(interaction, RoundedCornerShape(corner)),
         ) {
             Box(
                 modifier = Modifier.padding(horizontal = 20.dp),

@@ -635,6 +635,7 @@
     <string name="haptics_event_login_success">Signed in</string>
     <string name="haptics_event_message_sent">Message sent</string>
     <string name="haptics_event_update_ready">Update ready</string>
+    <string name="haptics_event_answer_token">Assistant answer: each piece</string>
     <string name="haptics_event_debug_tap">Debug unlock: tap</string>
     <string name="haptics_event_debug_unlock">Debug unlocked</string>
 
@@ -799,6 +800,25 @@
     <string name="assistant_card_instead">Instead of</string>
     <string name="assistant_tool_exams_card">Showed the exams</string>
     <string name="assistant_tool_absences_card">Showed the absences</string>
+    <string name="assistant_tool_website">Made a website</string>
+    <string name="assistant_tool_settings_read">Read the settings</string>
+    <string name="assistant_tool_settings_change">Changed the settings</string>
+    <string name="assistant_settings_title">Settings changed</string>
+    <string name="assistant_settings_undo">Undo</string>
+    <string name="assistant_settings_undone">Undone</string>
+    <string name="assistant_copy">Copy</string>
+    <string name="assistant_copied">Copied</string>
+    <string name="assistant_edit_message">Edit message</string>
+    <string name="assistant_edit_send">Send</string>
+    <string name="assistant_regenerate">Regenerate</string>
+    <string name="assistant_code_copy">Copy code</string>
+    <string name="assistant_code_preview">Preview</string>
+    <string name="assistant_website_preview">Preview</string>
+    <string name="assistant_website_code">Code</string>
+    <string name="assistant_website_generating">Generating code</string>
+    <string name="assistant_website_writing">The page is still being written…</string>
+    <string name="assistant_website_tap">Tap to open the preview and code</string>
+    <string name="assistant_website_default_title">Website</string>
     <string name="assistant_card_exams_title">Exams</string>
     <string name="assistant_card_exams_none">No exams in this period.</string>
     <string name="assistant_card_yesterday">Yesterday</string>
@@ -813,7 +833,6 @@
     <string name="assistant_card_absences_title">Absences</string>
     <string name="assistant_card_absences_year">This school year</string>
     <string name="assistant_card_absences_none">No absences recorded this school year.</string>
-    <string name="assistant_card_absences_clipped">Whole days count only their lessons, as on the Absences tab.</string>
     <plurals name="assistant_card_more">
         <item quantity="one">%d more</item>
         <item quantity="other">%d more</item>
@@ -850,13 +869,13 @@
     <string name="tutorial_week_body">The week view shows all days side by side. Pinch with two fingers to zoom in and out.</string>
     <string name="tutorial_absences_title">Keep track of absences</string>
     <string name="tutorial_absences_body">The Absences tab adds up the time you missed and shows what still needs an excuse.</string>
-    <string name="tutorial_assistant_title">Ask the AI assistant</string>
-    <string name="tutorial_assistant_body">Tap the sparkle at the top and just ask – about exams, study topics or lessons. Messages only go out when you send them.</string>
+    <string name="tutorial_assistant_title">Ask Dawn</string>
+    <string name="tutorial_assistant_body">Tap the sparkle at the top and just ask – about exams, study topics or lessons. Dawn can also build websites and set up the app for you. Messages only go out when you send them.</string>
     <string name="tutorial_more_title">Make it yours</string>
-    <string name="tutorial_more_body">More has colours, AMOLED black, the widget and reminders. You can replay this tour there any time.</string>
+    <string name="tutorial_more_body">More has colours, AMOLED black, the widget and reminders. Or tell Dawn what you want, and Dawn sets up the app for you.</string>
     <string name="tutorial_pill_timetable">Timetable</string>
     <string name="tutorial_pill_exams">Exams</string>
-    <string name="tutorial_pill_assistant">AI assistant</string>
+    <string name="tutorial_pill_assistant">Dawn</string>
     <string name="tutorial_demo_math">Maths</string>
     <string name="tutorial_demo_german">German</string>
     <string name="tutorial_demo_english">English</string>
@@ -907,4 +926,8 @@
     <string name="assistant_thinking">Thinking…</string>
     <string name="assistant_thoughts_show">Show thoughts</string>
     <string name="assistant_thoughts_hide">Hide thoughts</string>
+    <string name="dawn_intro_title">Daylight AI is now Dawn</string>
+    <string name="dawn_intro_body">Same assistant, new name. Ask it about your week, or let it set up the app for you.</string>
+    <string name="dawn_intro_try">Try it</string>
+    <string name="dawn_intro_later">Later</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui.assistant
 
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -87,9 +87,7 @@ internal fun DayCardView(card: DayCard, modifier: Modifier = Modifier, onOpenLes
     // Every cancelled lesson, whether something replaces it or not.
     val cancelledCount = card.entries.sumOf { entry -> entry.replaces.size + if (entry.cancelled) 1 else 0 }
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 36.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = colors.surfaceContainer,
         border = BorderStroke(1.dp, colors.outlineVariant),
