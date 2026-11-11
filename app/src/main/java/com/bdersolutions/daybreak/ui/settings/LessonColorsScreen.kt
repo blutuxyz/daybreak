@@ -1,9 +1,13 @@
 package com.bdersolutions.daybreak.ui.settings
 
+import com.bdersolutions.daybreak.ui.components.FilledTonalButton
+import com.bdersolutions.daybreak.ui.components.IconButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,9 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -427,12 +429,13 @@ private fun Swatch(
             .border(3.dp, ring, CircleShape)
             .padding(4.dp)
             .background(color, CircleShape)
+            .clip(CircleShape)
             .selectable(
                 selected = selected,
                 onClick = onClick,
                 role = Role.RadioButton,
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+                indication = LocalIndication.current,
             ),
         contentAlignment = Alignment.Center,
     ) {

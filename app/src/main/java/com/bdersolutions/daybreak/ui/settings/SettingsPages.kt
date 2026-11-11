@@ -1,5 +1,11 @@
 package com.bdersolutions.daybreak.ui.settings
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.CircleShape
+import com.bdersolutions.daybreak.ui.components.IconButton
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.FreeBreakfast
@@ -47,7 +53,6 @@ import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
@@ -510,8 +515,8 @@ fun TimetableSettingsScreen(
                 ) {
                     SegmentChoice(
                         options = listOf(
-                            ConcurrentLessons.COMBINED to stringResource(R.string.settings_concurrent_combined),
                             ConcurrentLessons.SIDE_BY_SIDE to stringResource(R.string.settings_concurrent_side),
+                            ConcurrentLessons.COMBINED to stringResource(R.string.settings_concurrent_combined),
                         ),
                         selected = display.concurrent,
                         onSelect = { value -> viewModel.updateDisplay { it.copy(concurrent = value) } },

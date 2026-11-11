@@ -1,5 +1,6 @@
 package com.bdersolutions.daybreak.ui
 
+import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.runtime.saveable.Saver
 import com.bdersolutions.daybreak.ui.components.PushHost
 import android.Manifest
@@ -9,6 +10,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -23,11 +28,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,11 +50,9 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FlexibleBottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,13 +65,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
@@ -119,7 +125,6 @@ import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
 import com.bdersolutions.daybreak.ui.timetable.LessonFocus
 import com.bdersolutions.daybreak.ui.timetable.TimetableScreen
 import com.bdersolutions.daybreak.ui.components.LocalAppTitle
-import com.bdersolutions.daybreak.ui.components.rememberMorphCorner
 import com.bdersolutions.daybreak.ui.theme.DaybreakTheme
 import com.bdersolutions.daybreak.ui.timetable.TimetableViewModel
 import com.bdersolutions.daybreak.data.tutorial.TutorialProgress
@@ -391,13 +396,34 @@ private fun LoggedInContent(
             containerColor = MaterialTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                DaybreakBottomBar(
-                    selectedTab = selectedTab,
-                    onSelect = {
-                        if (it != selectedTab) haptics.perform(HapticEvent.TAB_SWITCH)
-                        selectedTab = it
-                    },
-                )
+                // The content fades out just above the bar instead of ending in a straight edge.
+                val fadeColor = MaterialTheme.colorScheme.surface
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            val fade = 32.dp.toPx()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(fadeColor.copy(alpha = 0f), fadeColor),
+                                    startY = -fade,
+                                    endY = 0f,
+                                ),
+                                topLeft = Offset(0f, -fade),
+                                size = Size(size.width, fade),
+                            )
+                        }
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    DaybreakBottomBar(
+                        selectedTab = selectedTab,
+                        onSelect = {
+                            if (it != selectedTab) haptics.perform(HapticEvent.TAB_SWITCH)
+                            selectedTab = it
+                        },
+                    )
+                }
             },
         ) { innerPadding ->
             AnimatedContent(
@@ -582,57 +608,65 @@ private val DestinationSaver = Saver<Destination?, String>(
     },
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DaybreakBottomBar(
     selectedTab: Int,
     onSelect: (Int) -> Unit,
 ) {
-    FlexibleBottomAppBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+    // A floating pill, like the Material 3 Expressive toolbar: the selected tab opens into a filled
+    // pill with its label, the others are round icon buttons.
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
-        BottomBarItem(
-            selected = selectedTab == 0,
-            icon = Icons.Outlined.CalendarMonth,
-            selectedIcon = Icons.Filled.CalendarMonth,
-            label = stringResource(R.string.nav_timetable),
-            onClick = { onSelect(0) },
-            modifier = Modifier.weight(1f),
-        )
-        BottomBarItem(
-            selected = selectedTab == 1,
-            icon = Icons.Outlined.EventBusy,
-            selectedIcon = Icons.Filled.EventBusy,
-            label = stringResource(R.string.nav_absences),
-            onClick = { onSelect(1) },
-            modifier = Modifier.weight(1f),
-        )
-        BottomBarItem(
-            selected = selectedTab == 2,
-            icon = Icons.Outlined.MoreHoriz,
-            selectedIcon = Icons.Filled.MoreHoriz,
-            label = stringResource(R.string.nav_settings),
-            onClick = { onSelect(2) },
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BottomBarItem(
+                selected = selectedTab == 0,
+                icon = Icons.Outlined.CalendarMonth,
+                selectedIcon = Icons.Filled.CalendarMonth,
+                label = stringResource(R.string.nav_timetable),
+                onClick = { onSelect(0) },
+            )
+            BottomBarItem(
+                selected = selectedTab == 1,
+                icon = Icons.Outlined.EventBusy,
+                selectedIcon = Icons.Filled.EventBusy,
+                label = stringResource(R.string.nav_absences),
+                onClick = { onSelect(1) },
+            )
+            BottomBarItem(
+                selected = selectedTab == 2,
+                icon = Icons.Outlined.MoreHoriz,
+                selectedIcon = Icons.Filled.MoreHoriz,
+                label = stringResource(R.string.nav_settings),
+                onClick = { onSelect(2) },
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun RowScope.BottomBarItem(
+private fun BottomBarItem(
     selected: Boolean,
     icon: ImageVector,
     selectedIcon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val motion = MaterialTheme.motionScheme
     val container by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
+            MaterialTheme.colorScheme.primary
         } else {
             Color.Transparent
         },
@@ -641,7 +675,7 @@ private fun RowScope.BottomBarItem(
     )
     val content by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.onPrimary
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
@@ -650,28 +684,22 @@ private fun RowScope.BottomBarItem(
     )
     val iconFade = motion.fastEffectsSpec<Float>()
     val iconScale = motion.defaultSpatialSpec<Float>()
-    val interactionSource = remember { MutableInteractionSource() }
-    val corner by rememberMorphCorner(
-        interactionSource = interactionSource,
-        selected = selected,
-        selectedRadius = 32.dp,
-        unselectedRadius = 22.dp,
-        pressedRadius = 14.dp,
-    )
+    val labelSize = motion.defaultSpatialSpec<IntSize>()
     Surface(
         onClick = onClick,
-        modifier = modifier.height(64.dp),
-        shape = RoundedCornerShape(corner),
+        // A 50 % corner is a full pill at any width; the surface's size animates when the label opens.
+        shape = RoundedCornerShape(50),
         color = container,
         contentColor = content,
-        interactionSource = interactionSource,
+        modifier = Modifier
+            .height(56.dp)
+            .animateContentSize(labelSize),
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .height(56.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedContent(
                 targetState = selected,
@@ -690,16 +718,24 @@ private fun RowScope.BottomBarItem(
             ) { isSelected ->
                 Icon(
                     imageVector = if (isSelected) selectedIcon else icon,
-                    contentDescription = null,
+                    contentDescription = if (isSelected) null else label,
                     modifier = Modifier.size(24.dp),
                 )
             }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn(iconFade) + expandHorizontally(labelSize),
+                exit = fadeOut(iconFade) + shrinkHorizontally(labelSize),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

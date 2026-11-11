@@ -333,7 +333,7 @@ class SettingsRepository(private val preferences: KeyValueStore) {
             dayScale = preferences.getInt(KEY_DISPLAY_DAY_SCALE, 100),
             weekScale = preferences.getInt(KEY_DISPLAY_WEEK_SCALE, 100),
             weekFitsScreen = preferences.getBoolean(KEY_DISPLAY_WEEK_FITS, false),
-            concurrent = enumOrDefault(preferences.getString(KEY_DISPLAY_CONCURRENT, null), ConcurrentLessons.COMBINED),
+            concurrent = enumOrDefault(preferences.getString(KEY_DISPLAY_CONCURRENT, null), ConcurrentLessons.SIDE_BY_SIDE),
             showCancelled = preferences.getBoolean(KEY_DISPLAY_CANCELLED, true),
             showFreeBands = preferences.getBoolean(KEY_DISPLAY_FREE_BANDS, true),
             weekDetail = enumOrDefault(preferences.getString(KEY_DISPLAY_WEEK_DETAIL, null), WeekDetail.ROOM),
