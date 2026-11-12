@@ -90,10 +90,15 @@ import com.bdersolutions.daybreak.AppContainer
 import com.bdersolutions.daybreak.BuildConfig
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
+import com.bdersolutions.daybreak.data.notices.InstallSource
 import com.bdersolutions.daybreak.data.notices.RemoteFeatures
 import com.bdersolutions.daybreak.data.notices.RemoteSwitches
 import com.bdersolutions.daybreak.data.notices.UpdateGate
+import com.bdersolutions.daybreak.data.assistant.DawnNotice
+import com.bdersolutions.daybreak.data.permissions.PermissionIntro
 import com.bdersolutions.daybreak.ui.notices.ServerMessageSheet
+import com.bdersolutions.daybreak.ui.notices.installSourceOf
+import com.bdersolutions.daybreak.ui.permissions.PermissionsIntroScreen
 import com.bdersolutions.daybreak.ui.update.UpdateRequiredRoute
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.branding.AppNaming
@@ -103,6 +108,7 @@ import com.bdersolutions.daybreak.ui.account.LinkAccountScreen
 import com.bdersolutions.daybreak.ui.account.DaybreakAccountScreen
 import com.bdersolutions.daybreak.ui.account.DaybreakAccountViewModel
 import com.bdersolutions.daybreak.ui.account.LocalAccess
+import com.bdersolutions.daybreak.ui.account.LocalPlanPrices
 import com.bdersolutions.daybreak.ui.account.LocalPlans
 import com.bdersolutions.daybreak.ui.account.PlansLauncher
 import com.bdersolutions.daybreak.ui.account.PlansSheet
@@ -132,7 +138,6 @@ import com.bdersolutions.daybreak.ui.settings.SettingsPage
 import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingScreen
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingViewModel
-import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
 import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
@@ -154,7 +159,7 @@ import java.util.Locale
  * login, for everyone who has none or whose login is not linked yet), then the app itself. The full-screen
  * "new version" page and the "Daybreak AI is now Dawn" page come on top of the app.
  */
-private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, LINK_ACCOUNT, APP }
+private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, PERMISSIONS, LINK_ACCOUNT, APP }
 
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
@@ -177,6 +182,7 @@ fun DaybreakApp(
     val appLanguageCode = if (currentAppLanguage() == AppLanguage.GERMAN) "de" else "en"
     remember(appLanguageCode) { container.legalTexts.setLanguage(appLanguageCode) }
     val legal by container.legalTexts.current.collectAsStateWithLifecycle()
+    val planPrices by container.planPrices.current.collectAsStateWithLifecycle()
     val termsAccepted = TermsAcceptance.covers(acceptedVersion, legal.version)
     val appTitle = AppNaming.resolve(access.allows(Entitlement.APP_NAME), settings.appNamePreset, settings.customAppName)
     // The minimum version comes from the last answer of the update server, so it also holds offline.
@@ -202,10 +208,30 @@ fun DaybreakApp(
     }
     val linkKnown = account.signedIn && sessionKey != null && container.accountPrefs.isLinked(sessionKey)
     val needsAccountLink = container.accountAvailable && session != null && !linkKnown && !linkPassed
+    // The permissions are asked once, at the first launch, before anything else (see PermissionsIntroScreen).
+    val permissionContext = LocalContext.current
+    var permissionSteps by remember {
+        mutableStateOf(
+            if (container.permissionIntroStore.isDone()) {
+                emptyList()
+            } else {
+                PermissionIntro.neededSteps(
+                    notificationsAllowed = Build.VERSION.SDK_INT < 33 ||
+                        ContextCompat.checkSelfPermission(permissionContext, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED,
+                    needsNotificationPermission = Build.VERSION.SDK_INT >= 33,
+                    sideloaded = installSourceOf(permissionContext) == InstallSource.SIDELOADED,
+                    updatesConfigured = container.updateManager.isConfigured,
+                    canInstallUnknownApps = container.updateManager.installer.canInstall(),
+                ).also { if (it.isEmpty()) container.permissionIntroStore.markDone() }
+            },
+        )
+    }
     val stage = when {
         !termsAccepted -> AppStage.TERMS
         updateRequired -> AppStage.UPDATE_REQUIRED
         !TutorialProgress.isDone(tutorialVersion) -> AppStage.TUTORIAL
+        permissionSteps.isNotEmpty() -> AppStage.PERMISSIONS
         needsAccountLink -> AppStage.LINK_ACCOUNT
         else -> AppStage.APP
     }
@@ -227,6 +253,7 @@ fun DaybreakApp(
         LocalAppTitle provides appTitle,
         LocalAccess provides access,
         LocalLegalText provides legal,
+        LocalPlanPrices provides planPrices,
     ) {
         DaybreakTheme(settings = settings) {
             // Nothing of the app runs behind the gates: no login screen, no sync prompts, no update check.
@@ -253,8 +280,23 @@ fun DaybreakApp(
                         settingsRepository = container.settingsRepository,
                         onFinish = {
                             container.tutorialStore.complete()
-                            // New users meet the new name in the introduction, so the notice is not needed for them.
-                            container.dawnIntroStore.markShown()
+                            // New installs meet the new name in the introduction, so they do not need the notice.
+                            // Everyone who had the app before (an updated install) still gets it.
+                            val info = permissionContext.packageManager.getPackageInfo(permissionContext.packageName, 0)
+                            val fresh = DawnNotice.isFreshInstall(info.firstInstallTime, info.lastUpdateTime) && !container.sessionStore.isLoggedIn()
+                            if (fresh) container.dawnIntroStore.markShown()
+                        },
+                    )
+
+                    AppStage.PERMISSIONS -> PermissionsIntroScreen(
+                        steps = permissionSteps,
+                        canInstallUnknownApps = { container.updateManager.installer.canInstall() },
+                        onNotificationAnswered = { granted ->
+                            if (!granted) container.settingsRepository.setNotificationsEnabled(false)
+                        },
+                        onDone = {
+                            container.permissionIntroStore.markDone()
+                            permissionSteps = emptyList()
                         },
                     )
 
@@ -368,21 +410,6 @@ private fun LoggedInContent(
     val haptics = LocalHaptics.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (!granted) {
-            container.settingsRepository.setNotificationsEnabled(false)
-        }
-    }
-
-    // After an update, show what changed. Looking for a new version is the job of UpdateAvailableHost.
-    var whatsNew by remember { mutableStateOf<ReleaseInfo?>(null) }
-    LaunchedEffect(Unit) {
-        val updates = container.updateManager
-        if (!updates.isConfigured || !container.serverNotices.switches.updates) return@LaunchedEffect
-        whatsNew = updates.whatsNew()
-    }
     // The full-screen "new version" page is on top while it shows; the pop-ups below wait for it.
     val updatePageVisible by container.updatePageVisible.collectAsStateWithLifecycle()
 
@@ -413,18 +440,6 @@ private fun LoggedInContent(
         }
     }
 
-    LaunchedEffect(session.studentId) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            container.settingsRepository.current().notificationsEnabled &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     // The assistant shows when the server offers it and the developer's switch ("assistant") is on.
     var assistantOffered by remember { mutableStateOf(false) }
     val online by container.networkMonitor.online.collectAsStateWithLifecycle()
@@ -436,7 +451,7 @@ private fun LoggedInContent(
     }
     val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
     // The one-time full-screen page "Daybreak AI is now Dawn" for people who already used the app.
-    var showDawnIntro by remember { mutableStateOf(!container.dawnIntroStore.shown()) }
+    var showDawnIntro by remember { mutableStateOf(container.dawnIntroStore.needsNotice()) }
     val openAssistant: (() -> Unit)? = if (assistantShown) {
         { destination = Destination.Main(MainPage.ASSISTANT) }
     } else {
@@ -445,8 +460,8 @@ private fun LoggedInContent(
 
     // The thank-you popup comes up once, when nothing else is covering the app (and not under the Dawn page).
     val dawnPageUp = showDawnIntro && assistantShown
-    LaunchedEffect(trialPrompt, whatsNew, dawnPageUp, updatePageVisible) {
-        if (trialPrompt == TrialOfferPolicy.Prompt.POPUP && whatsNew == null && !dawnPageUp && !updatePageVisible && !trialSheetOpen) {
+    LaunchedEffect(trialPrompt, dawnPageUp, updatePageVisible) {
+        if (trialPrompt == TrialOfferPolicy.Prompt.POPUP && !dawnPageUp && !updatePageVisible && !trialSheetOpen) {
             delay(1_500)
             trialSheetOpen = true
         }
@@ -677,15 +692,6 @@ private fun LoggedInContent(
             )
         }
 
-        whatsNew?.let { release ->
-            WhatsNewSheet(
-                release = release,
-                onDismiss = {
-                    container.updateManager.markWhatsNewSeen()
-                    whatsNew = null
-                },
-            )
-        }
         if (showDawnIntro && assistantShown && !updatePageVisible) {
             DawnIntroOverlay(
                 onTry = {

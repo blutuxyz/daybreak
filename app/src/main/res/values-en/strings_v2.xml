@@ -137,4 +137,13 @@
     <string name="v2_account_unsaved_title">Keep your restore code safe</string>
     <string name="v2_account_unsaved_body">Store the code somewhere safe, for example in your password manager. Without it you cannot get back into your account on a new device.</string>
     <string name="v2_account_unsaved_confirm">I have saved it</string>
+    <string name="v2_plan_price">%1$s per month</string>
+    <string name="perm_step_count">%1$d of %2$d</string>
+    <string name="perm_notifications_title">Allow notifications</string>
+    <string name="perm_notifications_body">Daybreak tells you about timetable changes, a preview in the morning, and exams or homework the evening before. You can change this later in the settings.</string>
+    <string name="perm_notifications_allow">Allow</string>
+    <string name="perm_unknown_title">Updates straight from the app</string>
+    <string name="perm_unknown_body">This version does not come from the Google Play Store. So that Daybreak can install updates itself, allow installs from this source. You can take the permission back at any time.</string>
+    <string name="perm_unknown_allow">Open setting</string>
+    <string name="perm_skip">Not now</string>
 </resources>

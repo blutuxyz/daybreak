@@ -139,7 +139,7 @@ fun CreateOrRestorePanel(
     var code by rememberSaveable { mutableStateOf("") }
     val haptics = LocalHaptics.current
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
+        Button(elevation = null,
             onClick = onCreate,
             enabled = !busy,
             shape = CircleShape,

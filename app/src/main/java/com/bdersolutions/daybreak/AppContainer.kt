@@ -20,9 +20,12 @@ import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.haptics.VibratorHapticOutput
+import com.bdersolutions.daybreak.data.account.PlanPriceRepository
+import com.bdersolutions.daybreak.data.account.SharedPrefsPlanPriceCache
 import com.bdersolutions.daybreak.data.legal.LegalTextRepository
 import com.bdersolutions.daybreak.data.legal.SharedPrefsLegalTextCache
 import com.bdersolutions.daybreak.data.legal.TermsStore
+import com.bdersolutions.daybreak.data.permissions.PermissionIntroStore
 import com.bdersolutions.daybreak.data.notices.ServerNoticeStore
 import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
@@ -83,6 +86,7 @@ class AppContainer(context: Context) {
         systemAllows = { VibratorHapticOutput.systemTouchFeedbackOn(appContext) },
     )
     val termsStore = TermsStore(appContext)
+    val permissionIntroStore = PermissionIntroStore(appContext)
     val launcherNameSwitcher = LauncherNameSwitcher(appContext)
 
 
@@ -171,6 +175,15 @@ class AppContainer(context: Context) {
     // The privacy policy and terms the app shows and asks to accept: the server's copy, or the shipped one.
     // Debug builds always show the shipped copy (like the server notices), so a development build is not
     // changed by a text that is live on the server. Declared after updateApi, which it reads.
+    // The prices of the paid plans, shown on the plans sheet (the last answer is kept for offline use).
+    val planPrices = PlanPriceRepository(
+        fetch = updateApi?.let { api ->
+            val fetchPlans: suspend () -> String = { api.plansBody() }
+            fetchPlans
+        },
+        cache = SharedPrefsPlanPriceCache(appContext),
+        enabled = BuildConfig.SERVER_NOTICES,
+    )
     val legalTexts = LegalTextRepository(
         fetch = updateApi?.let { api ->
             val fetchLegal: suspend (String) -> String = { language -> api.legalBody(language) }
@@ -255,6 +268,7 @@ class AppContainer(context: Context) {
         if (accountAvailable) appScope.launch { accountManager.refresh() }
         // The privacy policy and terms: the current text from the server (the shipped copy is used until then).
         appScope.launch { legalTexts.refresh() }
+        appScope.launch { planPrices.refresh() }
         lessonNotificationManager.ensureChannel()
         reminderNotifier.ensureChannels()
         if (sessionStore.isLoggedIn()) {

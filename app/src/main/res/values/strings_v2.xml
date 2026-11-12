@@ -137,4 +137,13 @@
     <string name="v2_account_unsaved_title">Wiederherstellungscode sichern</string>
     <string name="v2_account_unsaved_body">Bewahre den Code an einem sicheren Ort auf, zum Beispiel in deinem Passwortmanager. Ohne ihn kommst du auf einem neuen Gerät nicht in dein Konto zurück.</string>
     <string name="v2_account_unsaved_confirm">Ich habe ihn gespeichert</string>
+    <string name="v2_plan_price">%1$s pro Monat</string>
+    <string name="perm_step_count">%1$d von %2$d</string>
+    <string name="perm_notifications_title">Benachrichtigungen erlauben</string>
+    <string name="perm_notifications_body">Daybreak meldet dir Stundenplanänderungen, eine Vorschau am Morgen und Prüfungen oder Hausaufgaben am Vorabend. Das kannst du später in den Einstellungen ändern.</string>
+    <string name="perm_notifications_allow">Erlauben</string>
+    <string name="perm_unknown_title">Updates direkt aus der App</string>
+    <string name="perm_unknown_body">Diese Version kommt nicht aus dem Google Play Store. Damit Daybreak Updates selbst installieren kann, erlaube die Installation aus dieser Quelle. Die Erlaubnis lässt sich jederzeit wieder entziehen.</string>
+    <string name="perm_unknown_allow">Einstellung öffnen</string>
+    <string name="perm_skip">Nicht jetzt</string>
 </resources>

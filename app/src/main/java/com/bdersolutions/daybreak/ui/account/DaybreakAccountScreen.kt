@@ -8,6 +8,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -136,7 +139,7 @@ fun DaybreakAccountScreen(
                         Spacer(Modifier.height(12.dp))
                         Surface(
                             shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(Modifier.padding(16.dp)) {
@@ -152,7 +155,7 @@ fun DaybreakAccountScreen(
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                 )
                                 Spacer(Modifier.height(10.dp))
-                                Button(
+                                Button(elevation = null,
                                     onClick = {
                                         haptics.perform(HapticEvent.TAP)
                                         viewModel.confirmCodeSaved()
@@ -197,7 +200,6 @@ fun DaybreakAccountScreen(
                         haptics.perform(HapticEvent.TAP)
                         viewModel.signOut()
                     },
-                    modifier = Modifier.animateItem(),
                 )
             }
             item(key = "delete") {
@@ -211,7 +213,6 @@ fun DaybreakAccountScreen(
                         haptics.perform(HapticEvent.TAP)
                         viewModel.deleteAccount()
                     },
-                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -308,10 +309,10 @@ private fun PlanCard(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (plan != Plan.PRO) {
-                    Button(onClick = onOpenPlans, shape = CircleShape) { Text(stringResource(R.string.v2_account_upgrade)) }
+                    Button(elevation = null, onClick = onOpenPlans, shape = CircleShape) { Text(stringResource(R.string.v2_account_upgrade)) }
                 }
                 if (plan != Plan.FREE) {
-                    FilledTonalButton(onClick = onManage, shape = CircleShape) { Text(stringResource(R.string.v2_plans_manage)) }
+                    FilledTonalButton(elevation = null, onClick = onManage, shape = CircleShape) { Text(stringResource(R.string.v2_plans_manage)) }
                 }
             }
         }
@@ -423,13 +424,13 @@ private fun AnimatedSignOut(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onCancel, shape = CircleShape, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.action_cancel))
-                        }
-                        Button(onClick = onConfirm, shape = CircleShape, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.v2_account_signout))
-                        }
+                    // Full-width buttons stacked: the labels are long and must not wrap.
+                    Button(elevation = null, onClick = onConfirm, shape = CircleShape, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.v2_account_signout), maxLines = 1)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onCancel, shape = CircleShape, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.action_cancel), maxLines = 1)
                     }
                 }
             }
@@ -460,12 +461,13 @@ private fun AnimatedDeleteAccount(
                 onClick = if (confirming) null else onAsk,
                 destructive = true,
             )
+            // Timed, not springs: the height and the fade run on one clock, so the panel visibly opens and closes.
             AnimatedVisibility(
                 visible = confirming,
-                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                    expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Top),
-                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                    shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec(), shrinkTowards = Alignment.Top),
+                enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                    expandVertically(tween(320, easing = FastOutSlowInEasing), expandFrom = Alignment.Top),
+                exit = fadeOut(tween(120, easing = LinearOutSlowInEasing)) +
+                    shrinkVertically(tween(220, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top),
             ) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                     Text(
@@ -473,24 +475,32 @@ private fun AnimatedDeleteAccount(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onCancel, enabled = !busy, shape = CircleShape, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.action_cancel))
-                        }
-                        Button(
-                            onClick = onConfirm,
-                            enabled = !busy,
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            ),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(stringResource(R.string.v2_account_delete_now))
-                        }
+                    // Full-width buttons stacked: the labels are long and must not wrap.
+                    Button(elevation = null,
+                        onClick = onConfirm,
+                        enabled = !busy,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.v2_account_delete_now), maxLines = 1)
                     }
-                    ErrorLine(error)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onCancel, enabled = !busy, shape = CircleShape, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.action_cancel), maxLines = 1)
+                    }
+                    // A plain text, not an ErrorLine: its own expand would run inside this panel's, two animations of one height.
+                    error?.let {
+                        Text(
+                            text = it.text(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
                 }
             }
         }

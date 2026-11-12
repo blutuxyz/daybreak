@@ -150,7 +150,7 @@ private fun ClassServicesCard(url: String?) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
-        FilledTonalButton(
+        FilledTonalButton(elevation = null,
             onClick = {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

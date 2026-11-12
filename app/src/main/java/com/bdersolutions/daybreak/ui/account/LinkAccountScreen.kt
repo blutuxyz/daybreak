@@ -244,7 +244,7 @@ private fun IntroPhase(
             Spacer(Modifier.height(12.dp))
             Surface(
                 shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -257,7 +257,7 @@ private fun IntroPhase(
         }
         Spacer(Modifier.height(28.dp))
         if (signedIn) {
-            Button(
+            Button(elevation = null,
                 onClick = {
                     haptics.perform(HapticEvent.TAP)
                     onCreate()
@@ -418,7 +418,7 @@ private fun WorkingPhase(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Button(
+            Button(elevation = null,
                 onClick = {
                     haptics.perform(HapticEvent.TAP)
                     onRetry()
@@ -485,7 +485,7 @@ private fun DonePhase(
             Spacer(Modifier.height(16.dp))
             Surface(
                 shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -515,7 +515,7 @@ private fun DonePhase(
             }
             Spacer(Modifier.height(16.dp))
         }
-        Button(
+        Button(elevation = null,
             onClick = onContinue,
             enabled = code == null || saved,
             shape = CircleShape,

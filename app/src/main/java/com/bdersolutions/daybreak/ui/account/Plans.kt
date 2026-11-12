@@ -60,6 +60,10 @@ import com.bdersolutions.daybreak.data.account.Access
 import com.bdersolutions.daybreak.data.account.ApiResult
 import com.bdersolutions.daybreak.data.account.Entitlement
 import com.bdersolutions.daybreak.data.account.Plan
+import com.bdersolutions.daybreak.data.account.PlanPrice
+import com.bdersolutions.daybreak.data.account.PlanPriceJson
+import com.bdersolutions.daybreak.data.settings.AppLanguage
+import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.components.Button
 import com.bdersolutions.daybreak.ui.components.FilledTonalButton
@@ -80,6 +84,9 @@ fun interface PlansLauncher {
 }
 
 val LocalPlans = staticCompositionLocalOf { PlansLauncher { } }
+
+/** The monthly prices of Plus and Pro from the server; empty until they are known. Provided by the app. */
+val LocalPlanPrices = compositionLocalOf<Map<Plan, PlanPrice>> { emptyMap() }
 
 /** Whether the person may use [this] right now: the one place the screens ask. */
 @Composable
@@ -179,6 +186,7 @@ fun PlansSheet(
     var busy by remember { mutableStateOf<Plan?>(null) }
     var error by remember { mutableStateOf<AccountError?>(null) }
     val needed = feature?.minPlan
+    val prices = LocalPlanPrices.current
 
     fun closeThen(action: () -> Unit) {
         scope.launch {
@@ -263,6 +271,7 @@ fun PlansSheet(
                     highlighted = needed == Plan.PLUS,
                     busy = busy == Plan.PLUS,
                     enabled = busy == null,
+                    price = prices[Plan.PLUS],
                     onChoose = { choose(Plan.PLUS) },
                 )
                 Spacer(Modifier.height(10.dp))
@@ -274,6 +283,7 @@ fun PlansSheet(
                     highlighted = needed == Plan.PRO || needed == null,
                     busy = busy == Plan.PRO,
                     enabled = busy == null,
+                    price = prices[Plan.PRO],
                     onChoose = { choose(Plan.PRO) },
                 )
             }
@@ -335,6 +345,7 @@ private fun PlanCard(
     highlighted: Boolean,
     busy: Boolean,
     enabled: Boolean,
+    price: PlanPrice?,
     onChoose: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -350,6 +361,14 @@ private fun PlanCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
+            if (price != null) {
+                val german = currentAppLanguage() == AppLanguage.GERMAN
+                Text(
+                    text = stringResource(R.string.v2_plan_price, PlanPriceJson.format(price.monthlyCents, german)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
             points.forEach { point ->
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(
@@ -379,9 +398,9 @@ private fun PlanCard(
                 }
             }
             if (highlighted) {
-                Button(onClick = onChoose, enabled = enabled, shape = CircleShape, modifier = buttonModifier) { content() }
+                Button(elevation = null, onClick = onChoose, enabled = enabled, shape = CircleShape, modifier = buttonModifier) { content() }
             } else {
-                FilledTonalButton(onClick = onChoose, enabled = enabled, shape = CircleShape, modifier = buttonModifier) { content() }
+                FilledTonalButton(elevation = null, onClick = onChoose, enabled = enabled, shape = CircleShape, modifier = buttonModifier) { content() }
             }
         }
     }

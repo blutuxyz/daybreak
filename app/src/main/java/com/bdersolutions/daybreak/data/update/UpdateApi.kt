@@ -46,6 +46,14 @@ class UpdateApi(
         }
     }
 
+    /** The names and monthly prices of Plus and Pro (GET /v1/plans). Read it with [com.bdersolutions.daybreak.data.account.PlanPriceJson]. */
+    suspend fun plansBody(): String = withContext(Dispatchers.IO) {
+        get("/v1/plans").use { response ->
+            if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
+
     suspend fun statusBody(): String = withContext(Dispatchers.IO) {
         get("/v1/status").use { response ->
             if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")

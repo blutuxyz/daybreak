@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { AccountStore } from '../src/accounts.js';
 import { LEGAL_KEYS, LEGAL_VERSION, legalAnswer, legalSectionsFromStrings, loadLegalTexts, unescapeAndroid } from '../src/legal.js';
 import { buildServer } from '../src/server.js';
 import { testConfig } from './helpers.js';
@@ -50,6 +51,17 @@ test('Android escapes are read the way the app shows them', () => {
   assert.equal(unescapeAndroid('Zeile\nzwei'), 'Zeile\nzwei');
   assert.equal(unescapeAndroid('Daybreak\’s &amp; co &lt;3&gt;'), 'Daybreak’s & co <3>');
   assert.equal(unescapeAndroid(String.raw`it\'s "quoted"`), `it's "quoted"`);
+});
+
+test('GET /v1/plans gives the names and monthly prices and no Stripe ids', async () => {
+  const config = await testConfig({ adminToken: 'admin-secret-long-enough' });
+  const accounts = new AccountStore({ config });
+  await accounts.saveSettings({ plus: { label: 'Plus', monthlyCents: 299, priceId: 'price_secret_plus' }, pro: { label: 'Pro', monthlyCents: 599, priceId: 'price_secret_pro' } });
+  const { app } = buildServer({ config, accounts });
+  const response = await app.inject({ method: 'GET', url: '/v1/plans', headers: host });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { plus: { label: 'Plus', monthlyCents: 299 }, pro: { label: 'Pro', monthlyCents: 599 } });
+  assert.ok(!response.body.includes('price_secret'));
 });
 
 test('GET /v1/legal serves the texts in German by default and in English on request', async () => {

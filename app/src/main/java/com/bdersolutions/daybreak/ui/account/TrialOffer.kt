@@ -123,7 +123,7 @@ fun TrialOfferSheet(
                 ErrorLine(error)
                 Spacer(Modifier.height(20.dp))
                 if (done) {
-                    Button(
+                    Button(elevation = null,
                         onClick = { closeThen(onLater) },
                         shape = CircleShape,
                         modifier = Modifier
@@ -131,7 +131,7 @@ fun TrialOfferSheet(
                             .height(52.dp),
                     ) { Text(stringResource(R.string.v2_trial_done)) }
                 } else {
-                    Button(
+                    Button(elevation = null,
                         onClick = onAccept,
                         enabled = !busy,
                         shape = CircleShape,
@@ -182,7 +182,7 @@ fun TrialBanner(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Button(
+            Button(elevation = null,
                 onClick = onAccept,
                 enabled = !busy,
                 shape = CircleShape,

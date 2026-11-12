@@ -601,6 +601,15 @@ export function buildServer({
   /** A picture of a message sheet; the app asks for it by the id in the message. */
   app.get('/v1/message-image/:id', async (request, reply) => sendImage(reply, await images.get(request.params.id)));
 
+  /** The names and monthly prices of Plus and Pro, for the plans sheet. No Stripe ids leave the server. */
+  app.get('/v1/plans', async (request, reply) => {
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'public, max-age=600');
+    const settings = await accounts.settings();
+    const price = (plan) => ({ label: settings[plan].label, monthlyCents: settings[plan].monthlyCents });
+    return { plus: price('plus'), pro: price('pro') };
+  });
+
   /** The privacy policy and terms of use (German or English). Public and without any identifier. */
   app.get('/v1/legal', async (request, reply) => {
     reply.header('Cache-Control', 'public, max-age=3600');
