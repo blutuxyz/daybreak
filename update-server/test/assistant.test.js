@@ -12,6 +12,7 @@ import {
 } from '../src/assistant.js';
 import { AssistantStore, DEFAULT_SETTINGS, dayOf, parseSettingsForm, readSettings, userKey } from '../src/assistant-store.js';
 import { buildServer } from '../src/server.js';
+import { AccountStore } from '../src/accounts.js';
 import { AnnouncementStore } from '../src/announcements.js';
 import { testConfig } from './helpers.js';
 
@@ -46,7 +47,7 @@ function fakeOpenRouter({ chunks, status = 200, errorBody, models = ['anthropic/
   return impl;
 }
 
-async function setup({ fetchImpl = fakeOpenRouter(), settings, paidCodes = [], key = 'sk-or-test', now, clientOff = false, random } = {}) {
+async function setup({ fetchImpl = fakeOpenRouter(), settings, paidCodes = [], key = 'sk-or-test', now, clientOff = false, random, withAccounts = false } = {}) {
   const config = await testConfig({ openRouterApiKey: key, openRouterUrl: 'https://openrouter.test/api/v1' });
   const store = new AssistantStore({ config, now });
   if (settings) await store.saveSettings({ ...DEFAULT_SETTINGS, ...settings });
@@ -54,6 +55,7 @@ async function setup({ fetchImpl = fakeOpenRouter(), settings, paidCodes = [], k
   const notices = new AnnouncementStore({ config });
   if (clientOff) await notices.setSwitches({ updates: 'on', requiredVersion: 'on', messages: 'on', 'feature:assistant': 'on' });
   const assistant = new AssistantService({ config, store, support, notices, fetchImpl, now, random });
+  const accounts = withAccounts ? new AccountStore({ config, now }) : undefined;
   const { app } = buildServer({
     config: { ...config, adminToken: 'admin-secret' },
     releases: {},
@@ -61,8 +63,10 @@ async function setup({ fetchImpl = fakeOpenRouter(), settings, paidCodes = [], k
     announcements: notices,
     assistant,
     assistantStore: store,
+    accounts,
+    ...(now ? { now } : {}),
   });
-  return { app, store, fetchImpl, config };
+  return { app, store, fetchImpl, config, accounts, assistant };
 }
 
 function events(body) {
@@ -194,6 +198,7 @@ test('settings form: provider and model rows, numbers, checkboxes', () => {
     tagKind: 'info',
     inputPrice: 0.5,
     outputPrice: 1.5,
+    tiers: { free: 'available', plus: 'available', pro: 'available' },
   });
   assert.equal(value.models[1].enabled, false);
   assert.equal(value.models[1].tagKind, 'alarm');
@@ -399,7 +404,11 @@ test('the effort picker: off by default, the pick only when shown, else the defa
   assert.deepEqual(body.reasoning, { effort: 'high' });
   assert.equal(buildOpenRouterBody({ model: 'm', request: value, settings: readSettings({}) }).reasoning, undefined);
 
-  const app = (await setup({ settings: { showEffortSelector: true, efforts: ['medium', 'xhigh'], defaultEffort: 'medium' } })).app;
+  // By default the picker is for Pro only, so the free plan does not see it.
+  const proOnly = (await setup({ settings: { showEffortSelector: true, efforts: ['medium', 'xhigh'], defaultEffort: 'medium' } })).app;
+  assert.equal((await proOnly.inject({ method: 'GET', url: '/v1/assistant/models' })).json().showEffort, false);
+
+  const app = (await setup({ settings: { showEffortSelector: true, efforts: ['medium', 'xhigh'], defaultEffort: 'medium', effortMinPlan: 'free' } })).app;
   const listed = (await app.inject({ method: 'GET', url: '/v1/assistant/models' })).json();
   assert.equal(listed.showEffort, true);
   assert.deepEqual(listed.efforts, ['medium', 'xhigh']);
@@ -494,4 +503,92 @@ test('an Anthropic-compatible provider gets the messages format: system apart, t
   assert.deepEqual(out.messages[2], { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'c1', content: '[]' }] });
   assert.equal(out.tools[0].input_schema.type, 'object');
   assert.equal(out.max_tokens, 900);
+});
+
+const tierModels = [
+  { id: 'vendor/basic', label: 'Basic', provider: 'openrouter', enabled: true, tiers: { free: 'available', plus: 'available', pro: 'available' } },
+  { id: 'vendor/better', label: 'Better', provider: 'openrouter', enabled: true, tiers: { free: 'locked', plus: 'available', pro: 'available' } },
+  { id: 'vendor/best', label: 'Best', provider: 'openrouter', enabled: true, tiers: { free: 'hidden', plus: 'locked', pro: 'available' } },
+];
+
+async function signIn(accounts, plan) {
+  const { account, token } = await accounts.create({});
+  if (plan) await accounts.setPaid(account.accountId, { plan, source: 'admin' });
+  return { token, accountId: account.accountId };
+}
+
+const models = (app, token) =>
+  app.inject({ method: 'GET', url: '/v1/assistant/models', headers: token ? { authorization: `Bearer ${token}` } : {} }).then((response) => response.json());
+
+test('each plan sees the models its tier allows: usable, locked (greyed out) or hidden', async () => {
+  const { app, accounts } = await setup({ withAccounts: true, settings: { models: tierModels, defaultModel: 'vendor/basic' } });
+  const plus = await signIn(accounts, 'plus');
+  const pro = await signIn(accounts, 'pro');
+
+  const free = await models(app);
+  assert.deepEqual(free.models.map((model) => [model.id, model.locked === true]), [['vendor/basic', false], ['vendor/better', true]]);
+
+  const plusList = await models(app, plus.token);
+  assert.deepEqual(plusList.models.map((model) => [model.id, model.locked === true]), [['vendor/basic', false], ['vendor/better', false], ['vendor/best', true]]);
+
+  const proList = await models(app, pro.token);
+  assert.deepEqual(proList.models.map((model) => model.locked === true), [false, false, false]);
+  assert.equal(JSON.stringify(free).includes('tiers'), false);
+  // The apps read `state`; every listed model carries it.
+  assert.deepEqual(free.models.map((model) => model.state), ['available', 'locked']);
+  assert.deepEqual(plusList.models.map((model) => model.state), ['available', 'available', 'locked']);
+});
+
+test('a locked model cannot be used: the request gets the default model instead', async () => {
+  const { app, fetchImpl } = await setup({ settings: { models: tierModels, defaultModel: 'vendor/basic' } });
+  await post(app, { ...validBody, model: 'vendor/better' });
+  assert.equal(fetchImpl.calls.at(-1).body.model, 'vendor/basic');
+  await post(app, { ...validBody, model: 'vendor/best' });
+  assert.equal(fetchImpl.calls.at(-1).body.model, 'vendor/basic');
+});
+
+test('an account of the right plan can use the model that is locked for free', async () => {
+  const { app, accounts, fetchImpl } = await setup({ withAccounts: true, settings: { models: tierModels, defaultModel: 'vendor/basic' } });
+  const plus = await signIn(accounts, 'plus');
+  await app.inject({ method: 'POST', url: '/v1/assistant', payload: { ...validBody, model: 'vendor/better' }, headers: { 'x-daybreak-install': INSTALL, authorization: `Bearer ${plus.token}` } });
+  assert.equal(fetchImpl.calls.at(-1).body.model, 'vendor/better');
+});
+
+test('budgets follow the plan and belong to the account, whatever device it uses', async () => {
+  const time = Date.parse('2026-11-09T10:00:00Z');
+  const { app, accounts, store } = await setup({ withAccounts: true, now: () => time });
+  const plus = await signIn(accounts, 'plus');
+  const pro = await signIn(accounts, 'pro');
+  const ask = (account, install) =>
+    app.inject({ method: 'POST', url: '/v1/assistant', payload: validBody, headers: { 'x-daybreak-install': install, authorization: `Bearer ${account.token}` } }).then((response) => events(response.body));
+
+  await store.addSpend(userKey(plus.accountId), 25);
+  assert.deepEqual(await ask(plus, INSTALL), [{ type: 'error', code: 'limit' }]);
+  // The same account on another phone is stopped too.
+  assert.deepEqual(await ask(plus, 'ffffffff-0000-4000-8000-aaaaaaaaaaaa'), [{ type: 'error', code: 'limit' }]);
+
+  await store.addSpend(userKey(pro.accountId), 25);
+  assert.deepEqual((await ask(pro, INSTALL)).at(-1), { type: 'done' });
+  assert.equal((await store.logs())[0].plan, 'pro');
+});
+
+test('the admin form saves the tier of each model and the Pro budget', async () => {
+  const { value } = parseSettingsForm({
+    modelId: ['vendor/a', 'vendor/b'],
+    modelProvider: ['openrouter', 'openrouter'],
+    modelTierFree: ['available', 'locked'],
+    modelTierPlus: ['available', 'hidden'],
+    modelTierPro: ['available', 'bogus'],
+    freeCentsPerDay: '10',
+    paidCentsPerDay: '20',
+    proCentsPerDay: '75',
+    effortMinPlan: 'plus',
+    assistantPerMinute: '5',
+    updateChecksPerMinute: '30',
+    downloadsPerHour: '20',
+    logRetentionDays: '7',
+  });
+  assert.deepEqual(value.models[1].tiers, { free: 'locked', plus: 'hidden', pro: 'available' });
+  assert.equal(value.proCentsPerDay, 75);
+  assert.equal(value.effortMinPlan, 'plus');
 });

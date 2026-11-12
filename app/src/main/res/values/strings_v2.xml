@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Daybreak 2: Daybreak-Konto, Tarife (Free, Plus, Pro), Dawn-Seite, Update-Seite. Deutsch ist die Hauptsprache; Englisch steht in values-en. -->
+<resources>
+    <!-- Sperren und Tarife -->
+    <string name="v2_locked">Gesperrt</string>
+    <string name="v2_extras_title">Extras mit Plus</string>
+    <string name="v2_locked_plan">Teil von %1$s</string>
+    <string name="v2_plan_free">Free</string>
+    <string name="v2_plan_plus">Plus</string>
+    <string name="v2_plan_pro">Pro</string>
+
+    <string name="v2_feature_app_name">App-Name</string>
+    <string name="v2_feature_app_icon">App-Symbol</string>
+    <string name="v2_feature_calendar_export">Kalenderexport</string>
+    <string name="v2_feature_widget">Widget-Optionen</string>
+    <string name="v2_feature_share_picture">Stundenplan als Bild teilen</string>
+    <string name="v2_feature_sync">Abgleich auf allen Geräten</string>
+    <string name="v2_feature_dawn_reasoning">Denkstufe in Dawn</string>
+    <string name="v2_feature_dawn_drafts">Nachrichtenentwürfe in Dawn</string>
+    <string name="v2_feature_haptics">Haptik-Studio</string>
+    <string name="v2_feature_accent">Akzentfarben</string>
+    <string name="v2_feature_amoled">AMOLED-Schwarz</string>
+
+    <string name="v2_plans_title">Daybreak Tarife</string>
+    <string name="v2_plans_title_feature">%1$s gibt es mit %2$s</string>
+    <string name="v2_plans_body">Alles Wichtige bleibt kostenlos: Stundenplan, Fehlzeiten, Nachrichten, Prüfungen, Hausaufgaben, Suche und Benachrichtigungen. Die Tarife bringen mehr Komfort und mehr von Dawn.</string>
+    <string name="v2_plans_choose">%1$s wählen</string>
+    <string name="v2_plans_needs_account">Dafür brauchst du ein Daybreak-Konto. Es ist in einer Minute gemacht, ohne E-Mail und ohne Passwort.</string>
+    <string name="v2_plans_all">Alle Tarife ansehen</string>
+    <string name="v2_plans_manage">Abo verwalten</string>
+    <string name="v2_plans_close">Schließen</string>
+    <string name="v2_plus_1">Mehr Fragen am Tag und mehr Modelle in Dawn</string>
+    <string name="v2_plus_2">App-Name und Symbol, Kalenderexport</string>
+    <string name="v2_plus_3">Widget-Optionen und Stundenplan als Bild teilen</string>
+    <string name="v2_plus_4">Deine Einstellungen und Notizen auf allen Geräten</string>
+    <string name="v2_pro_1">Alles aus Plus</string>
+    <string name="v2_pro_2">Die meisten Fragen am Tag und alle Modelle in Dawn</string>
+    <string name="v2_pro_3">Denkstufe und Nachrichtenentwürfe in Dawn</string>
+    <string name="v2_pro_4">Haptik-Studio, Akzentfarben und AMOLED-Schwarz</string>
+
+    <!-- Fehler der Konto-Aufrufe -->
+    <string name="v2_error_offline">Keine Verbindung zum Server. Prüfe dein Netz und versuche es noch einmal.</string>
+    <string name="v2_error_unauthorized">Dieses Gerät ist nicht mehr angemeldet. Melde dich mit deinem Wiederherstellungscode an.</string>
+    <string name="v2_error_unknown_code">Diesen Wiederherstellungscode kennen wir nicht. Prüfe ihn auf Tippfehler.</string>
+    <string name="v2_error_limit">Es sind schon drei WebUntis-Konten verbunden. Entferne eins, um ein neues zu verbinden.</string>
+    <string name="v2_error_duplicate">Dieses WebUntis-Konto ist schon mit deinem Daybreak-Konto verbunden.</string>
+    <string name="v2_error_not_offered">Dieses Angebot gibt es für dein Konto nicht (mehr).</string>
+    <string name="v2_error_no_subscription">Du hast noch kein Abo, das du verwalten könntest.</string>
+    <string name="v2_error_rate_limited">Zu viele Versuche. Warte kurz und versuche es dann noch einmal.</string>
+    <string name="v2_error_unavailable">Gerade nicht erreichbar. Versuche es später noch einmal.</string>
+
+    <!-- Wechsel zum Daybreak-Konto (nach dem Update) -->
+    <string name="v2_migrate_title">Willkommen bei Daybreak 2</string>
+    <string name="v2_migrate_body">Mit einem Daybreak-Konto gehört dein Tarif dir und nicht diesem einen Handy. Du brauchst weder E-Mail noch Passwort: Du bekommst einen Wiederherstellungscode, mit dem du dich auf jedem Gerät anmeldest.</string>
+    <string name="v2_migrate_supporter">Danke, dass du Daybreak über Ko-fi unterstützt hast. Deine Extras bleiben dir erhalten, und für dich liegt noch etwas bereit.</string>
+    <string name="v2_migrate_later">Jetzt nicht</string>
+    <string name="v2_migrate_privacy">Dein WebUntis-Passwort und dein Stundenplan werden nie an dein Daybreak-Konto gesendet.</string>
+    <string name="v2_created_title">Dein Konto ist da</string>
+    <string name="v2_created_body">Das ist dein Wiederherstellungscode. Mit ihm meldest du dich auf einem neuen Handy oder nach einer Neuinstallation wieder an.</string>
+    <string name="v2_created_warning">Bewahre ihn sicher auf, zum Beispiel in deinem Passwortmanager. Wer ihn kennt, kommt in dein Konto, und wir können ihn nicht zurücksetzen. Du findest ihn jederzeit unter Mehr → Daybreak-Konto.</string>
+    <string name="v2_created_thanks">Deine Supporter-Extras (App-Name, Symbol, Kalenderexport) sind für immer freigeschaltet.</string>
+    <string name="v2_created_continue">Weiter</string>
+
+    <!-- Konto-Seite -->
+    <string name="v2_account_row">Daybreak-Konto</string>
+    <string name="v2_account_row_desc">Tarif %1$s, Wiederherstellungscode, WebUntis-Konten</string>
+    <string name="v2_account_title">Daybreak-Konto</string>
+    <string name="v2_account_intro">Ein Konto bewahrt deinen Tarif und deine Daybreak-Einstellungen auf, auch wenn du das Handy wechselst. Kein Passwort, keine E-Mail.</string>
+    <string name="v2_account_create">Konto erstellen</string>
+    <string name="v2_account_have_code">Ich habe einen Wiederherstellungscode</string>
+    <string name="v2_account_code_label">Wiederherstellungscode</string>
+    <string name="v2_account_sign_in">Anmelden</string>
+    <string name="v2_account_code_title">Wiederherstellungscode</string>
+    <string name="v2_account_code_unknown">Dieses Gerät kennt den Code nicht. Du findest ihn auf dem Gerät, auf dem du das Konto erstellt hast.</string>
+    <string name="v2_account_code_hint">Tippe auf den Code, um ihn zu kopieren. Bewahre ihn sicher auf: Wer ihn kennt, kommt in dein Konto.</string>
+    <string name="v2_account_copy">Code kopieren</string>
+    <string name="v2_account_copied">Kopiert</string>
+    <string name="v2_account_plan">Tarif: %1$s</string>
+    <string name="v2_account_plan_until">Läuft bis %1$s</string>
+    <string name="v2_account_plan_active">Aktiv</string>
+    <string name="v2_account_plan_free_hint">Alles Wichtige ist kostenlos. Mehr gibt es mit Plus und Pro.</string>
+    <string name="v2_account_supporter">Supporter: App-Name, Symbol und Kalenderexport bleiben für immer freigeschaltet.</string>
+    <string name="v2_account_upgrade">Tarife ansehen</string>
+    <string name="v2_account_webuntis_title">WebUntis-Konten (%1$d von %2$d)</string>
+    <string name="v2_account_webuntis_empty">Noch kein WebUntis-Konto verbunden.</string>
+    <string name="v2_account_webuntis_this">Mit diesem Handy verbunden</string>
+    <string name="v2_account_unbind">Verbindung lösen</string>
+    <string name="v2_account_bind">Dieses WebUntis-Konto verbinden</string>
+    <string name="v2_account_webuntis_full">Alle drei Plätze sind belegt</string>
+    <string name="v2_account_bind_title">WebUntis-Konto verbinden</string>
+    <string name="v2_account_bind_body">Das Konto, mit dem du gerade angemeldet bist, wird deinem Daybreak-Konto zugeordnet. Gespeichert wird nur ein Hash und die Bezeichnung, die du hier wählst.</string>
+    <string name="v2_account_bind_label">Bezeichnung</string>
+    <string name="v2_account_bind_confirm">Verbinden</string>
+    <string name="v2_account_shared_warning">Achtung: Dieses WebUntis-Konto ist auch mit einem anderen Daybreak-Konto verbunden.</string>
+    <string name="v2_account_signout">Von diesem Gerät abmelden</string>
+    <string name="v2_account_signout_desc">Das Konto und der Tarif bleiben erhalten</string>
+    <string name="v2_account_signout_confirm">Danach gilt auf diesem Gerät wieder Free, bis du dich mit deinem Wiederherstellungscode anmeldest. Hast du ihn noch?</string>
+
+    <!-- Dankeschön für frühere Ko-fi-Unterstützer -->
+    <string name="v2_trial_title">Danke für deine Unterstützung</string>
+    <string name="v2_trial_body">Du hast Daybreak früher über Ko-fi unterstützt. Dafür schenken wir dir 3 Monate Daybreak Pro.</string>
+    <string name="v2_trial_note">Pro bringt Dawn mit den meisten Fragen und allen Modellen, Haptik-Studio, Akzentfarben und mehr. Danach geht es ohne Kosten auf Free zurück; deine Supporter-Extras behältst du.</string>
+    <string name="v2_trial_accept">3 Monate Pro starten</string>
+    <string name="v2_trial_later">Später</string>
+    <string name="v2_trial_done">Fertig</string>
+    <string name="v2_trial_started_title">Pro ist aktiv</string>
+    <string name="v2_trial_started_body">Viel Spaß mit Pro! Alles ist jetzt freigeschaltet.</string>
+    <string name="v2_trial_banner_title">3 Monate Pro für dich</string>
+    <string name="v2_trial_banner_body">Als Dank für deine Unterstützung. Das Angebot steht hier noch zwei Wochen.</string>
+
+    <!-- Dawn -->
+    <string name="v2_dawn_title">Daybreak AI heißt jetzt Dawn</string>
+    <string name="v2_dawn_body">Gleicher Assistent, neuer Name. Frag ihn nach deiner Woche, lass ihn Fotos und PDFs lesen oder die App für dich einstellen.</string>
+    <string name="v2_dawn_try">Jetzt ausprobieren</string>
+    <string name="v2_dawn_later">Später</string>
+    <string name="v2_dawn_demo_question">Welche Stunde fällt morgen aus?</string>
+    <string name="v2_dawn_demo_answer">Morgen entfällt die 3. Stunde, Mathe bei Frau Weber. Dafür hast du in der 5. Stunde Vertretung in Raum 204.</string>
+
+    <!-- Neue Version -->
+    <string name="v2_update_title">Eine neue Version ist verfügbar</string>
+    <string name="v2_update_question">Daybreak %1$s steht bereit. Möchtest du sie herunterladen?</string>
+    <string name="v2_update_download">Jetzt herunterladen</string>
+    <string name="v2_update_later">Später</string>
+</resources>

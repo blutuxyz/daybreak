@@ -153,6 +153,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.ui.account.LocalPlans
+import com.bdersolutions.daybreak.ui.account.allowed
 import com.bdersolutions.daybreak.data.assistant.AnswerMarkdown
 import com.bdersolutions.daybreak.data.assistant.AssistantModels
 import com.bdersolutions.daybreak.data.assistant.AttachmentProblem
@@ -304,9 +307,6 @@ internal fun AssistantScreenContent(
                 TextButton(onClick = { editing = null }) { Text(stringResource(R.string.assistant_rename_cancel)) }
             },
         )
-    }
-    if (state.failure == AssistantFailure.LIMIT) {
-        UsageLimitSheet(onDismiss = viewModel::dismissFailure)
     }
     if (showHistory) {
         HistorySheet(
@@ -562,8 +562,8 @@ internal fun AssistantScreenContent(
                         if (state.waiting) {
                             item(key = "typing") { TypingIndicator(statusRow()) }
                         }
-                        // A used-up day is explained in a sheet (see UsageLimitSheet), not in the chat.
-                        state.failure?.takeIf { it != AssistantFailure.LIMIT }?.let { failure ->
+                        // A used-up budget is not told as one: it reads like any other outage (see AssistantProtocol).
+                        state.failure?.let { failure ->
                             item(key = "failure") {
                                 FailureCard(failure = failure, onRetry = { viewModel.retry(language) }, modifier = statusRow())
                             }
@@ -1091,7 +1091,6 @@ private fun FailureCard(failure: AssistantFailure, onRetry: () -> Unit, modifier
         AssistantFailure.BUSY -> stringResource(R.string.assistant_error_busy)
         AssistantFailure.UPSTREAM -> stringResource(R.string.assistant_error_upstream)
         AssistantFailure.UNAVAILABLE -> stringResource(R.string.assistant_error_unavailable)
-        AssistantFailure.LIMIT -> stringResource(R.string.assistant_error_limit)
         AssistantFailure.REJECTED -> stringResource(R.string.assistant_error_rejected)
     }
     Surface(
@@ -1218,12 +1217,15 @@ private fun InputBar(
                             onFile = onPickFile,
                         )
                         Spacer(Modifier.weight(1f))
+                        val plans = LocalPlans.current
+                        val reasoningAllowed = Entitlement.DAWN_REASONING.allowed()
                         if (models != null && models.showSwitcher && currentModel != null) {
                             PickerChip(
                                 current = currentModel.label,
-                                options = models.models.map { PickerOption(it.id, it.label, it.tag, it.tagAlarm) },
+                                options = models.models.map { PickerOption(it.id, it.label, it.tag, it.tagAlarm, it.locked) },
                                 selectedId = currentModel.id,
                                 onSelect = onSelectModel,
+                                onLocked = { plans.show(null) },
                                 tag = currentModel.tag,
                                 tagAlarm = currentModel.tagAlarm,
                                 onTagLongClick = if (description.isNotBlank()) ({ descriptionHidden = !descriptionHidden }) else null,
@@ -1234,9 +1236,10 @@ private fun InputBar(
                         if (models != null && models.showEffort && currentEffort != null) {
                             PickerChip(
                                 current = effortLabel(currentEffort),
-                                options = models.efforts.map { PickerOption(it, effortLabel(it)) },
+                                options = models.efforts.map { PickerOption(it, effortLabel(it), locked = !reasoningAllowed) },
                                 selectedId = currentEffort,
                                 onSelect = onSelectEffort,
+                                onLocked = { plans.show(Entitlement.DAWN_REASONING) },
                                 icon = Icons.Outlined.Psychology,
                             )
                         }
@@ -1547,57 +1550,6 @@ private fun HistoryRow(
                         Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete_chat))
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * The day's usage is used up. The same kind of bottom sheet as the supporter popup: one icon, a short
- * explanation, and one button to close it.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun UsageLimitSheet(onDismiss: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    // Closing slides the sheet down first; the state only changes once it is gone, so the exit animates.
-    val close: () -> Unit = {
-        scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
-    }
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = close, sheetState = sheetState) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(colors.secondaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.Schedule, contentDescription = null, tint = colors.onSecondaryContainer, modifier = Modifier.size(30.dp))
-            }
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.assistant_limit_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.assistant_limit_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = close, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.assistant_limit_ok))
             }
         }
     }

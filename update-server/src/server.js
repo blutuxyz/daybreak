@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import Fastify from 'fastify';
@@ -5,6 +6,13 @@ import { AnnouncementStore, MESSAGE_ID_PATTERN } from './announcements.js';
 import { parseAssistantRequest, parseTitleRequest } from './assistant.js';
 import { DEFAULT_SETTINGS, EFFORTS, HIDDEN_ROUTINGS, PROVIDER_SORTS, parseSettingsForm } from './assistant-store.js';
 import { renderAdmin, renderLogEntry } from './admin.js';
+import { MAX_SYNC_BYTES, PLANS, effectivePlan } from './accounts.js';
+import { parseUntil, renderAccounts } from './admin-accounts.js';
+import { handleStripeEvent, verifyStripeSignature } from './billing.js';
+import { renderSubscribe } from './subscribe-page.js';
+import { MESSAGE_NOTICES, playStoreMessage, renderPreviewPage } from './admin-messages.js';
+import { IMAGE_ID, MAX_IMAGE_BYTES, MessageImageStore, parseSingleFile } from './message-images.js';
+import { normalizeMessage } from './announcements.js';
 import { pickLanguage, renderDesktopPage, renderPage } from './page.js';
 import { ReleaseFileCache } from './release-files.js';
 import { RateLimiter, extractCode, normalizeCode, parseKofiBody, sameSecret } from './support.js';
@@ -26,6 +34,17 @@ import { isSafeTag } from './version.js';
  *   POST /v1/kofi           Ko-fi's webhook: a payment whose message holds an unlock code (needs
  *                           KOFI_VERIFICATION_TOKEN)
  *   GET  /v1/support/status ?code=DB-XXXX-XXXX  { paid } whether that unlock code was paid for
+ *   POST /v1/account        a new Daybreak account { accountId, restoreCode, token, plan, … } (accounts.js);
+ *                           the body may carry legacyUnlockCode of a 1.x Ko-fi supporter
+ *   POST /v1/account/restore  signs a device in with a restore code
+ *   GET  /v1/account        the account's plan, bound WebUntis accounts and trial (Bearer token)
+ *   POST /v1/account/webuntis, DELETE /v1/account/webuntis/:id   bind (at most 3) or unbind a WebUntis account
+ *   POST /v1/account/trial/accept   the 3 months of Pro for old supporters
+ *   POST /v1/billing/checkout, /v1/billing/portal   a Stripe Checkout or customer portal address (billing.js)
+ *   POST /v1/stripe/webhook Stripe's webhook, signature checked (needs STRIPE_WEBHOOK_SECRET)
+ *   GET/PUT /v1/sync        the account's synced document (Plus and Pro)
+ *   GET  /subscribe         the public plans page with the Ko-fi donate link
+ *   GET  /admin/accounts    admin: find an account, grant or end a plan, prices and Stripe price ids
  *   GET  /v1/status         the minimum app version and the messages for the app (announcements.js)
  *   GET  /admin             the admin page, behind ADMIN_TOKEN: minimum version, switches and messages
  *   GET  /v1/assistant/models  the models the app may offer (404 while the assistant is off)
@@ -39,7 +58,10 @@ export function buildServer({
   apks,
   setups = new ReleaseFileCache({ config, kind: 'setup' }),
   support,
+  accounts,
+  stripe,
   announcements,
+  messageImages,
   assistant,
   assistantStore,
   logger = false,
@@ -47,6 +69,12 @@ export function buildServer({
 }) {
   const app = Fastify({ logger, trustProxy: true });
   const notices = announcements ?? new AnnouncementStore({ config });
+  const images = messageImages ?? new MessageImageStore({ config });
+
+  // A picture upload from the admin page arrives as multipart/form-data; the body is read as bytes.
+  app.addContentTypeParser('multipart/form-data', { parseAs: 'buffer', bodyLimit: MAX_IMAGE_BYTES + 65_536 }, (request, body, done) => {
+    done(null, { multipart: body, contentType: request.headers['content-type'] });
+  });
   const adminLimiter = new RateLimiter({ limit: 60, windowMs: 60_000, now });
 
   // Ko-fi posts a form ("data=<json>"). Reading it needs no extra package.
@@ -366,6 +394,192 @@ export function buildServer({
     return { paid: await support.isPaid(code) };
   });
 
+  // ---- Daybreak accounts, plans and sync (accounts.js, billing.js) ----------------------------------
+
+  const accountLimiter = new RateLimiter({ limit: 20, windowMs: 60_000, now });
+  const createLimiter = new RateLimiter({ limit: 10, windowMs: 3_600_000, now });
+
+  /** The account behind "Authorization: Bearer <token>", or a 401 (and undefined). */
+  const accountFrom = async (request, reply) => {
+    const match = /^Bearer\s+(\S+)$/i.exec(String(request.headers.authorization ?? ''));
+    const account = match ? await accounts.authenticate(match[1]) : undefined;
+    if (!account) {
+      reply.code(401).send({ error: 'unauthorized' });
+      return undefined;
+    }
+    return account;
+  };
+  const accountRoute = (handler) => async (request, reply) => {
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!accountLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const account = await accountFrom(request, reply);
+    return account ? handler(account, request, reply) : reply;
+  };
+
+  /**
+   * Who is asking the assistant: the signed-in account (its plan and its one budget) or nobody, which is
+   * the free plan (or Plus for a 1.x app that sends a paid unlock code). The sign-in is optional.
+   */
+  const assistantCaller = async (request) => {
+    const match = /^Bearer\s+(\S+)$/i.exec(String(request.headers.authorization ?? ''));
+    const account = match && accounts ? await accounts.authenticate(match[1]) : undefined;
+    return account ? { accountId: account.id, plan: effectivePlan(account, now()).plan } : { plan: undefined };
+  };
+
+  /** A new account. A 1.x supporter may pass the old unlock code to be recognised as one. */
+  app.post('/v1/account', async (request, reply) => {
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!createLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const legacyUnlockCode = normalizeCode(request.body?.legacyUnlockCode);
+    const created = await accounts.create({
+      legacyUnlockCode,
+      isLegacyPaid: support ? (code) => support.isPaid(code) : undefined,
+    });
+    return reply.code(201).send({ ...created.account, restoreCode: created.restoreCode, token: created.token, legacy: created.legacy });
+  });
+
+  /** Signs a device in with a restore code. */
+  app.post('/v1/account/restore', async (request, reply) => {
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    reply.header('Cache-Control', 'no-store');
+    if (!accountLimiter.allow(request.ip)) return reply.code(429).send({ error: 'too_many_requests' });
+    const signedIn = await accounts.restore(request.body?.restoreCode);
+    if (!signedIn) return reply.code(404).send({ error: 'unknown_code' });
+    return { ...signedIn.account, token: signedIn.token };
+  });
+
+  app.get('/v1/account', accountRoute((account) => accounts.view(account)));
+
+  app.post('/v1/account/webuntis', accountRoute(async (account, request, reply) => {
+    const result = await accounts.bindWebuntis(account.id, request.body ?? {});
+    if (result.error === 'limit') return reply.code(409).send({ error: 'limit' });
+    if (result.error === 'duplicate') return reply.code(409).send({ error: 'duplicate' });
+    if (result.error) return reply.code(400).send({ error: result.error });
+    return reply.code(201).send({ ...result, account: accounts.view(await accounts.get(account.id)) });
+  }));
+
+  app.delete('/v1/account/webuntis/:id', accountRoute(async (account, request, reply) => {
+    if (!(await accounts.unbindWebuntis(account.id, request.params.id))) return reply.code(404).send({ error: 'not_found' });
+    return accounts.view(await accounts.get(account.id));
+  }));
+
+  /** Starts the three months of Pro that old Ko-fi supporters are offered. */
+  app.post('/v1/account/trial/accept', accountRoute(async (account, request, reply) => {
+    const result = await accounts.acceptTrial(account.id);
+    if (result.error) return reply.code(409).send({ error: result.error });
+    return result.account;
+  }));
+
+  /** A Stripe Checkout page for a plan; the app opens the returned address in the browser. */
+  app.post('/v1/billing/checkout', accountRoute(async (account, request, reply) => {
+    const plan = request.body?.plan;
+    if (plan !== 'plus' && plan !== 'pro') return reply.code(400).send({ error: 'bad_plan' });
+    const settings = await accounts.settings();
+    const priceId = settings[plan]?.priceId;
+    if (!stripe?.configured || !priceId) return reply.code(503).send({ error: 'payments_off' });
+    try {
+      const url = await stripe.checkout({
+        accountId: account.id,
+        plan,
+        priceId,
+        customerId: account.stripe?.customerId,
+        successUrl: `${baseUrl(request)}/subscribe?done=1`,
+        cancelUrl: `${baseUrl(request)}/subscribe`,
+      });
+      return { url };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: 'payments_unavailable' });
+    }
+  }));
+
+  /** The Stripe page where a subscriber changes the card or cancels. */
+  app.post('/v1/billing/portal', accountRoute(async (account, request, reply) => {
+    if (!stripe?.configured) return reply.code(503).send({ error: 'payments_off' });
+    if (!account.stripe?.customerId) return reply.code(409).send({ error: 'no_subscription' });
+    try {
+      return { url: await stripe.portal({ customerId: account.stripe.customerId, returnUrl: `${baseUrl(request)}/subscribe` }) };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: 'payments_unavailable' });
+    }
+  }));
+
+  // Stripe signs the raw body, so this route (alone) keeps the body as text.
+  app.register(async (scope) => {
+    scope.removeAllContentTypeParsers();
+    scope.addContentTypeParser('*', { parseAs: 'string', bodyLimit: 1_048_576 }, (_, body, done) => done(null, body));
+    scope.post('/v1/stripe/webhook', async (request, reply) => {
+      if (!config.stripeWebhookSecret || !accounts) return reply.code(404).send({ error: 'not_found' });
+      const payload = typeof request.body === 'string' ? request.body : '';
+      if (!verifyStripeSignature({ payload, header: request.headers['stripe-signature'], secret: config.stripeWebhookSecret, now: now() })) {
+        return reply.code(400).send({ error: 'bad_signature' });
+      }
+      let event;
+      try {
+        event = JSON.parse(payload);
+      } catch {
+        return reply.code(400).send({ error: 'bad_request' });
+      }
+      try {
+        const settings = await accounts.settings();
+        const outcome = await handleStripeEvent({
+          event,
+          accounts,
+          priceToPlan: (priceId) => ['plus', 'pro'].find((plan) => settings[plan]?.priceId && settings[plan].priceId === priceId),
+          now: now(),
+        });
+        request.log.info({ type: event.type, handled: outcome.handled, reason: outcome.reason }, 'stripe event');
+      } catch (error) {
+        // A 500 makes Stripe deliver the event again, which is what we want for a failure that may pass.
+        request.log.error(error);
+        return reply.code(500).send({ error: 'failed' });
+      }
+      return { received: true };
+    });
+  });
+
+  /** The synced document of the account (Plus and Pro). */
+  app.get('/v1/sync', accountRoute(async (account, request, reply) => {
+    if (effectivePlan(account, now()).plan === 'free') return reply.code(402).send({ error: 'plan_required' });
+    return accounts.getSync(account.id);
+  }));
+
+  app.put('/v1/sync', { bodyLimit: MAX_SYNC_BYTES + 4096 }, accountRoute(async (account, request, reply) => {
+    if (effectivePlan(account, now()).plan === 'free') return reply.code(402).send({ error: 'plan_required' });
+    const { baseVersion, data } = request.body ?? {};
+    if (!Number.isInteger(baseVersion) || baseVersion < 0 || data === undefined || data === null || typeof data !== 'object') {
+      return reply.code(400).send({ error: 'bad_request' });
+    }
+    if (Buffer.byteLength(JSON.stringify(data)) > MAX_SYNC_BYTES) return reply.code(413).send({ error: 'too_large' });
+    const result = await accounts.putSync(account.id, { baseVersion, data });
+    if (result.error === 'conflict') return reply.code(409).send(result);
+    return result;
+  }));
+
+  /** The public plans page, with the Ko-fi donate button. */
+  app.get('/subscribe', async (request, reply) => {
+    const lang = pickLanguage(request.headers['accept-language']);
+    pageHeaders(reply);
+    const settings = accounts ? await accounts.settings() : {};
+    return reply.send(renderSubscribe({ app: config.appName, lang, settings, donateUrl: config.donateUrl, done: request.query?.done === '1' }));
+  });
+
+  const sendImage = (reply, image) => {
+    if (!image) return reply.code(404).send({ error: 'not_found' });
+    return reply
+      .header('Content-Type', image.type)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Security-Policy', "default-src 'none'")
+      .header('Cache-Control', 'public, max-age=86400')
+      .send(image.data);
+  };
+
+  /** A picture of a message sheet; the app asks for it by the id in the message. */
+  app.get('/v1/message-image/:id', async (request, reply) => sendImage(reply, await images.get(request.params.id)));
+
   app.get('/v1/status', async (request, reply) => {
     reply.header('Cache-Control', 'no-cache');
     try {
@@ -379,7 +593,7 @@ export function buildServer({
   /** The models the app may offer, or 404 while the assistant is off (the app then hides it). */
   app.get('/v1/assistant/models', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const models = await assistant?.models();
+    const models = await assistant?.models({ plan: (await assistantCaller(request)).plan });
     if (!models) return reply.code(404).send({ error: 'not_found' });
     return models;
   });
@@ -393,7 +607,7 @@ export function buildServer({
     if (!/^[A-Za-z0-9-]{16,64}$/.test(installId)) return reply.code(400).send({ error: 'no_install_id' });
     const parsed = parseTitleRequest(request.body);
     if (parsed.error) return reply.code(400).send({ error: parsed.error });
-    const title = await assistant.title({ request: parsed.value, installId });
+    const title = await assistant.title({ request: parsed.value, installId, ...(await assistantCaller(request)) });
     return title ? { title } : reply.code(204).send();
   });
 
@@ -414,6 +628,7 @@ export function buildServer({
     if (!/^[A-Za-z0-9-]{16,64}$/.test(installId)) return reply.code(400).send({ error: 'no_install_id' });
     const parsed = parseAssistantRequest(request.body);
     if (parsed.error) return reply.code(400).send({ error: parsed.error });
+    const caller = await assistantCaller(request);
 
     const abort = new AbortController();
     reply.hijack();
@@ -432,7 +647,7 @@ export function buildServer({
       if (!out.writableEnded && !out.destroyed) out.write(`data: ${JSON.stringify(event)}\n\n`);
     };
     try {
-      await assistant.run({ request: parsed.value, installId, send, signal: abort.signal });
+      await assistant.run({ request: parsed.value, installId, ...caller, send, signal: abort.signal });
     } catch (error) {
       request.log.warn({ name: error?.name }, 'assistant request failed');
       send({ type: 'error', code: 'unavailable' });
@@ -500,7 +715,7 @@ export function buildServer({
       };
     }
     adminHeaders(reply).type('text/html; charset=utf-8');
-    return reply.send(renderAdmin({ app: config.appName, state, notice, now: now(), assistant: assistantState }));
+    return reply.send(renderAdmin({ app: config.appName, state, notice, now: now(), assistant: assistantState, images: await images.list() }));
   });
 
   app.post('/admin/min-version', async (request, reply) => {
@@ -515,10 +730,62 @@ export function buildServer({
     return backToAdmin(reply, result.error ?? 'saved');
   });
 
+  /** Reads the message form, with the pictures the admin has uploaded as the only ones that may be named. */
+  const messageOptions = async () => {
+    const known = new Set((await images.list()).map((image) => image.id));
+    return { now: now(), imageExists: (id) => known.has(id) };
+  };
+
   app.post('/admin/messages', async (request, reply) => {
     if (!guardAdmin(request, reply, { write: true })) return reply;
-    const result = await notices.addMessage(request.body ?? {}, { now: now() });
+    const result = await notices.addMessage(request.body ?? {}, await messageOptions());
     return backToAdmin(reply, result.error ?? 'saved');
+  });
+
+  /** Shows how a message will look (German and English side by side) without publishing it. */
+  app.post('/admin/messages/preview', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const fields = request.body ?? {};
+    const result = normalizeMessage(fields, await messageOptions());
+    adminHeaders(reply).type('text/html; charset=utf-8');
+    const error = result.error ? (MESSAGE_NOTICES[result.error] ?? 'Give the message a title or a text in German or English.') : undefined;
+    return reply.send(renderPreviewPage({ app: config.appName, message: result.message, fields, error, canSave: !result.error }));
+  });
+
+  app.get('/admin/messages/:id/preview', async (request, reply) => {
+    if (!guardAdmin(request, reply)) return reply;
+    const state = await notices.snapshot();
+    const message = state.messages.find((entry) => entry.id === request.params.id);
+    adminHeaders(reply).type('text/html; charset=utf-8');
+    if (!message) return reply.code(404).send(renderPreviewPage({ app: config.appName, error: 'That message does not exist any more.', canSave: false }));
+    return reply.send(renderPreviewPage({ app: config.appName, message, canSave: false }));
+  });
+
+  /** One click: the announcement for the Play Store release, ready to show on Android installs from an APK. */
+  app.post('/admin/messages/demo-playstore', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    await notices.addPreparedMessage(playStoreMessage({ id: randomBytes(6).toString('hex'), now: now(), playUrl: config.playStoreUrl }));
+    return backToAdmin(reply, 'demo_added');
+  });
+
+  app.post('/admin/images', { bodyLimit: MAX_IMAGE_BYTES + 65_536 }, async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const upload = request.body?.multipart ? parseSingleFile(request.body.multipart, request.body.contentType) : undefined;
+    if (!upload) return backToAdmin(reply, 'no_file');
+    const result = await images.add(upload);
+    return backToAdmin(reply, result.error ?? 'image_saved');
+  });
+
+  app.post('/admin/images/:id/delete', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    const removed = IMAGE_ID.test(request.params.id) && (await images.remove(request.params.id));
+    return backToAdmin(reply, removed ? 'image_removed' : 'not_found');
+  });
+
+  /** The same picture for the admin page's thumbnails and previews. */
+  app.get('/admin/message-image/:id', async (request, reply) => {
+    if (!guardAdmin(request, reply)) return reply;
+    return sendImage(reply, await images.get(request.params.id));
   });
 
   app.post('/admin/messages/:id/toggle', async (request, reply) => {
@@ -559,6 +826,85 @@ export function buildServer({
     adminHeaders(reply).type('text/html; charset=utf-8');
     if (!entry) return reply.code(404).send(renderLogEntry({ app: config.appName, entry: undefined }));
     return reply.send(renderLogEntry({ app: config.appName, entry }));
+  });
+
+  // ---- Admin: accounts and plans ------------------------------------------------------------------
+
+  const backToAccounts = (reply, notice, id) =>
+    reply
+      .code(303)
+      .header('Location', `/admin/accounts?notice=${notice}${id ? `&id=${encodeURIComponent(id)}` : ''}`)
+      .send();
+
+  app.get('/admin/accounts', async (request, reply) => {
+    if (!guardAdmin(request, reply)) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const lookup = typeof request.query?.id === 'string' ? request.query.id : '';
+    const account = lookup ? await accounts.find(lookup) : undefined;
+    const notice = typeof request.query?.notice === 'string' ? request.query.notice : lookup && !account ? 'not_found' : undefined;
+    adminHeaders(reply).type('text/html; charset=utf-8');
+    return reply.send(
+      renderAccounts({
+        app: config.appName,
+        notice,
+        count: await accounts.count(),
+        settings: await accounts.settings(),
+        stripeConfigured: Boolean(stripe?.configured),
+        account,
+        view: account ? accounts.view(account) : undefined,
+      }),
+    );
+  });
+
+  app.post('/admin/accounts/grant', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const { id, plan } = request.body ?? {};
+    const until = parseUntil(request.body?.until);
+    if (until.error) return backToAccounts(reply, until.error, id);
+    if (!PLANS.includes(plan) || plan === 'free') return backToAccounts(reply, 'bad_plan', id);
+    const result = await accounts.setPaid(id, { plan, until: until.until, source: 'admin' });
+    return backToAccounts(reply, result.error ?? 'granted', id);
+  });
+
+  app.post('/admin/accounts/revoke', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const result = await accounts.clearPaid(request.body?.id);
+    return backToAccounts(reply, result.error ?? 'revoked', request.body?.id);
+  });
+
+  app.post('/admin/accounts/grandfather', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const ok = await accounts.setGrandfathered(request.body?.id, request.body?.value === 'on');
+    return backToAccounts(reply, ok ? 'saved' : 'not_found', request.body?.id);
+  });
+
+  app.post('/admin/accounts/unbind', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const ok = await accounts.unbindWebuntis(request.body?.id, request.body?.binding);
+    return backToAccounts(reply, ok ? 'unbound' : 'not_found', request.body?.id);
+  });
+
+  /** The names, prices and Stripe price ids of Plus and Pro. */
+  app.post('/admin/billing', async (request, reply) => {
+    if (!guardAdmin(request, reply, { write: true })) return reply;
+    if (!accounts) return reply.code(404).send({ error: 'not_found' });
+    const body = request.body ?? {};
+    const settings = {};
+    for (const plan of ['plus', 'pro']) {
+      const cents = Number(body[`${plan}Cents`]);
+      if (!Number.isInteger(cents) || cents < 0 || cents > 100_000) return backToAccounts(reply, 'bad_number');
+      settings[plan] = {
+        label: String(body[`${plan}Label`] ?? '').trim().slice(0, 20) || (plan === 'plus' ? 'Plus' : 'Pro'),
+        monthlyCents: cents,
+        priceId: String(body[`${plan}Price`] ?? '').trim().slice(0, 100),
+      };
+    }
+    await accounts.saveSettings(settings);
+    return backToAccounts(reply, 'saved');
   });
 
   /** Tells whether an unlock code the app shows has a payment on record. Changes nothing. */

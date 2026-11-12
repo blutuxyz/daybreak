@@ -1,6 +1,8 @@
 import { AssistantService } from './assistant.js';
 import { AssistantStore } from './assistant-store.js';
 import { AnnouncementStore } from './announcements.js';
+import { AccountStore } from './accounts.js';
+import { StripeClient } from './billing.js';
 import { ReleaseFileCache } from './release-files.js';
 import { loadConfig } from './config.js';
 import { ReleaseService } from './releases.js';
@@ -12,6 +14,8 @@ const releases = new ReleaseService({ config });
 const apks = new ReleaseFileCache({ config, kind: 'apk' });
 const setups = new ReleaseFileCache({ config, kind: 'setup' });
 const support = new SupportLedger({ config });
+const accounts = new AccountStore({ config });
+const stripe = new StripeClient({ config });
 // The assistant (OpenRouter) is on only with OPENROUTER_API_KEY; its settings are on the admin page.
 const assistantStore = new AssistantStore({ config });
 await assistantStore.settings();
@@ -23,6 +27,8 @@ const { app, warm } = buildServer({
   apks,
   setups,
   support,
+  accounts,
+  stripe,
   announcements,
   assistant,
   assistantStore,

@@ -502,29 +502,46 @@ export class AssistantService {
    * What the app may pick from, or null when the app should hide the assistant (no key, or the client-side
    * switch is off). The server-side switch does not hide it: requests then fail with the upstream error.
    */
-  async models() {
+  async models({ plan = 'free' } = {}) {
     const settings = await this.store.settings();
     if (!this.configured || !(await this.clientSwitchOn())) return null;
+    const shown = settings.models.filter((model) => tierOf(model, plan) !== 'hidden');
+    const usable = shown.filter((model) => tierOf(model, plan) === 'available');
+    const effortAllowed = PLAN_RANK[plan] >= PLAN_RANK[settings.effortMinPlan ?? 'free'];
+    const showEffort = settings.showEffortSelector && settings.efforts.length > 0 && effortAllowed;
     return {
-      showEffort: settings.showEffortSelector && settings.efforts.length > 0,
-      efforts: settings.showEffortSelector ? settings.efforts : [],
-      defaultEffort: settings.showEffortSelector ? settings.defaultEffort || settings.efforts.at(-1) || null : null,
+      showEffort,
+      efforts: showEffort ? settings.efforts : [],
+      defaultEffort: showEffort ? settings.defaultEffort || settings.efforts.at(-1) || null : null,
       showSwitcher: settings.showModelSwitcher,
       // Off: the app shows no HTML Preview; websites come as code blocks.
       livePreviews: settings.livePreviews !== false,
-      models: settings.showModelSwitcher ? settings.models.map(publicModel) : [],
-      defaultModel: settings.showModelSwitcher ? settings.defaultModel : null,
+      // A locked model is listed (the app greys it out and opens the plans); a hidden one is left out.
+      models: settings.showModelSwitcher ? shown.map((model) => publicModel(model, tierOf(model, plan))) : [],
+      defaultModel: settings.showModelSwitcher
+        ? (usable.find((model) => model.id === settings.defaultModel) ?? usable[0])?.id ?? null
+        : null,
     };
   }
 
-  /** The model for one request: the user's pick when the switcher is shown, else fixed or random. */
-  pickModel(settings, requested) {
-    const byId = (id) => settings.models.find((model) => model.id === id);
-    if (settings.showModelSwitcher) return byId(requested) ?? byId(settings.defaultModel);
-    if (settings.hiddenRouting === 'random' && settings.models.length > 0) {
-      return settings.models[Math.min(Math.floor(this.random() * settings.models.length), settings.models.length - 1)];
+  /**
+   * The model for one request: the user's pick when the switcher is shown, else fixed or random. Only models
+   * the plan may use count; a pick it may not use (a locked model) is replaced by the default.
+   */
+  pickModel(settings, requested, plan = 'free') {
+    const usable = settings.models.filter((model) => tierOf(model, plan) === 'available');
+    const byId = (id) => usable.find((model) => model.id === id);
+    if (settings.showModelSwitcher) return byId(requested) ?? byId(settings.defaultModel) ?? usable[0];
+    if (settings.hiddenRouting === 'random' && usable.length > 0) {
+      return usable[Math.min(Math.floor(this.random() * usable.length), usable.length - 1)];
     }
-    return byId(settings.defaultModel);
+    return byId(settings.defaultModel) ?? usable[0];
+  }
+
+  /** The plan of a request: the account's, else a 1.x app's paid unlock code counts as Plus. */
+  async planOf({ plan, unlockCode }) {
+    if (plan) return plan;
+    return unlockCode && this.support && (await this.support.isPaid(unlockCode)) ? 'plus' : 'free';
   }
 
   /**
@@ -532,19 +549,19 @@ export class AssistantService {
    * it cannot or should not be made (switched off, over budget, any failure): the app then keeps the
    * first question as the name. Counts against the same daily budget.
    */
-  async title({ request, installId }) {
+  async title({ request, installId, accountId, plan: givenPlan }) {
     const settings = await this.store.settings();
     if (!this.configured || !settings.aiTitles || !(await this.serverSwitchOn(settings))) return null;
-    const user = userKey(installId);
-    const limit = settings.freeCentsPerDay > settings.paidCentsPerDay ? settings.freeCentsPerDay : settings.paidCentsPerDay;
-    if ((await this.store.spentToday(user)) >= limit) return null;
-    const model = this.pickModel(settings, request.model);
+    const user = userKey(accountId ?? installId);
+    const plan = await this.planOf({ plan: givenPlan, unlockCode: request.unlockCode });
+    if ((await this.store.spentToday(user)) >= budgetFor(settings, plan)) return null;
+    const model = this.pickModel(settings, request.model, plan);
     const upstream = model ? providerFor(settings, model) : null;
     const conn = upstream ? connectionFor(upstream, this.config) : null;
     // A switched-off model, or one without a provider and key, makes no title: the app keeps the first question.
     if (!model || !model.enabled || !upstream || !conn.apiKey) return null;
     const started = this.now();
-    const entry = { user, paid: false, model: model.id, status: 'title', costCents: 0 };
+    const entry = { user, paid: plan !== 'free', plan, model: model.id, status: 'title', costCents: 0 };
     try {
       const { text, usage } = await completeOnce({
         fetchImpl: this.fetchImpl,
@@ -569,12 +586,13 @@ Answer: ${request.answer}`,
     }
   }
 
-  async run({ request, installId, send, signal }) {
+  async run({ request, installId, accountId, plan: givenPlan, send, signal }) {
     const started = this.now();
     const settings = await this.store.settings();
-    const user = userKey(installId);
-    const paid = Boolean(request.unlockCode && this.support && (await this.support.isPaid(request.unlockCode)));
-    const entry = { user, paid, model: '', status: 'ok', durationMs: 0, costCents: 0 };
+    // A signed-in account has one budget on all its devices; without one the install id is the user.
+    const user = userKey(accountId ?? installId);
+    const plan = await this.planOf({ plan: givenPlan, unlockCode: request.unlockCode });
+    const entry = { user, paid: plan !== 'free', plan, model: '', status: 'ok', durationMs: 0, costCents: 0 };
     const finish = async (extra) => {
       Object.assign(entry, extra, { durationMs: this.now() - started });
       if (!settings.logContent) delete entry.content;
@@ -587,13 +605,13 @@ Answer: ${request.answer}`,
       return finish({ status: 'error', error: 'assistant switched off on the admin page' });
     }
     // The budget is not shown in the app: a user over it only learns the assistant is not available now.
-    const limit = paid ? settings.paidCentsPerDay : settings.freeCentsPerDay;
+    const limit = budgetFor(settings, plan);
     const spent = await this.store.spentToday(user);
     if (spent >= limit) {
       send({ type: 'error', code: 'limit' });
       return finish({ status: 'limit', error: `daily budget used: ${spent.toFixed(3)} of ${limit} cents` });
     }
-    const allowed = this.pickModel(settings, request.model);
+    const allowed = this.pickModel(settings, request.model, plan);
     if (!allowed) {
       send({ type: 'error', code: 'upstream' });
       return finish({ status: 'error', error: 'no model configured on the admin page' });
@@ -660,8 +678,30 @@ Answer: ${request.answer}`,
 }
 
 /** What the app may show of a model: no provider, price or switch. */
-export function publicModel(model) {
-  return { id: model.id, label: model.label, description: model.description, tag: model.tag, tagKind: model.tagKind };
+export function publicModel(model, state = 'available') {
+  return {
+    id: model.id,
+    label: model.label,
+    description: model.description,
+    tag: model.tag,
+    tagKind: model.tagKind,
+    // The apps read `state` (docs/v2-spec.md); `locked` says the same for a reader that wants a flag.
+    state,
+    ...(state === 'locked' ? { locked: true } : {}),
+  };
+}
+
+const PLAN_RANK = { free: 0, plus: 1, pro: 2 };
+
+/** What a plan sees of a model: "available", "locked" or "hidden" (models stored before plans are available to all). */
+export function tierOf(model, plan) {
+  return model.tiers?.[plan] ?? 'available';
+}
+
+/** The daily budget in US cents for a plan. The Plus budget is still stored as paidCentsPerDay. */
+export function budgetFor(settings, plan) {
+  if (plan === 'pro') return settings.proCentsPerDay ?? settings.paidCentsPerDay;
+  return plan === 'plus' ? settings.paidCentsPerDay : settings.freeCentsPerDay;
 }
 
 /** The request body for an OpenAI-compatible chat completions server. */

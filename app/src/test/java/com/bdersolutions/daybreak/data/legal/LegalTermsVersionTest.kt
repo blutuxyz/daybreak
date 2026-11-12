@@ -4,6 +4,7 @@ import java.io.File
 import java.security.MessageDigest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -13,6 +14,7 @@ import org.junit.Test
  *
  * When this fails because you edited the text on purpose: raise [LegalTerms.VERSION], then add the
  * new version and the hash from the failure message to [HASH_BY_VERSION]. Keep the old entries.
+ * The contact address is hashed as a placeholder, so changing only the address needs no new version.
  */
 class LegalTermsVersionTest {
     private val sectionKeys = listOf(
@@ -41,6 +43,16 @@ class LegalTermsVersionTest {
         )
     }
 
+    @Test
+    fun theContactSectionNamesTheContactAddress() {
+        listOf("values", "values-en").forEach { dir ->
+            val text = File("src/main/res/$dir/strings.xml").readText(Charsets.UTF_8)
+            val body = Regex("""<string name="legal_contact_body">(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
+                .find(text)?.groupValues?.get(1).orEmpty()
+            assertTrue("$dir legal_contact_body must contain ${LegalTerms.CONTACT_EMAIL}", LegalTerms.CONTACT_EMAIL in body)
+        }
+    }
+
     private fun currentHash(): String {
         val pattern = Regex("""<string name="(legal_[a-z_]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
         val wanted = sectionKeys.flatMap { listOf("legal_${it}_title", "legal_${it}_body") }.toSet()
@@ -49,7 +61,7 @@ class LegalTermsVersionTest {
             val text = file.readText(Charsets.UTF_8).replace("\r\n", "\n")
             pattern.findAll(text)
                 .filter { it.groupValues[1] in wanted }
-                .map { "$dir/${it.groupValues[1]}=${it.groupValues[2]}" }
+                .map { "$dir/${it.groupValues[1]}=${it.groupValues[2].replace(LegalTerms.CONTACT_EMAIL, "{CONTACT_EMAIL}")}" }
                 .toList()
         }.sorted()
         assertEquals("Every section needs a title and a body in both languages.", wanted.size * 2, lines.size)
@@ -66,6 +78,7 @@ class LegalTermsVersionTest {
             5 to "2adc2ef99130cbd22799fd9083c75b2902a7b26827e7c8e6d69453036d286627",
             6 to "26bdc60406356787173800ef11ab4e9d520e02caca2a45cfb795b868c3b87837",
             7 to "af1c7b81d67690d3ce29926d7c46092372f9867c454a82114b600e44cf4bf1a7",
+            8 to "fbdee6f7205367e54d7991414100f64eeaacc23db67b87791170d05b69fb3586",
         )
     }
 }

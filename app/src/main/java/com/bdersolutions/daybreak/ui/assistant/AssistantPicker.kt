@@ -62,7 +62,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -87,6 +89,8 @@ internal data class PickerOption(
     /** A badge next to the label, e.g. "Free"; null for none. */
     val tag: String? = null,
     val tagAlarm: Boolean = false,
+    /** Greyed out with a lock: the plan does not include it. Tapping calls `onLocked` instead of selecting. */
+    val locked: Boolean = false,
 )
 
 /**
@@ -100,6 +104,7 @@ internal fun PickerChip(
     options: List<PickerOption>,
     selectedId: String?,
     onSelect: (String) -> Unit,
+    onLocked: (PickerOption) -> Unit = {},
     icon: ImageVector? = null,
     /** The model's tag, shown inside the chip; it grows the chip smoothly instead of pushing its neighbours. */
     tag: String? = null,
@@ -259,10 +264,11 @@ internal fun PickerChip(
                                     tag = option.tag,
                                     tagAlarm = option.tagAlarm,
                                     selected = option.id == selectedId,
+                                    locked = option.locked,
                                     onClick = {
                                         open = false
                                         haptics.perform(HapticEvent.TAP)
-                                        onSelect(option.id)
+                                        if (option.locked) onLocked(option) else onSelect(option.id)
                                     },
                                 )
                             }
@@ -275,7 +281,7 @@ internal fun PickerChip(
 }
 
 @Composable
-private fun PickerRow(label: String, tag: String?, tagAlarm: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun PickerRow(label: String, tag: String?, tagAlarm: Boolean, selected: Boolean, locked: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val background by animateColorAsState(
         targetValue = if (selected) colors.secondaryContainer else Color.Transparent,
@@ -286,6 +292,7 @@ private fun PickerRow(label: String, tag: String?, tagAlarm: Boolean, selected: 
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 6.dp)
+            .alpha(if (locked) 0.5f else 1f)
             .clip(RoundedCornerShape(16.dp))
             .background(background)
             .clickable(onClick = onClick)
@@ -303,6 +310,16 @@ private fun PickerRow(label: String, tag: String?, tagAlarm: Boolean, selected: 
         if (tag != null) {
             ModelTagBadge(text = tag, alarm = tagAlarm, inverted = selected)
             Spacer(Modifier.width(6.dp))
+        }
+        if (locked) {
+            Icon(
+                Icons.Outlined.Lock,
+                contentDescription = stringResource(R.string.v2_locked),
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(18.dp),
+            )
         }
         AnimatedVisibility(
             visible = selected,

@@ -42,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bdersolutions.daybreak.data.account.Access
+import com.bdersolutions.daybreak.data.account.Entitlement
 import com.bdersolutions.daybreak.data.branding.AppNamePreset
 import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.schedule.IcsExport
@@ -51,27 +53,32 @@ import java.time.LocalDate
 
 /**
  * The name the app shows in its own title (the timetable header and the window title). Changing it is
- * a supporter extra, as on Android: without a confirmed payment the app is always "Daybreak". Windows
- * has no launcher name to change, so this is the only place the name appears.
+ * part of Plus (and stays for old Ko-fi supporters), as on Android: without it the app is always
+ * "Daybreak". Windows has no launcher name to change, so this is the only place the name appears.
+ * [allowed] is `access.allows(Entitlement.APP_NAME)`.
  */
-fun appTitle(paid: Boolean, custom: String): String = AppNaming.resolve(paid, AppNamePreset.DAYBREAK, custom)
+fun appTitle(allowed: Boolean, custom: String): String = AppNaming.resolve(allowed, AppNamePreset.DAYBREAK, custom)
 
-/** The card of supporter extras on the More page: starred and tinted, dimmed with a lock until unlocked. */
+/** The card of extras on the More page: starred and tinted, dimmed with a lock until the plan unlocks them. */
 @Composable
 fun SupporterExtras(
-    paid: Boolean,
+    access: Access,
     currentTitle: String,
     onOpenAppName: () -> Unit,
     onOpenCalendarExport: () -> Unit,
-    onLocked: () -> Unit,
+    onLocked: (Entitlement) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val nameAllowed = access.allows(Entitlement.APP_NAME)
+    val calendarAllowed = access.allows(Entitlement.CALENDAR_EXPORT)
+    val paid = nameAllowed || calendarAllowed
+    val lockedNote = tr("Teil von Plus", "Part of Plus")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.padding(start = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Star, contentDescription = null, tint = scheme.tertiary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(6.dp))
             Text(
-                tr("Extras für Unterstützer", "Supporter extras"),
+                tr("Extras mit Plus", "Extras with Plus"),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = scheme.tertiary,
@@ -84,27 +91,27 @@ fun SupporterExtras(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
+                Box(modifier = Modifier.alpha(if (nameAllowed) 1f else 0.6f)) {
                     SettingsRow(
                         icon = Icons.Outlined.DriveFileRenameOutline,
                         title = tr("App-Name", "App name"),
-                        subtitle = if (paid) currentTitle else tr("Für Unterstützer freischaltbar", "Unlock by supporting Daybreak"),
-                        onClick = if (paid) onOpenAppName else onLocked,
-                        trailing = extraTrailing(paid),
+                        subtitle = if (nameAllowed) currentTitle else lockedNote,
+                        onClick = if (nameAllowed) onOpenAppName else ({ onLocked(Entitlement.APP_NAME) }),
+                        trailing = extraTrailing(nameAllowed),
                     )
                 }
                 HorizontalDivider(color = scheme.tertiary.copy(alpha = 0.25f))
-                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
+                Box(modifier = Modifier.alpha(if (calendarAllowed) 1f else 0.6f)) {
                     SettingsRow(
                         icon = Icons.Outlined.Event,
                         title = tr("Kalender-Export", "Calendar export"),
-                        subtitle = if (paid) {
+                        subtitle = if (calendarAllowed) {
                             tr("Stundenplan als Kalenderdatei (.ics)", "Timetable as a calendar file (.ics)")
                         } else {
-                            tr("Für Unterstützer freischaltbar", "Unlock by supporting Daybreak")
+                            lockedNote
                         },
-                        onClick = if (paid) onOpenCalendarExport else onLocked,
-                        trailing = extraTrailing(paid),
+                        onClick = if (calendarAllowed) onOpenCalendarExport else ({ onLocked(Entitlement.CALENDAR_EXPORT) }),
+                        trailing = extraTrailing(calendarAllowed),
                     )
                 }
             }
@@ -154,7 +161,8 @@ private fun ExtraPage(content: @Composable () -> Unit) {
 @Composable
 fun AppNamePage(container: DesktopContainer) {
     val settings by container.settings.settings.collectAsState()
-    val paid by container.supportStore.paid.collectAsState()
+    val access by container.access.collectAsState()
+    val paid = access.allows(Entitlement.APP_NAME)
     var text by remember { mutableStateOf(settings.customAppName) }
     ExtraPage {
         Text(
@@ -274,7 +282,7 @@ fun CalendarExportPage(container: DesktopContainer) {
 
 /** Loads the missing weeks, then builds the file. Fails only when no lesson could be loaded at all. */
 private suspend fun buildCalendar(container: DesktopContainer, weekCount: Int, language: com.bdersolutions.daybreak.data.settings.AppLanguage): String {
-    check(container.supportStore.paid.value) { "Calendar export is a supporter extra." }
+    check(container.access.value.allows(Entitlement.CALENDAR_EXPORT)) { "Calendar export is part of Plus." }
     val repository = container.timetable
     val first = repository.weekStartFor(LocalDate.now())
     val weeks = (0 until weekCount).map { first.plusWeeks(it.toLong()) }

@@ -1,6 +1,14 @@
 package com.bdersolutions.daybreak.desktop
 
 import androidx.compose.foundation.background
+import com.bdersolutions.daybreak.data.account.TrialOfferPolicy
+import com.bdersolutions.daybreak.data.account.Entitlement
+import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.width
 import kotlinx.coroutines.CoroutineScope
@@ -93,9 +101,15 @@ fun MoreScreen(
     val settings by container.settings.settings.collectAsState()
     val language = LocalLanguage.current
     val debugUnlocked by container.debugUnlock.unlocked.collectAsState()
-    val paid by container.supportStore.paid.collectAsState()
-    // The dialog that unlocks the extras or hides the Ko-fi button; the text says what paying does.
-    var supportNote by remember { mutableStateOf<String?>(null) }
+    val access by container.access.collectAsState()
+    val plans = LocalPlans.current
+    val snapshot by container.accountManager.snapshot.collectAsState()
+    val trialDismissedAt by container.accountPrefs.trialDismissed.collectAsState()
+    val trialPrompt = TrialOfferPolicy.prompt(
+        offered = snapshot.state?.proTrial?.offered == true,
+        dismissedAtMillis = trialDismissedAt,
+        nowMillis = System.currentTimeMillis(),
+    )
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
     ) {
@@ -105,33 +119,31 @@ fun MoreScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ProfileHeader(session)
-            // The Ko-fi button hides once a payment is confirmed. Hiding it is paid, as on Android, and
-            // needs the update server to confirm; builds without one keep the button.
-            if (!paid) {
-                KofiButton(onClick = { openSupportPage() })
-                if (container.supportApi != null) {
-                    TextButton(
-                        onClick = { supportNote = trFor(language, "Dieser Button verschwindet, sobald du auf Ko-fi zahlst.", "This button hides when you pay on Ko-fi.") },
-                        modifier = Modifier.align(Alignment.CenterHorizontally).handCursor(),
-                    ) {
-                        Text(str("settings_support_hide"), style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
-            // The extras need the update server to confirm a payment, so builds without one hide the card.
-            if (container.supportApi != null || paid) {
+            // The thank-you for old Ko-fi supporters stays here for two weeks after the popup was dismissed.
+            AnimatedVisibility(
+                visible = trialPrompt == TrialOfferPolicy.Prompt.BANNER,
+                enter = fadeIn(DesktopMotion.effects()) + expandVertically(DesktopMotion.spatial()),
+                exit = fadeOut(DesktopMotion.fastEffects()) + shrinkVertically(DesktopMotion.fastSpatial()),
+            ) { TrialBanner(container) }
+            // The extras need the update server to sell a plan, so builds without one hide the card.
+            if (container.accountAvailable) {
                 SupporterExtras(
-                    paid = paid,
-                    currentTitle = appTitle(paid, settings.customAppName),
+                    access = access,
+                    currentTitle = appTitle(access.allows(Entitlement.APP_NAME), settings.customAppName),
                     onOpenAppName = { onOpen(SubRoute.APP_NAME) },
                     onOpenCalendarExport = { onOpen(SubRoute.CALENDAR_EXPORT) },
-                    onLocked = {
-                        supportNote = trFor(language, "Dieses Extra wird freigeschaltet, sobald du auf Ko-fi zahlst.", "This extra unlocks when you pay on Ko-fi.")
-                    },
+                    onLocked = { plans.show(it) },
                 )
             }
             SectionLabel(tr("Mein Profil", "My profile"))
             ListCard {
+                SettingsRow(
+                    icon = Icons.Outlined.WorkspacePremium,
+                    title = tr("Daybreak-Konto", "Daybreak account"),
+                    subtitle = trFor(language, "Tarif ${access.plan.name.lowercase().replaceFirstChar { it.uppercase() }}, Wiederherstellungscode, WebUntis-Konten", "${access.plan.name.lowercase().replaceFirstChar { it.uppercase() }} plan, restore code, WebUntis accounts"),
+                    onClick = { onOpen(SubRoute.DAYBREAK_ACCOUNT) },
+                )
+                HorizontalDivider()
                 SettingsRow(
                     icon = Icons.Outlined.AccountCircle,
                     title = tr("Mein Konto", "My account"),
@@ -212,13 +224,6 @@ fun MoreScreen(
                     HorizontalDivider()
                 }
                 SettingsRow(
-                    icon = Icons.Outlined.Favorite,
-                    title = str("settings_support"),
-                    subtitle = str("settings_support_desc"),
-                    onClick = { openSupportPage() },
-                )
-                HorizontalDivider()
-                SettingsRow(
                     icon = Icons.Outlined.PrivacyTip,
                     title = str("settings_legal"),
                     subtitle = null,
@@ -235,14 +240,6 @@ fun MoreScreen(
             // Log out asks first, inside the card, as on Android.
             LogoutCard(onConfirm = onLogout)
         }
-    }
-    supportNote?.let { note ->
-        HideSupportButtonDialog(
-            unlockCode = container.supportStore.unlockCode(),
-            note = note,
-            onDismiss = { supportNote = null },
-            onCheckPayment = { checkSupportPayment(container) },
-        )
     }
 }
 
@@ -461,7 +458,21 @@ fun AppearanceSettings(container: DesktopContainer) {
         ) {}
         HorizontalDivider()
         SettingBlock(Icons.Outlined.ColorLens, tr("Akzentfarbe", "Accent colour")) {
-            SegmentedRow(AccentColor.entries, settings.accent, { accentName(it, language) }) { container.settings.setAccent(it) }
+            // Other palettes than the first are part of Pro: a locked pick opens the plans instead.
+            val accentsAllowed = Entitlement.ACCENT_PALETTES.allowed()
+            val plans = LocalPlans.current
+            Column(modifier = Modifier.lockedAlpha(!accentsAllowed)) {
+                SegmentedRow(AccentColor.entries, if (accentsAllowed) settings.accent else AccentColor.OCEAN, { accentName(it, language) }) {
+                    if (accentsAllowed || it == AccentColor.OCEAN) container.settings.setAccent(it) else plans.show(Entitlement.ACCENT_PALETTES)
+                }
+            }
+            if (!accentsAllowed) {
+                Text(
+                    tr("Teil von Pro", "Part of Pro"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         HorizontalDivider()
         SettingBlock(Icons.Outlined.FormatSize, tr("Textgröße", "Text size")) {

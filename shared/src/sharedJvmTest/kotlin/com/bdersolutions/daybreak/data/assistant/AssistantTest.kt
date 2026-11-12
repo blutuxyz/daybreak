@@ -159,12 +159,10 @@ class AssistantTest {
             language = "de",
             today = monday,
             model = "anthropic/claude-haiku-5.5",
-            unlockCode = "DB-AAAA-BBBB",
         )
         val json = JsonParser.parseString(body).asJsonObject
         assertEquals("de", json.get("language").asString)
         assertEquals("anthropic/claude-haiku-5.5", json.get("model").asString)
-        assertEquals("DB-AAAA-BBBB", json.get("unlockCode").asString)
         val messages = json.getAsJsonArray("messages")
         val first = messages[0].asJsonObject
         assertNull(first.get("attachments"))
@@ -199,7 +197,7 @@ class AssistantTest {
         )
         assertEquals(AssistantEvent.Failure(AssistantFailure.UPSTREAM), AssistantProtocol.parseEvent("""data: {"type":"error","code":"upstream"}"""))
         // A used-up budget looks like any other outage.
-        assertEquals(AssistantEvent.Failure(AssistantFailure.LIMIT), AssistantProtocol.parseEvent("""data: {"type":"error","code":"limit"}"""))
+        assertEquals(AssistantEvent.Failure(AssistantFailure.UPSTREAM), AssistantProtocol.parseEvent("""data: {"type":"error","code":"limit"}"""))
         assertNull(AssistantProtocol.parseEvent(": keep-alive"))
         assertNull(AssistantProtocol.parseEvent("data: not json"))
 
@@ -208,6 +206,16 @@ class AssistantTest {
         assertEquals("a/one", models.defaultModel)
         assertFalse(AssistantProtocol.parseModels("""{"showSwitcher":false,"models":[],"defaultModel":null}""")!!.showSwitcher)
         assertNull(AssistantProtocol.parseModels("nope"))
+        // Locked models are listed (greyed out in the picker); a missing state means available.
+        val tiers = AssistantProtocol.parseModels(
+            """{"models":[{"id":"a/one","label":"One","state":"available"},{"id":"b/two","label":"Two","state":"locked"},{"id":"c/three","label":"Three"}]}""",
+        )!!
+        assertEquals(listOf(false, true, false), tiers.models.map { it.locked })
+        // The server also sends a plain `locked` flag; it locks the model on its own as well.
+        val flagged = AssistantProtocol.parseModels(
+            """{"models":[{"id":"a/one","label":"One"},{"id":"b/two","label":"Two","locked":true}]}""",
+        )!!
+        assertEquals(listOf(false, true), flagged.models.map { it.locked })
     }
 
     private inner class FakeData(override val canSendMessages: Boolean = true) : AssistantData {

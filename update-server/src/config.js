@@ -53,6 +53,19 @@ export function loadConfig(env = process.env) {
      * and limits are set on the admin page.
      */
     openRouterApiKey: env.OPENROUTER_API_KEY || undefined,
+    /**
+     * Optional. Stripe, for the Plus and Pro subscriptions: the secret key and the webhook signing
+     * secret (webhook address /v1/stripe/webhook, events checkout.session.completed and
+     * customer.subscription.*). The price ids are set on the admin page. Without the key the
+     * subscribe page says that payment is not available; plans can still be given on the admin page.
+     */
+    stripeSecretKey: env.STRIPE_SECRET_KEY || undefined,
+    stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || undefined,
+    stripeApiUrl: (env.STRIPE_API_URL ?? 'https://api.stripe.com').replace(/\/+$/, ''),
+    /** Where the "Donate" button on the subscribe page leads. */
+    donateUrl: env.DONATE_URL ?? 'https://ko-fi.com/blutuxyz',
+    /** Where "Download from the Play Store" leads in the ready-made announcement. */
+    playStoreUrl: env.PLAY_STORE_URL ?? 'https://play.google.com/store/apps/details?id=com.bdersolutions.daybreak',
     /** The OpenRouter API address. Change it to point tests at a fake. */
     openRouterUrl: (env.OPENROUTER_API_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
   };

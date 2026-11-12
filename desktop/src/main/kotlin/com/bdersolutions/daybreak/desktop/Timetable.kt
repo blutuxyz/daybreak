@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.desktop
 
 import androidx.compose.animation.AnimatedContent
+import com.bdersolutions.daybreak.data.account.Entitlement
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -237,8 +238,8 @@ fun TimetableScreen(container: DesktopContainer, onOpenSearch: () -> Unit, onOpe
     val dayStatus: DayStatus = remember(lessonsByDate, now) {
         NowAndNext.compute(lessonsByDate[today].orEmpty(), now)
     }
-    val paid by container.supportStore.paid.collectAsState()
-    val title = appTitle(paid, settings.customAppName)
+    val access by container.access.collectAsState()
+    val title = appTitle(access.allows(Entitlement.APP_NAME), settings.customAppName)
     val targetName = target?.displayName ?: session(container)
     val subtitle = trFor(language, "KW $weekNumber · $targetName", "CW $weekNumber · $targetName")
 

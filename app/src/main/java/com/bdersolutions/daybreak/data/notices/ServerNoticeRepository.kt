@@ -82,6 +82,9 @@ class ServerNotices(
     /** False while the developer has turned the single feature [id] off. */
     fun featureOn(id: String): Boolean = switches.featureOn(id)
 
+    /** The bytes of an uploaded picture of a sheet, or null when there is none to be had. */
+    suspend fun image(id: String): ByteArray? = if (enabled) api?.messageImage(id) else null
+
     /** Remembers that the user has read [id]; it is not shown again. */
     fun dismiss(id: String) {
         store.dismiss(id)

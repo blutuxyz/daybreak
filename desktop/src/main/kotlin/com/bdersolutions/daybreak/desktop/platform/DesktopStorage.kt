@@ -121,9 +121,13 @@ class DesktopTextFile(private val file: File) : TextFileStore {
  * ciphertext, in the user's app-data folder. That only stops casual reading; it is no stronger than
  * the plain session file the desktop app used before. Windows DPAPI would be the next step.
  */
-class DesktopSecretStore(private val directory: File) : SecretStore {
-    private val keyFile: File get() = File(directory, "secret.key")
-    private val cipherFile: File get() = File(directory, "secret.bin")
+class DesktopSecretStore(
+    private val directory: File,
+    /** The file name without its ending: `secret` for the WebUntis key, another name for a second secret. */
+    private val baseName: String = "secret",
+) : SecretStore {
+    private val keyFile: File get() = File(directory, "$baseName.key")
+    private val cipherFile: File get() = File(directory, "$baseName.bin")
 
     @Synchronized
     override fun getStoredSecret(): String? = try {

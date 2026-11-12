@@ -2,17 +2,7 @@
 
 # Daybreak
 
-**A fast, good-looking, unofficial WebUntis timetable app for Android and Windows, with an AI assistant that knows your school week.**
-
-[![Stars](https://img.shields.io/github/stars/blutuxyz/daybreak?style=for-the-badge&logo=github&color=f5c542)](https://github.com/blutuxyz/daybreak/stargazers)
-[![Forks](https://img.shields.io/github/forks/blutuxyz/daybreak?style=for-the-badge&logo=github&color=8ab4f8)](https://github.com/blutuxyz/daybreak/network/members)
-[![Issues](https://img.shields.io/github/issues/blutuxyz/daybreak?style=for-the-badge&logo=github&color=f28b82)](https://github.com/blutuxyz/daybreak/issues)
-[![Pull requests](https://img.shields.io/github/issues-pr/blutuxyz/daybreak?style=for-the-badge&logo=github&color=c58af9)](https://github.com/blutuxyz/daybreak/pulls)
-
-[![Latest release](https://img.shields.io/github/v/release/blutuxyz/daybreak?style=for-the-badge&label=release&color=81c995)](https://github.com/blutuxyz/daybreak/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/blutuxyz/daybreak/total?style=for-the-badge&color=81c995)](https://github.com/blutuxyz/daybreak/releases)
-[![Last commit](https://img.shields.io/github/last-commit/blutuxyz/daybreak?style=for-the-badge&color=fdd663)](https://github.com/blutuxyz/daybreak/commits)
-[![Repo size](https://img.shields.io/github/repo-size/blutuxyz/daybreak?style=for-the-badge&color=aecbfa)](https://github.com/blutuxyz/daybreak)
+**A fast, good-looking, unofficial WebUntis timetable app for Android and Windows, with Dawn, an AI assistant that knows your school week.**
 
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
@@ -20,6 +10,7 @@
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
 ![Languages](https://img.shields.io/badge/UI-Deutsch%20%7C%20English-ffb648?style=flat-square)
 ![No tracking](https://img.shields.io/badge/tracking-none-success?style=flat-square)
+![Plans](https://img.shields.io/badge/plans-Free%20%7C%20Plus%20%7C%20Pro-8ab4f8?style=flat-square)
 
 </div>
 
@@ -27,7 +18,7 @@
   <img src="docs/screenshots/tutorial-welcome.png" width="200" alt="Welcome screen of the introduction tour">
   <img src="docs/screenshots/day-view.png" width="200" alt="Day view with lessons, swiping between days">
   <img src="docs/screenshots/lesson-details.png" width="200" alt="Lesson details with a substitute teacher and a room change">
-  <img src="docs/screenshots/assistant.png" width="200" alt="The AI assistant with suggested questions">
+  <img src="docs/screenshots/assistant.png" width="200" alt="Dawn, the AI assistant, with suggested questions">
 </p>
 
 > The timetable screenshots come from the app's built-in demo (the introduction tour), so they show sample
@@ -38,12 +29,12 @@
 ## Contents
 
 - [Features](#features)
-- [AI assistant](#ai-assistant)
+- [Plans and account](#plans-and-account)
+- [Dawn, the AI assistant](#dawn-the-ai-assistant)
 - [Introduction tour](#introduction-tour)
 - [Screenshots](#screenshots)
 - [Signing in](#signing-in)
-- [Build](#build)
-- [Project layout](#project-layout)
+- [Working on Daybreak](#working-on-daybreak)
 - [Privacy and security](#privacy-and-security)
 - [Licence and disclaimer](#licence-and-disclaimer)
 
@@ -52,9 +43,11 @@
 - **Day and week views**: swipe between days, pinch to zoom, a live "now and next" card, and clear badges for
   cancellations, room changes and substitutions. Exams are framed in amber; the part of a lesson you missed is greyed out.
 - **Holidays** show as a block you can open. Rooms, teachers and classes in a lesson link to their own timetable.
-- **AI assistant** (optional, served through the developer's update server): ask about your week in your own words,
-  attach photos or PDFs, let it find what to study for an exam, or have it draft a message to a teacher that only
-  you can send. [More below](#ai-assistant).
+- **Dawn**, the AI assistant (optional): ask about your week in your own words, attach photos or PDFs, let it find
+  what to study for an exam, or have it draft a message to a teacher that only you can send.
+  [More below](#dawn-the-ai-assistant).
+- **Daybreak account** with up to three WebUntis accounts, and the plans Free, Plus and Pro.
+  [More below](#plans-and-account).
 - **Introduction tour** in a demo environment, in German and English, shown once to everyone and replayable from More.
 - **Homework, exams and school notices** on their own pages, plus your WebUntis **messages** (inbox, sent, drafts)
   with attachments.
@@ -68,39 +61,51 @@
 - **Windows desktop app** (Compose Multiplatform) with a one-click installer.
 - German is the default UI language; English can be picked in Settings or on the login screen.
 
-## AI assistant
+## Plans and account
+
+Daybreak works with a **Daybreak account**: a random account id and a **restore code**, no e-mail address and no
+password. Several devices can sign in to one account with the restore code. Up to **three WebUntis accounts** can be
+bound to one Daybreak account; Daybreak stores only a salted hash of school and student id plus a short label you
+choose.
+
+| | Free | Plus | Pro |
+| --- | :---: | :---: | :---: |
+| Timetable, absences, messages, exams, homework, search, notifications, basic widget | ✓ | ✓ | ✓ |
+| Dawn, with photo and PDF attachments | a few questions, basic model | more questions, more models | most questions, all models |
+| App name and icon, calendar export, widget customisation, share timetable as picture | | ✓ | ✓ |
+| Sync of Daybreak-only data across devices (settings, lesson colours, notes, homework ticks) | | ✓ | ✓ |
+| Dawn reasoning picker and message drafts, haptics studio, accent palettes, AMOLED black | | | ✓ |
+
+Plus and Pro are monthly subscriptions paid through **Stripe** (Stripe Checkout in the browser); Daybreak stores only
+the plan and its status, never payment details. Ko-fi remains a plain donation link on the Daybreak web page and does
+not buy a plan. People who supported Daybreak on Ko-fi before 2.0.0 keep their extras.
+
+## Dawn, the AI assistant
 
 <p align="center">
-  <img src="docs/screenshots/assistant.png" width="220" alt="AI assistant welcome screen">
-  <img src="docs/screenshots/assistant-tour.png" width="220" alt="The assistant answering what to study for an exam">
+  <img src="docs/screenshots/assistant.png" width="220" alt="Dawn welcome screen">
+  <img src="docs/screenshots/assistant-tour.png" width="220" alt="Dawn answering what to study for an exam">
 </p>
 
-Tap the ✨ in the timetable bar (or More → AI assistant) and ask, for example:
+Tap the ✨ in the timetable bar (or More → Dawn) and ask, for example:
 
 - *"What do I have tomorrow?"*, *"Is anything cancelled this week?"*
 - *"When is my next exam?"*, *"What do I need to study for it?"* (it reads the teachers' lesson texts and info notes)
 - *"How much have I been absent?"*
-- *"Write to my maths teacher that I'm ill today."* The assistant drafts the message; **it is sent only when you
-  tap Send on the draft card**.
+- *"Write to my maths teacher that I'm ill today."* Dawn drafts the message; **it is sent only when you tap Send on
+  the draft card**.
 
 You can attach **photos** (scaled down to 1600 px JPEG on the phone, which also drops location data) and **PDF or
 text files** up to 5 MB.
 
 How it works:
 
-- The app talks only to the developer's **update server**, which forwards to **[OpenRouter](https://openrouter.ai)**.
-  The API key never ships in the APK.
-- **Tools run on the phone**: `get_lessons`, `get_exams`, `get_lesson_notes`, `get_homework`, `get_absences`,
-  `list_teachers`, `draft_message`. The server passes the model's tool calls to the app, the app answers from your
-  WebUntis data, and the chat continues.
-- The admin page of the update server sets the **models**, whether users see a **model switcher** (if hidden, users
-  get the default or a random model), **provider routing** (cheapest, fastest, lowest latency, best availability),
-  **daily budgets per user** (10 ¢ free / 20 ¢ for supporters by default), **per-IP rate limits** (including update
-  checks) and a **request log** with a page per request.
-- Two switches: a client-side one (hides the assistant in the app) and a server-side one (requests fail with
-  "Upstream provider fail"). A wrongly configured model shows the same message.
-
-Server setup and every option: [`update-server/README.md`](update-server/README.md#ai-assistant-openrouter).
+- Requests go to Daybreak, which forwards them to **[OpenRouter](https://openrouter.ai)** and the model's provider.
+  No API key ships in the app.
+- **Tools run on the phone**: lessons, exams, lesson notes, homework, absences, teachers and message drafts are looked
+  up on the device from your WebUntis data, and the chat continues.
+- Which models you can use depends on your plan. Dawn can be limited or unavailable for a while; the app then asks you
+  to come back later and shows no numbers.
 
 ## Introduction tour
 
@@ -153,58 +158,49 @@ name, your username and the Untis Mobile key.
 verification code if your school uses two-factor authentication). Daybreak stores only the derived key, never your
 password.
 
-## Build
+## Working on Daybreak
+
+Daybreak is closed source from 2.0.0 and this repository is private. Notes for whoever builds it:
 
 Requirements: Windows, JDK 17, Android SDK Platform 37. The project uses the included Gradle wrapper.
 
 ```powershell
 .\gradlew.bat assembleDebug
-```
-
-The debug APK is written to `app\build\outputs\apk\debug\app-debug.apk`. Unit tests:
-
-```powershell
 .\gradlew.bat testDebugUnitTest
 ```
 
-The update server (Node.js 20+, Fastify) has its own tests:
-
-```powershell
-cd update-server; npm test
-```
-
-To try the assistant against a local update server on the emulator, run the server with `OPENROUTER_API_KEY` set,
-forward the port with `adb reverse tcp:3000 tcp:3000`, and build with
-`-Pdaybreak.updateApiUrl=http://localhost:3000`. Debug builds allow cleartext traffic to `localhost` and `10.0.2.2`
-only.
-
-## Project layout
+The debug APK is written to `app\build\outputs\apk\debug\app-debug.apk`. The server has its own tests
+(`cd update-server; npm test`). The decisions behind 2.0.0 are in [`docs/v2-spec.md`](docs/v2-spec.md), and
+[`CLAUDE.md`](CLAUDE.md) describes the architecture.
 
 - `:untis`: the WebUntis protocol module (JSON-RPC, REST, TOTP, QR parsing, tolerant parsers, normalized models).
-- `:shared`: logic shared by the Android and desktop apps (repositories, cache, schedule maths, the assistant's
-  protocol, context builder and tools), all unit-tested.
-- `:app`: the Compose app (UI, secure session storage, WorkManager jobs, notifications, the widget, the assistant chat
-  and the introduction tour).
+- `:shared`: logic shared by the Android and desktop apps (repositories, cache, schedule maths, Dawn's protocol,
+  context builder and tools), all unit-tested.
+- `:app`: the Compose app (UI, secure session storage, WorkManager jobs, notifications, the widget, Dawn and the
+  introduction tour).
 - `:desktop`: the Windows app (Compose Multiplatform) and its Inno Setup installer.
-- `update-server/`: the Fastify service for updates, the minimum version, messages, Ko-fi payments and the assistant.
+- `update-server/`: the Fastify service behind the apps (updates, accounts, plans, Stripe, Dawn).
 
 ## Privacy and security
 
-- HTTPS only. Secrets are encrypted with AES/GCM under a key in the Android Keystore; credentials and cached data are
-  excluded from backups.
-- No account, no ads, no analytics, no crash reporting.
-- Without the assistant, school data goes only to your school's WebUntis server.
-- **With the assistant**, your question, attachments, a timetable summary and the tools' results go through the
-  developer's update server to OpenRouter and the model's provider. No name, password or access key is sent. The
-  developer can see a request log for at most 30 days (attachments only by name and size). Messages to teachers are
-  sent only after you confirm them.
+- HTTPS only. Secrets are encrypted on the device; credentials and cached data are excluded from backups.
+- No ads, no analytics, no crash reporting. Your WebUntis password is never stored, and your sign-in data and access
+  key never leave your device.
+- A Daybreak account has no e-mail and no password. Of your WebUntis accounts Daybreak stores only a salted hash of
+  school and student id plus a label you choose.
+- With Plus or Pro, Daybreak-only data (settings, lesson colours, notes, homework ticks) is synced with your account.
+  Timetable, absences and messages are not.
+- Payments run through Stripe; Daybreak stores only the plan and its status.
+- **With Dawn**, your question, attachments, a timetable summary and the tools' results go through Daybreak to
+  OpenRouter and the model's provider. No name, password or access key is sent. Daybreak can see a request log for at
+  most 30 days (attachments only by name and size). Messages to teachers are sent only after you confirm them.
 - The privacy policy and terms of use are part of the app (German and English) and must be accepted once; the app
   asks again only when the text changes (`LegalTerms.VERSION`). They stay readable under More → Privacy and terms.
 - Signing out removes the key, the session, the cache and the debug log.
 
 ## Licence and disclaimer
 
-Daybreak is a private, unofficial client and is not affiliated with Untis GmbH. WebUntis is a registered trademark of
-Untis GmbH. Use it with your own WebUntis account and within your school's rules. The WebUntis mobile interface is
+Daybreak is proprietary software (all rights reserved) and an unofficial client; it is not affiliated with Untis
+GmbH. WebUntis is a registered trademark of Untis GmbH. Use it with your own WebUntis account and within your school's rules. The WebUntis mobile interface is
 not a public, supported API and may change without notice. AI answers can be wrong; check what matters in your
 timetable.

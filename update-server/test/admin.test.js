@@ -48,7 +48,7 @@ test('signed in, the page shows the forms with a strict content security policy'
   assert.match(response.headers['content-security-policy'], /style-src 'unsafe-inline'/);
   assert.match(response.body, /<style>/, 'the page brings its own styles');
   assert.match(response.body, /action="\/admin\/min-version"/);
-  assert.match(response.body, /action="\/admin\/messages"/);
+  assert.match(response.body, /action="\/admin\/messages\/preview"/);
   assert.doesNotMatch(response.body, /<script/i);
 });
 

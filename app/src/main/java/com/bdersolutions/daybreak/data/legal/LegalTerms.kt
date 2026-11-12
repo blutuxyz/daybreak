@@ -19,7 +19,14 @@ data class LegalSection(
  * and [VERSION] did not.
  */
 object LegalTerms {
-    const val VERSION = 7
+    const val VERSION = 8
+
+    /**
+     * The e-mail address named in the contact section (`legal_contact_body`, German and English,
+     * and the desktop texts). Keep it in sync with those places; `LegalTermsVersionTest` fails when the strings
+     * and this constant differ. Changing only the address does not need a new [VERSION].
+     */
+    const val CONTACT_EMAIL = "contact@daybreak.playfrolic.xyz"
 
     val sections: List<LegalSection> = listOf(
         LegalSection(R.string.legal_what_title, R.string.legal_what_body),

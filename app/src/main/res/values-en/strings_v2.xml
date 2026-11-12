@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Daybreak 2: Daybreak account, plans (Free, Plus, Pro), Dawn page, update page. German is the main language; see values. -->
+<resources>
+    <!-- Locks and plans -->
+    <string name="v2_locked">Locked</string>
+    <string name="v2_extras_title">Extras with Plus</string>
+    <string name="v2_locked_plan">Part of %1$s</string>
+    <string name="v2_plan_free">Free</string>
+    <string name="v2_plan_plus">Plus</string>
+    <string name="v2_plan_pro">Pro</string>
+
+    <string name="v2_feature_app_name">App name</string>
+    <string name="v2_feature_app_icon">App icon</string>
+    <string name="v2_feature_calendar_export">Calendar export</string>
+    <string name="v2_feature_widget">Widget options</string>
+    <string name="v2_feature_share_picture">Share the timetable as a picture</string>
+    <string name="v2_feature_sync">Sync across devices</string>
+    <string name="v2_feature_dawn_reasoning">Reasoning level in Dawn</string>
+    <string name="v2_feature_dawn_drafts">Message drafts in Dawn</string>
+    <string name="v2_feature_haptics">Haptics studio</string>
+    <string name="v2_feature_accent">Accent colours</string>
+    <string name="v2_feature_amoled">AMOLED black</string>
+
+    <string name="v2_plans_title">Daybreak plans</string>
+    <string name="v2_plans_title_feature">%1$s comes with %2$s</string>
+    <string name="v2_plans_body">Everything important stays free: timetable, absences, messages, exams, homework, search and notifications. Plans add comfort and more of Dawn.</string>
+    <string name="v2_plans_choose">Get %1$s</string>
+    <string name="v2_plans_needs_account">You need a Daybreak account for that. It takes a minute, with no email and no password.</string>
+    <string name="v2_plans_all">See all plans</string>
+    <string name="v2_plans_manage">Manage subscription</string>
+    <string name="v2_plans_close">Close</string>
+    <string name="v2_plus_1">More questions a day and more models in Dawn</string>
+    <string name="v2_plus_2">App name and icon, calendar export</string>
+    <string name="v2_plus_3">Widget options and sharing the timetable as a picture</string>
+    <string name="v2_plus_4">Your settings and notes on all your devices</string>
+    <string name="v2_pro_1">Everything in Plus</string>
+    <string name="v2_pro_2">The most questions a day and every model in Dawn</string>
+    <string name="v2_pro_3">Reasoning level and message drafts in Dawn</string>
+    <string name="v2_pro_4">Haptics studio, accent colours and AMOLED black</string>
+
+    <!-- Errors of the account calls -->
+    <string name="v2_error_offline">No connection to the server. Check your network and try again.</string>
+    <string name="v2_error_unauthorized">This device is no longer signed in. Sign in with your restore code.</string>
+    <string name="v2_error_unknown_code">We do not know this restore code. Check it for typing mistakes.</string>
+    <string name="v2_error_limit">Three WebUntis accounts are connected already. Remove one to connect a new one.</string>
+    <string name="v2_error_duplicate">This WebUntis account is already connected to your Daybreak account.</string>
+    <string name="v2_error_not_offered">This offer is not available for your account (any more).</string>
+    <string name="v2_error_no_subscription">You do not have a subscription to manage yet.</string>
+    <string name="v2_error_rate_limited">Too many tries. Wait a moment and try again.</string>
+    <string name="v2_error_unavailable">Not reachable right now. Please try again later.</string>
+
+    <!-- Moving to a Daybreak account (after the update) -->
+    <string name="v2_migrate_title">Welcome to Daybreak 2</string>
+    <string name="v2_migrate_body">With a Daybreak account your plan belongs to you, not to this one phone. You need no email and no password: you get a restore code that signs you in on any device.</string>
+    <string name="v2_migrate_supporter">Thank you for supporting Daybreak on Ko-fi. Your extras stay with you, and there is something waiting for you.</string>
+    <string name="v2_migrate_later">Not now</string>
+    <string name="v2_migrate_privacy">Your WebUntis password and your timetable are never sent to your Daybreak account.</string>
+    <string name="v2_created_title">Your account is ready</string>
+    <string name="v2_created_body">This is your restore code. It signs you in again on a new phone or after a reinstall.</string>
+    <string name="v2_created_warning">Keep it safe, for example in your password manager. Anyone who knows it can get into your account, and we cannot reset it. You can always find it under More → Daybreak account.</string>
+    <string name="v2_created_thanks">Your supporter extras (app name, icon, calendar export) are unlocked for good.</string>
+    <string name="v2_created_continue">Continue</string>
+
+    <!-- Account page -->
+    <string name="v2_account_row">Daybreak account</string>
+    <string name="v2_account_row_desc">%1$s plan, restore code, WebUntis accounts</string>
+    <string name="v2_account_title">Daybreak account</string>
+    <string name="v2_account_intro">An account keeps your plan and your Daybreak settings safe, even when you change phones. No password, no email.</string>
+    <string name="v2_account_create">Create account</string>
+    <string name="v2_account_have_code">I have a restore code</string>
+    <string name="v2_account_code_label">Restore code</string>
+    <string name="v2_account_sign_in">Sign in</string>
+    <string name="v2_account_code_title">Restore code</string>
+    <string name="v2_account_code_unknown">This device does not know the code. You find it on the device where you made the account.</string>
+    <string name="v2_account_code_hint">Tap the code to copy it. Keep it safe: anyone who knows it can get into your account.</string>
+    <string name="v2_account_copy">Copy code</string>
+    <string name="v2_account_copied">Copied</string>
+    <string name="v2_account_plan">Plan: %1$s</string>
+    <string name="v2_account_plan_until">Runs until %1$s</string>
+    <string name="v2_account_plan_active">Active</string>
+    <string name="v2_account_plan_free_hint">Everything important is free. There is more with Plus and Pro.</string>
+    <string name="v2_account_supporter">Supporter: app name, icon and calendar export stay unlocked for good.</string>
+    <string name="v2_account_upgrade">See plans</string>
+    <string name="v2_account_webuntis_title">WebUntis accounts (%1$d of %2$d)</string>
+    <string name="v2_account_webuntis_empty">No WebUntis account connected yet.</string>
+    <string name="v2_account_webuntis_this">Connected from this phone</string>
+    <string name="v2_account_unbind">Disconnect</string>
+    <string name="v2_account_bind">Connect this WebUntis account</string>
+    <string name="v2_account_webuntis_full">All three places are taken</string>
+    <string name="v2_account_bind_title">Connect WebUntis account</string>
+    <string name="v2_account_bind_body">The account you are signed in with now is assigned to your Daybreak account. Only a hash and the name you choose here are stored.</string>
+    <string name="v2_account_bind_label">Name</string>
+    <string name="v2_account_bind_confirm">Connect</string>
+    <string name="v2_account_shared_warning">Careful: this WebUntis account is also connected to another Daybreak account.</string>
+    <string name="v2_account_signout">Sign out of this device</string>
+    <string name="v2_account_signout_desc">The account and plan are kept</string>
+    <string name="v2_account_signout_confirm">After that this device is back on Free until you sign in with your restore code. Do you still have it?</string>
+
+    <!-- Thank-you for former Ko-fi supporters -->
+    <string name="v2_trial_title">Thank you for your support</string>
+    <string name="v2_trial_body">You supported Daybreak on Ko-fi before. As a thank-you, here are 3 months of Daybreak Pro.</string>
+    <string name="v2_trial_note">Pro brings Dawn with the most questions and every model, the haptics studio, accent colours and more. After that you go back to Free at no cost; you keep your supporter extras.</string>
+    <string name="v2_trial_accept">Start 3 months of Pro</string>
+    <string name="v2_trial_later">Later</string>
+    <string name="v2_trial_done">Done</string>
+    <string name="v2_trial_started_title">Pro is active</string>
+    <string name="v2_trial_started_body">Enjoy Pro! Everything is unlocked now.</string>
+    <string name="v2_trial_banner_title">3 months of Pro for you</string>
+    <string name="v2_trial_banner_body">A thank-you for your support. The offer stays here for two more weeks.</string>
+
+    <!-- Dawn -->
+    <string name="v2_dawn_title">Daybreak AI is now Dawn</string>
+    <string name="v2_dawn_body">Same assistant, new name. Ask it about your week, let it read photos and PDFs, or let it set up the app for you.</string>
+    <string name="v2_dawn_try">Try now</string>
+    <string name="v2_dawn_later">Later</string>
+    <string name="v2_dawn_demo_question">Which lesson is cancelled tomorrow?</string>
+    <string name="v2_dawn_demo_answer">Tomorrow lesson 3 is cancelled, maths with Ms Weber. In lesson 5 you have a substitution in room 204.</string>
+
+    <!-- New version -->
+    <string name="v2_update_title">A new version is available</string>
+    <string name="v2_update_question">Daybreak %1$s is ready. Do you want to download it?</string>
+    <string name="v2_update_download">Download now</string>
+    <string name="v2_update_later">Later</string>
+</resources>

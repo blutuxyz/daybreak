@@ -72,16 +72,105 @@ export function parseMinVersion(text) {
   return { minVersion: { name: parsed.versionName, code: parsed.versionCode } };
 }
 
+/** Pictures that ship inside the app; the sheet names one and the app draws it. */
+export const PRESET_IMAGES = ["playstore"];
+export const SHEET_STYLES = ["plain", "brand", "warning", "critical"];
+export const IMAGE_SHAPES = ["icon", "banner"];
+export const PLATFORMS = ["all", "android", "desktop"];
+export const INSTALL_SOURCES = ["any", "sideloaded", "play"];
+export const BUTTON_ACTIONS = ["dismiss", "url"];
+export const BUTTON_STYLES = ["filled", "tonal", "text"];
+const MAX_BUTTONS = 3;
+
+/** A repeated form field, as a list (one value arrives as a plain string). */
+const rows = (input, key) => (input[key] === undefined ? [] : Array.isArray(input[key]) ? input[key] : [input[key]]);
+const pick = (value, allowed, fallback) => (allowed.includes(clean(value)) ? clean(value) : fallback);
+
+/**
+ * Reads the part of a message that makes it a sheet: a title, a picture, how it looks, who sees it and up to
+ * three buttons (label, what it does, a small note under it). Returns { sheet } (null when the admin left all of
+ * it at the defaults, so the message stays a plain one) or { error }. A link must be https.
+ */
+export function normalizeSheet(input, { imageExists = () => true } = {}) {
+  const titleDe = clean(input.titleDe);
+  const titleEn = clean(input.titleEn);
+  if (titleDe.length > 80 || titleEn.length > 80) return { error: "bad_title" };
+
+  const kind = pick(input.imageKind, ["none", "preset", "upload"], "none");
+  let image = null;
+  if (kind === "preset") {
+    const value = clean(input.imagePreset);
+    if (!PRESET_IMAGES.includes(value)) return { error: "bad_image" };
+    image = { kind, value, shape: pick(input.imageShape, IMAGE_SHAPES, "icon") };
+  } else if (kind === "upload") {
+    const value = clean(input.imageUpload);
+    if (!ID.test(value) || !imageExists(value)) return { error: "bad_image" };
+    image = { kind, value, shape: pick(input.imageShape, IMAGE_SHAPES, "icon") };
+  }
+
+  const buttons = [];
+  const labelsDe = rows(input, "buttonDe");
+  const count = Math.max(labelsDe.length, rows(input, "buttonEn").length);
+  for (let index = 0; index < count; index += 1) {
+    const cell = (key) => clean(rows(input, key)[index]);
+    const de = cell("buttonDe");
+    const en = cell("buttonEn");
+    if (!de && !en) continue;
+    if (de.length > 40 || en.length > 40) return { error: "bad_button" };
+    const action = pick(cell("buttonAction"), BUTTON_ACTIONS, "dismiss");
+    const url = cell("buttonUrl");
+    if (action === "url" && !/^https:\/\/\S{3,500}$/.test(url)) return { error: "bad_url" };
+    const infoDe = cell("buttonInfoDe");
+    const infoEn = cell("buttonInfoEn");
+    if (infoDe.length > 200 || infoEn.length > 200) return { error: "bad_button" };
+    buttons.push({
+      de,
+      en,
+      action,
+      url: action === "url" ? url : "",
+      style: pick(cell("buttonStyle"), BUTTON_STYLES, buttons.length === 0 ? "filled" : "tonal"),
+      closes: cell("buttonCloses") !== "no",
+      infoDe,
+      infoEn,
+    });
+    if (buttons.length > MAX_BUTTONS) return { error: "too_many_buttons" };
+  }
+
+  const dismissible = input.dismissible === "on" || input.dismissible === true;
+  const dismissibleGiven = input.dismissibleGiven !== undefined;
+  const sheet = {
+    titleDe,
+    titleEn,
+    image,
+    style: pick(input.style, SHEET_STYLES, "plain"),
+    // The form always sends dismissibleGiven, so an unchecked box means "not dismissible"; callers without a form mean yes.
+    dismissible: dismissibleGiven ? dismissible : true,
+    platform: pick(input.platform, PLATFORMS, "all"),
+    installSource: pick(input.installSource, INSTALL_SOURCES, "any"),
+    buttons,
+  };
+  // A page that cannot be swiped away needs a button that closes it.
+  if (!sheet.dismissible && !buttons.some((button) => button.closes)) return { error: "needs_button" };
+
+  const plain =
+    !titleDe && !titleEn && !image && buttons.length === 0 && sheet.style === "plain" &&
+    sheet.platform === "all" && sheet.installSource === "any" && sheet.dismissible;
+  return { sheet: plain ? null : sheet };
+}
+
 /**
  * Checks what the admin typed for a message. Needs a level, text in German or English (or both), and an
  * optional end time with an offset, such as 2026-11-07T18:00:00Z. Returns { message } or { error }.
  */
-export function normalizeMessage(input, { now = Date.now(), id = newId() } = {}) {
+export function normalizeMessage(input, { now = Date.now(), id = newId(), imageExists } = {}) {
   const level = clean(input.level);
   if (!LEVELS.includes(level)) return { error: 'bad_level' };
   const de = clean(input.de);
   const en = clean(input.en);
-  if (!de && !en) return { error: 'bad_text' };
+  const sheet = normalizeSheet(input, { imageExists });
+  if (sheet.error) return { error: sheet.error };
+  // A sheet may carry its words in the title and the buttons alone.
+  if (!de && !en && !(sheet.sheet?.titleDe || sheet.sheet?.titleEn)) return { error: 'bad_text' };
   if (de.length > MAX_TEXT || en.length > MAX_TEXT) return { error: 'bad_text' };
   let until = null;
   const endsAt = clean(input.until);
@@ -91,7 +180,10 @@ export function normalizeMessage(input, { now = Date.now(), id = newId() } = {})
     until = new Date(time).toISOString();
   }
   return {
-    message: { id, level, de, en, enabled: true, until, createdAt: new Date(now).toISOString() },
+    message: {
+      id, level, de, en, enabled: true, until, createdAt: new Date(now).toISOString(),
+      ...(sheet.sheet ? { sheet: sheet.sheet } : {}),
+    },
   };
 }
 
@@ -105,7 +197,7 @@ export function publicStatus(state, now = Date.now()) {
     disabledFeatures: switches.disabledFeatures,
     messages: state.messages
       .filter((message) => message.enabled && (!message.until || Date.parse(message.until) > now))
-      .map(({ id, level, de, en, until }) => ({ id, level, de, en, until })),
+      .map(({ id, level, de, en, until, sheet }) => ({ id, level, de, en, until, ...(sheet ? { sheet } : {}) })),
   };
 }
 
@@ -167,6 +259,14 @@ export class AnnouncementStore {
   setSwitches(input) {
     return this.#change((state) => {
       state.switches = switchesFromForm(input);
+      return { saved: true };
+    });
+  }
+
+  /** Stores a message made by the server itself (the one-click demo); no form is read. */
+  addPreparedMessage(message) {
+    return this.#change((state) => {
+      state.messages.unshift(message);
       return { saved: true };
     });
   }

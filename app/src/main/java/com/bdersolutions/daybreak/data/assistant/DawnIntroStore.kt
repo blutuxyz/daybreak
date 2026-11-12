@@ -3,7 +3,7 @@ package com.bdersolutions.daybreak.data.assistant
 import android.content.Context
 
 /**
- * Whether the one-time "Daylight AI is now Dawn" notice has been shown. Set when the introduction is finished
+ * Whether the one-time full-screen page "Daybreak AI is now Dawn" has been shown. Set when the introduction is finished
  * (new users see the new name there) and when the notice is closed. Kept in its own preferences.
  */
 class DawnIntroStore(context: Context) {

@@ -154,6 +154,10 @@ import androidx.compose.material3.DropdownMenuItem
 import com.bdersolutions.daybreak.data.schedule.NowAndNext
 import com.bdersolutions.daybreak.data.schedule.DayPhase
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.ui.account.LocalPlans
+import com.bdersolutions.daybreak.ui.account.LockIcon
+import com.bdersolutions.daybreak.ui.account.allowed
 import com.bdersolutions.daybreak.data.cache.TimetableCache
 import com.bdersolutions.daybreak.data.repository.TimetableTarget
 import com.bdersolutions.daybreak.untis.ElementType
@@ -350,6 +354,9 @@ fun TimetableScreen(
         is TimetableTarget.Element -> targetLabel(current)
     }
     val retryLabel = stringResource(R.string.action_retry)
+    // Sharing the timetable as a picture is part of Plus; as text it stays free.
+    val sharePictureAllowed = Entitlement.SHARE_PICTURE.allowed()
+    val plansLauncher = LocalPlans.current
     // Shares what is on screen: the selected day, or the selected week.
     val shareTimetable: (Boolean) -> Unit = { asImage ->
         val allLessons = cache.weeks.values.flatMap { it.lessons }
@@ -467,8 +474,9 @@ fun TimetableScreen(
                                     text = { Text(stringResource(R.string.share_as_image)) },
                                     onClick = {
                                         showShareMenu = false
-                                        shareTimetable(true)
+                                        if (sharePictureAllowed) shareTimetable(true) else plansLauncher.show(Entitlement.SHARE_PICTURE)
                                     },
+                                    trailingIcon = if (sharePictureAllowed) null else ({ LockIcon() }),
                                 )
                             }
                         }

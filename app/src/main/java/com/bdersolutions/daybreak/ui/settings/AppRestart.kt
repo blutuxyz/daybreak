@@ -68,11 +68,11 @@ internal fun RestartDialog() {
 private fun restartApp(context: Context) {
     val container = (context.applicationContext as DaybreakApplication).container
     val chosen = container.settingsRepository.current()
-    val paid = container.supportStore.paid.value
+    val access = container.access.value
     val intent = RestartActivity.intent(
         context,
-        AppNaming.effectivePreset(paid, chosen.appNamePreset),
-        AppNaming.effectiveIconStyle(paid, chosen.appIconStyle),
+        AppNaming.effectivePreset(access.allows(com.bdersolutions.daybreak.data.account.Entitlement.APP_NAME), chosen.appNamePreset),
+        AppNaming.effectiveIconStyle(access.allows(com.bdersolutions.daybreak.data.account.Entitlement.APP_ICON), chosen.appIconStyle),
     )
     context.startActivity(intent)
     var host: Context = context

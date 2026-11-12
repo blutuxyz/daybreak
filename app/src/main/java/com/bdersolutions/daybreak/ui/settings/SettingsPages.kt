@@ -81,6 +81,8 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.NotificationsActive
 import com.bdersolutions.daybreak.data.reminders.ReminderPlanner
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.ui.account.LockedArea
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
 import com.bdersolutions.daybreak.data.settings.AbsenceUnit
@@ -281,6 +283,7 @@ fun AppearanceScreen(
                 }
 
                 AppearanceDivider()
+                LockedArea(Entitlement.AMOLED) {
                 SettingsRow(
                     icon = Icons.Outlined.Contrast,
                     title = stringResource(R.string.settings_amoled),
@@ -293,6 +296,7 @@ fun AppearanceScreen(
                         )
                     },
                 )
+                }
 
                 if (dynamicAvailable) {
                     AppearanceDivider()
@@ -320,6 +324,7 @@ fun AppearanceScreen(
                 ) {
                     Column {
                         AppearanceDivider()
+                        LockedArea(Entitlement.ACCENT_PALETTES) {
                         AppearanceOption(
                             icon = Icons.Outlined.Palette,
                             title = stringResource(R.string.settings_accent),
@@ -339,6 +344,7 @@ fun AppearanceScreen(
                                     )
                                 }
                             }
+                        }
                         }
                     }
                 }

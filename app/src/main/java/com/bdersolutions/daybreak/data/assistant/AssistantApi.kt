@@ -22,6 +22,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class AssistantApi(
     baseUrl: String,
     private val installId: () -> String,
+    /** The Daybreak account token, if this device is signed in: the server reads the plan from it. */
+    private val accountToken: () -> String? = { null },
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         // The first piece can take a while (the model reads the timetable); after that pieces come fast.
@@ -39,6 +41,7 @@ class AssistantApi(
             .url("$url/title")
             .header("Accept", "application/json")
             .header("X-Daybreak-Install", installId())
+            .withAccount()
             .post(AssistantProtocol.titleRequestBody(question, answer, language, model).toRequestBody(JSON))
             .build()
         try {
@@ -54,7 +57,8 @@ class AssistantApi(
 
     /** The models the server allows, or null when the assistant is off there (or unreachable). */
     suspend fun models(): AssistantModels? = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url("$url/models").header("Accept", "application/json").build()
+        val request = Request.Builder().url("$url/models").header("Accept", "application/json")
+            .header("X-Daybreak-Install", installId()).withAccount().build()
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) null else AssistantProtocol.parseModels(response.body?.string())
@@ -75,16 +79,16 @@ class AssistantApi(
         context: String,
         language: String,
         model: String? = null,
-        unlockCode: String? = null,
         effort: String? = null,
         today: LocalDate = LocalDate.now(),
     ): Flow<AssistantEvent> = callbackFlow {
-        val body = AssistantProtocol.requestBody(messages, context, language, today, model, unlockCode, effort)
+        val body = AssistantProtocol.requestBody(messages, context, language, today, model, effort)
         val call = client.newCall(
             Request.Builder()
                 .url(url)
                 .header("Accept", "text/event-stream")
                 .header("X-Daybreak-Install", installId())
+                .withAccount()
                 .post(body.toRequestBody(JSON))
                 .build(),
         )
@@ -120,6 +124,9 @@ class AssistantApi(
         }
         awaitClose { call.cancel() }
     }
+
+    private fun Request.Builder.withAccount(): Request.Builder =
+        accountToken()?.let { header("Authorization", "Bearer $it") } ?: this
 
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
