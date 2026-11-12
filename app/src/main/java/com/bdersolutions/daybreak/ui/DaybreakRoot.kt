@@ -1,6 +1,7 @@
 package com.bdersolutions.daybreak.ui
 
 import com.bdersolutions.daybreak.ui.components.DaybreakBottomBar
+import com.bdersolutions.daybreak.ui.components.MainTab
 import com.bdersolutions.daybreak.ui.assistant.DawnIntroOverlay
 import com.bdersolutions.daybreak.ui.components.Surface
 import androidx.compose.runtime.saveable.Saver
@@ -306,7 +307,7 @@ private fun LoggedInContent(
     openSearch: Boolean,
 ) {
     // Tapping the "update available" notification lands on the Updates screen.
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (openPage != null) 2 else 0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (openPage != null) MainTab.MORE else MainTab.TIMETABLE) }
     // The full-screen page pushed over the tabs (a settings page, Upcoming, Account, Messages or
     // the debug log), if any. All of them slide in alike through one PushHost.
     var destination by rememberSaveable(stateSaver = DestinationSaver) {
@@ -399,7 +400,7 @@ private fun LoggedInContent(
     val openLesson = { focus: LessonFocus ->
         haptics.perform(HapticEvent.TAP)
         lessonFocus = focus
-        if (selectedTab != 0) selectedTab = 0
+        if (selectedTab != MainTab.TIMETABLE) selectedTab = MainTab.TIMETABLE
         destination = null
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -466,7 +467,7 @@ private fun LoggedInContent(
                 label = "tabContent",
             ) { tab ->
                 when (tab) {
-                    0 -> TimetableScreen(
+                    MainTab.TIMETABLE -> TimetableScreen(
                         viewModel = timetableViewModel,
                         initialDate = initialDate,
                         initialMode = startMode
@@ -478,7 +479,7 @@ private fun LoggedInContent(
                         onFocusHandled = { lessonFocus = null },
                     )
 
-                    1 -> {
+                    MainTab.ABSENCES -> {
                         val absencesViewModel: AbsencesViewModel = viewModel(
                             key = "absences_${session.studentId}",
                             factory = AbsencesViewModel.Factory(container),

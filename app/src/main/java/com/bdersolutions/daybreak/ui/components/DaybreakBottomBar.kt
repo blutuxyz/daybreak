@@ -62,6 +62,16 @@ import kotlin.math.roundToInt
 
 /** The bottom bar of the app, also used by the introduction, so the two look the same. */
 
+/**
+ * The bottom tabs, numbered by their place in the bar from left to right. The tab content slides by
+ * these numbers too (a higher one comes in from the right), so keep them in bar order.
+ */
+internal object MainTab {
+    const val ABSENCES = 0
+    const val TIMETABLE = 1
+    const val MORE = 2
+}
+
 private class BarTab(val icon: ImageVector, val selectedIcon: ImageVector, val label: String)
 
 private val SlotHeight = 56.dp
@@ -102,9 +112,10 @@ internal fun DaybreakBottomBar(
     // values in the layout and the draw pass, so nothing lags behind anything else and nothing
     // recomposes while it moves. Icons and labels are drawn in one colour and recoloured where the
     // pill covers them, so the colour changes exactly at the pill's edge.
+    // In the order of [MainTab]: Absences on the left, Timetable in the centre, More on the right.
     val tabs = listOf(
-        BarTab(Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, stringResource(R.string.nav_timetable)),
         BarTab(Icons.Outlined.EventBusy, Icons.Filled.EventBusy, stringResource(R.string.nav_absences)),
+        BarTab(Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, stringResource(R.string.nav_timetable)),
         BarTab(Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz, stringResource(R.string.nav_settings)),
     )
     val expansion: List<State<Float>> = tabs.indices.map { i ->
