@@ -34,10 +34,49 @@ class UpdateApi(
      * The server's status answer as it came: the minimum app version and the messages. Read it with
      * [com.bdersolutions.daybreak.data.notices.ServerStatusJson].
      */
+    /**
+     * The privacy policy and terms (GET /v1/legal) in German or English; any other language gets German.
+     * Only the language is sent, no identifier. Read it with [com.bdersolutions.daybreak.data.legal.RemoteLegalJson].
+     */
+    suspend fun legalBody(language: String): String = withContext(Dispatchers.IO) {
+        val lang = if (language == "en") "en" else "de"
+        get("/v1/legal?lang=$lang").use { response ->
+            if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
+
+    /** The names and monthly prices of Plus and Pro (GET /v1/plans). Read it with [com.bdersolutions.daybreak.data.account.PlanPriceJson]. */
+    suspend fun plansBody(): String = withContext(Dispatchers.IO) {
+        get("/v1/plans").use { response ->
+            if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
+
     suspend fun statusBody(): String = withContext(Dispatchers.IO) {
         get("/v1/status").use { response ->
             if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
             response.body?.string().orEmpty()
+        }
+    }
+
+    /**
+     * A picture of a message sheet (GET /v1/message-image/:id), at most [MAX_IMAGE_BYTES] bytes. Null when the
+     * server has no such picture or cannot be reached: the sheet then simply has no picture.
+     */
+    suspend fun messageImage(id: String): ByteArray? = withContext(Dispatchers.IO) {
+        if (!id.matches(IMAGE_ID)) return@withContext null
+        try {
+            get("/v1/message-image/$id").use { response ->
+                if (!response.isSuccessful) return@use null
+                val body = response.body ?: return@use null
+                if (body.contentLength() > MAX_IMAGE_BYTES) return@use null
+                val bytes = body.byteStream().readNBytes(MAX_IMAGE_BYTES + 1)
+                bytes.takeIf { it.size <= MAX_IMAGE_BYTES }
+            }
+        } catch (_: UpdateException) {
+            null
         }
     }
 
@@ -82,6 +121,8 @@ class UpdateApi(
 
     private companion object {
         const val TAG = "UpdateApi"
+        const val MAX_IMAGE_BYTES = 3 * 1024 * 1024
+        val IMAGE_ID = Regex("[0-9a-f]{12}")
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

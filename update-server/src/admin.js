@@ -1,6 +1,7 @@
 import { PROVIDER_TYPES, TAG_KINDS } from './assistant-store.js';
 import { escapeHtml } from './page.js';
 import { FEATURES, LEVELS, readSwitches } from './announcements.js';
+import { COMPOSER_STYLE, MESSAGE_NOTICES, imagesSection, messageComposer } from './admin-messages.js';
 
 /**
  * The admin page (GET /admin). Plain forms with one small style block and no scripts, so the
@@ -30,7 +31,7 @@ const NOTICES = {
 };
 
 /** The look of the admin page and of one logged request. Light, dark, no pictures, no script. */
-const STYLE = `
+export const STYLE = `
 :root{color-scheme:light dark;--bg:#fff;--text:#1b1b1b;--muted:#6b6b6b;--line:#dcdcdc;--field:#fff;--button:#1b1b1b;--on-button:#fff;--notice:#fbf3e6;--danger:#b3261e}
 @media (prefers-color-scheme:dark){:root{--bg:#141414;--text:#e6e6e6;--muted:#9a9a9a;--line:#303030;--field:#1c1c1c;--button:#e6e6e6;--on-button:#141414;--notice:#241d13;--danger:#f0a08f}}
 *{box-sizing:border-box}
@@ -97,6 +98,18 @@ function providerRows(providers) {
     .join('\n');
 }
 
+/** What one plan sees of a model: usable, shown greyed out and locked, or not shown. */
+function tierSelect(name, value = 'available') {
+  const options = [
+    ['available', 'Available'],
+    ['locked', 'Locked'],
+    ['hidden', 'Hidden'],
+  ]
+    .map(([id, label]) => `<option value="${id}"${id === value ? ' selected' : ''}>${label}</option>`)
+    .join('');
+  return `<td><select name="${name}">${options}</select></td>`;
+}
+
 /** One row per model; three blank rows to add more. Switched-off models stay in the picker and answer with the upstream error. */
 function modelRows(models, providers) {
   const rows = [...models, null, null, null];
@@ -118,6 +131,7 @@ function modelRows(models, providers) {
 <td><select name="modelTagKind">${tagOptions}</select></td>
 <td><input name="modelInputPrice" type="number" min="0" step="any" value="${model?.inputPrice ?? 0}" size="6" title="US dollars per million input tokens (not reported by OpenRouter)"></td>
 <td><input name="modelOutputPrice" type="number" min="0" step="any" value="${model?.outputPrice ?? 0}" size="6" title="US dollars per million output tokens (not reported by OpenRouter)"></td>
+${['Free', 'Plus', 'Pro'].map((plan) => tierSelect(`modelTier${plan}`, model?.tiers?.[plan.toLowerCase()])).join('\n')}
 </tr>`;
     })
     .join('\n');
@@ -166,7 +180,7 @@ function assistantSection(assistant) {
 <tr><th>Time (UTC)</th><th>Status</th><th>Model</th><th>User</th><th>Cost</th><th>Tokens in/out</th><th>Duration</th></tr>
 ${logs.entries
   .map(
-    (entry) => `<tr><td><a href="/admin/assistant/logs/${escapeHtml(entry.id)}">${escapeHtml(entry.at.replace('T', ' ').slice(0, 19))}</a></td><td>${escapeHtml(entry.status)}</td><td>${escapeHtml(entry.model || '–')}</td><td>${escapeHtml(entry.user)}${entry.paid ? ' (paid)' : ''}</td><td>${cents(entry.costCents)}</td><td>${entry.promptTokens ?? '–'} / ${entry.completionTokens ?? '–'}</td><td>${(entry.durationMs / 1000).toFixed(1)} s</td></tr>`,
+    (entry) => `<tr><td><a href="/admin/assistant/logs/${escapeHtml(entry.id)}">${escapeHtml(entry.at.replace('T', ' ').slice(0, 19))}</a></td><td>${escapeHtml(entry.status)}</td><td>${escapeHtml(entry.model || '–')}</td><td>${escapeHtml(entry.user)}${entry.plan && entry.plan !== 'free' ? ` (${escapeHtml(entry.plan)})` : entry.paid ? ' (paid)' : ''}</td><td>${cents(entry.costCents)}</td><td>${entry.promptTokens ?? '–'} / ${entry.completionTokens ?? '–'}</td><td>${(entry.durationMs / 1000).toFixed(1)} s</td></tr>`,
   )
   .join('\n')}
 </table></div>`;
@@ -184,9 +198,10 @@ ${providerRows(settings.providers)}
 <h3>Models</h3>
 <p class="hint">A model that is Off stays in the app's picker but answers with the upstream error. The tag and description show next to the model in the app: an Info tag is a quiet badge, an Alarm tag is loud, and the description opens when the model is long-pressed in the app. Prices are US dollars per million tokens; set them for providers that do not report a cost, so the budget counts.</p>
 <div class="scroll"><table>
-<tr><th>On</th><th>Model id</th><th>Label</th><th>Provider</th><th>Description</th><th>Tag</th><th>Tag kind</th><th>Input $/M</th><th>Output $/M</th></tr>
+<tr><th>On</th><th>Model id</th><th>Label</th><th>Provider</th><th>Description</th><th>Tag</th><th>Tag kind</th><th>Input $/M</th><th>Output $/M</th><th>Free</th><th>Plus</th><th>Pro</th></tr>
 ${modelRows(settings.models, settings.providers)}
 </table></div>
+<p class="hint">Free, Plus and Pro say what each plan sees of a model: Available, Locked (shown greyed out; tapping it opens the plans) or Hidden. A plan always falls back to a model it may use.</p>
 <p>${checkbox('showModelSwitcher', settings.showModelSwitcher, 'Show the model switcher in the app')}</p>
 <p><label>While the switcher is hidden, users get <select name="hiddenRouting">${routingOptions}</select></label></p>
 <p><label>Default model <select name="defaultModel">${defaultOptions}</select></label> <span class="hint">Save once after changing the list to pick from it.</span></p>
@@ -196,12 +211,16 @@ ${modelRows(settings.models, settings.providers)}
 <p>${checkbox('livePreviews', settings.livePreviews, 'Live HTML previews: a website the assistant writes opens as a card with a Preview and its code. Off, websites come as HTML code blocks only, and the app shows no Preview.')}</p>
 <p><label>Levels the app offers <span class="hint">(${efforts.join(', ')}; not every model takes every level)</span> <input name="efforts" value="${escapeHtml(settings.efforts.join(', '))}" size="24"></label></p>
 <p><label>Default effort <select name="defaultEffort">${effortOptions}</select></label></p>
+<p><label>The picker is for <select name="effortMinPlan">${['free', 'plus', 'pro']
+    .map((plan) => `<option value="${plan}"${plan === (settings.effortMinPlan ?? 'pro') ? ' selected' : ''}>${plan === 'free' ? 'everyone' : `${plan} and up`}</option>`)
+    .join('')}</select></label></p>
 <p>${checkbox('allowFallbacks', settings.allowFallbacks, 'Allow a fallback to another provider when one fails (OpenRouter)')}</p>
 <p>${checkbox('denyDataCollection', settings.denyDataCollection, 'Only providers that do not store or train on prompts (OpenRouter)')}</p>
 <h3>Limits</h3>
 <div class="grid">
 ${number('freeCentsPerDay', 'Budget per user and day, free (US cents)')}
-${number('paidCentsPerDay', 'Budget per user and day, supporters (US cents)')}
+${number('paidCentsPerDay', 'Budget per user and day, Plus (US cents)')}
+${number('proCentsPerDay', 'Budget per user and day, Pro (US cents)')}
 ${number('assistantPerMinute', 'Assistant requests per IP and minute')}
 ${number('updateChecksPerMinute', 'Update checks and status per IP and minute')}
 ${number('downloadsPerHour', 'Downloads per IP and hour')}
@@ -262,7 +281,7 @@ ${field('Model (served)', entry.servedModel)}
 ${field('Reasoning effort', entry.effort)}
 ${field('Provider', entry.provider)}
 ${field('Finish reason', entry.finishReason)}
-${field('User', `${entry.user}${entry.paid ? ' (paid)' : ''}`)}
+${field('User', `${entry.user}${entry.plan && entry.plan !== 'free' ? ` (${entry.plan})` : entry.paid ? ' (paid)' : ''}`)}
 ${field('Cost', cents(entry.costCents))}
 ${field('Tokens in / out', `${entry.promptTokens ?? '–'} / ${entry.completionTokens ?? '–'}`)}
 ${field('Duration', `${(entry.durationMs / 1000).toFixed(2)} s`)}
@@ -318,9 +337,8 @@ function messageStatus(message, now) {
   return 'shown';
 }
 
-export function renderAdmin({ app, state, notice, now = Date.now(), assistant }) {
-  const notes = NOTICES[notice];
-  const levelOptions = LEVELS.map((level) => `<option value="${level}">${level}</option>`).join('');
+export function renderAdmin({ app, state, notice, now = Date.now(), assistant, images = [] }) {
+  const notes = NOTICES[notice] ?? MESSAGE_NOTICES[notice];
   const messages = state.messages.length === 0
     ? '<p class="hint">No messages yet.</p>'
     : `<ul class="messages">${state.messages
@@ -329,10 +347,12 @@ export function renderAdmin({ app, state, notice, now = Date.now(), assistant })
           const status = messageStatus(message, now);
           const ends = message.until ? ` · ends ${escapeHtml(message.until)}` : '';
           return `<li>
-<p class="meta"><strong>${escapeHtml(message.level)}</strong> · ${status}${ends} · id ${id}</p>
+<p class="meta"><strong>${escapeHtml(message.level)}</strong> · ${status}${ends}${message.sheet ? ' · sheet' : ''} · id ${id}</p>
+${message.sheet && (message.sheet.titleDe || message.sheet.titleEn) ? `<p><strong>${escapeHtml(message.sheet.titleDe || message.sheet.titleEn)}</strong></p>` : ''}
 <p>DE: ${escapeHtml(message.de || '–')}</p>
 <p>EN: ${escapeHtml(message.en || '–')}</p>
 <div class="row">
+<form method="get" action="/admin/messages/${id}/preview"><button type="submit" class="plain">Preview</button></form>
 <form method="post" action="/admin/messages/${id}/toggle"><button type="submit" class="plain">${message.enabled ? 'Hide' : 'Show'}</button></form>
 <form method="post" action="/admin/messages/${id}/delete"><button type="submit" class="danger">Delete</button></form>
 </div>
@@ -346,12 +366,12 @@ export function renderAdmin({ app, state, notice, now = Date.now(), assistant })
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(app)} update server admin</title>
-<style>${STYLE}</style>
+<style>${STYLE}${COMPOSER_STYLE}</style>
 </head>
 <body>
 <main>
 <h1>${escapeHtml(app)}</h1>
-<p class="lead">Update server · admin</p>
+<p class="lead">Update server · admin · <a href="/admin/accounts">Accounts and plans</a></p>
 <p class="notice">${notes ? escapeHtml(notes) : ''}</p>
 
 <h2>Minimum app version</h2>
@@ -365,17 +385,16 @@ export function renderAdmin({ app, state, notice, now = Date.now(), assistant })
 ${switchesSection(state)}
 ${assistantSection(assistant)}
 ${supportSection()}
-<h2>Add a message</h2>
-<p class="hint">Shown once per phone when the app opens. No editing: hide or delete the old one and add a new one.</p>
-<form method="post" action="/admin/messages">
-<p><label>Level <select name="level">${levelOptions}</select></label></p>
-<p><label>Text (German)
-<textarea name="de" rows="3"></textarea></label></p>
-<p><label>Text (English)
-<textarea name="en" rows="3"></textarea></label></p>
-<p><label>Ends (optional, e.g. 2026-11-07T18:00:00Z) <input name="until" size="24"></label></p>
-<p><button type="submit">Add message</button></p>
+<h2 id="compose">Add a message</h2>
+<p class="hint">Opens as a sheet from the bottom of the app, once per phone. Give it a title, a picture, up to three buttons and a note under each button, and choose who sees it. Press Preview first: nothing is published until you save from the preview. No editing afterwards: hide or delete a message and add a new one.</p>
+${messageComposer({ images })}
+<h3>Ready-made</h3>
+<form method="post" action="/admin/messages/demo-playstore">
+<p class="row"><button type="submit" class="plain">Add the "Daybreak is now on the Play Store" announcement</button>
+<span class="hint">Android installs from an APK only; buttons: Download from the Play Store, Continue using the APK.</span></p>
 </form>
+
+${imagesSection(images)}
 
 <h2>All messages</h2>
 ${messages}

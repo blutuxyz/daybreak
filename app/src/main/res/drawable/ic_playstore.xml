@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stand-in for the Google Play mark: a triangle of four coloured pieces. Used by message sheets (preset "playstore"). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#00A3FF"
+        android:pathData="M8,4 L27,24 L8,44 Z" />
+    <path
+        android:fillColor="#00E07A"
+        android:pathData="M8,4 L27,24 L35.9,20.4 Z" />
+    <path
+        android:fillColor="#FFD500"
+        android:pathData="M35.9,20.4 L42,24 L35.9,27.6 L27,24 Z" />
+    <path
+        android:fillColor="#FF3B52"
+        android:pathData="M8,44 L27,24 L35.9,27.6 Z" />
+</vector>

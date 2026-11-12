@@ -61,6 +61,8 @@ data class AssistantModel(
     val tag: String? = null,
     /** Alarm badges are loud; info badges are quiet. */
     val tagAlarm: Boolean = false,
+    /** Shown but greyed out: the caller's plan does not include it (`state: "locked"`); tapping shows the plans. */
+    val locked: Boolean = false,
 )
 
 /** The answer of `GET /v1/assistant/models`. */
@@ -102,9 +104,6 @@ enum class AssistantFailure {
     /** Not available right now. */
     UNAVAILABLE,
 
-    /** The day's usage is used up: the answer comes back tomorrow. Shown as a sheet, not as an error. */
-    LIMIT,
-
     /** The question or chat was not accepted (too long, for example). */
     REJECTED,
 }
@@ -125,7 +124,6 @@ object AssistantProtocol {
         language: String,
         today: LocalDate,
         model: String? = null,
-        unlockCode: String? = null,
         effort: String? = null,
     ): String {
         val sent = prepared(messages)
@@ -192,7 +190,6 @@ object AssistantProtocol {
             addProperty("today", today.toString())
             addProperty("context", context.take(MAX_CONTEXT_CHARS))
             if (!model.isNullOrBlank()) addProperty("model", model)
-            if (!unlockCode.isNullOrBlank()) addProperty("unlockCode", unlockCode)
             if (!effort.isNullOrBlank()) addProperty("effort", effort)
             add("messages", array)
         }.toString()
@@ -276,7 +273,8 @@ object AssistantProtocol {
 
     /** Maps the server's error code to a [AssistantFailure]. */
     fun failureFor(code: String?): AssistantFailure = when (code) {
-        "limit" -> AssistantFailure.LIMIT
+        // A used-up budget is not told as one: it looks like any other outage (Daybreak 2 hides limits).
+        "limit" -> AssistantFailure.UPSTREAM
         "upstream" -> AssistantFailure.UPSTREAM
         "busy", "too_many_requests" -> AssistantFailure.BUSY
         "bad_request", "context_too_long", "message_too_long", "too_many_messages", "bad_attachment",
@@ -318,6 +316,9 @@ object AssistantProtocol {
                 description = model.string("description").orEmpty(),
                 tag = model.string("tag")?.takeIf { it.isNotBlank() },
                 tagAlarm = model.string("tagKind") == "alarm",
+                // The server says `state: "locked"` and also `locked: true`; either one locks the model.
+                locked = model.string("state") == "locked" ||
+                    model.get("locked")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean == true,
             )
         }.orEmpty()
         val show = json.get("showSwitcher")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: models.isNotEmpty()

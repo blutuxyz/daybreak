@@ -118,6 +118,23 @@ fun UpdatesScreen(
                 onAllowInstall = { context.startActivity(viewModel.installPermissionIntent()) },
             )
         }
+        // What changed in the version that is installed now (it used to pop up once after an update).
+        item(key = "whatsnew") {
+            val installed = releases.firstOrNull { it.versionCode == viewModel.currentVersionCode }
+            if (installed != null && installed.changelog.isNotBlank()) {
+                SettingsGroup {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.whats_new_title, installed.versionName),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ChangelogText(markdown = installed.changelog, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
         item(key = "auto") {
             SettingsGroup {
                 SettingsRow(

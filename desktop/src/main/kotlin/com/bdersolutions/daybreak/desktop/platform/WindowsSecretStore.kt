@@ -8,8 +8,11 @@ import java.io.File
  * Keeps the WebUntis mobile key with Windows DPAPI. The data is encrypted for the signed-in
  * Windows user, so another user account (or a copy of the file) cannot read it.
  */
-class WindowsSecretStore(private val directory: File) : SecretStore {
-    private val file: File get() = File(directory, FILE_NAME)
+class WindowsSecretStore(
+    private val directory: File,
+    private val fileName: String = FILE_NAME,
+) : SecretStore {
+    private val file: File get() = File(directory, fileName)
 
     override fun getStoredSecret(): String? = try {
         if (file.exists()) {
@@ -30,8 +33,10 @@ class WindowsSecretStore(private val directory: File) : SecretStore {
     override fun clear() {
         file.delete()
         // Files from the earlier AES store are removed too.
-        File(directory, "secret.bin").delete()
-        File(directory, "secret.key").delete()
+        if (fileName == FILE_NAME) {
+            File(directory, "secret.bin").delete()
+            File(directory, "secret.key").delete()
+        }
     }
 
     private companion object {

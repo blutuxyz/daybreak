@@ -37,7 +37,8 @@ import com.bdersolutions.daybreak.data.repository.SchoolDataRepository
 import com.bdersolutions.daybreak.data.repository.TimetableRepository
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.data.haptics.Haptics
-import com.bdersolutions.daybreak.data.support.SupportStore
+import com.bdersolutions.daybreak.data.account.Access
+import com.bdersolutions.daybreak.data.account.Entitlement
 import com.bdersolutions.daybreak.untis.UntisHomework
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -173,7 +174,8 @@ class AssistantViewModel(
     private val timetable: TimetableRepository,
     private val schoolData: SchoolDataRepository,
     private val tools: AssistantToolRunner,
-    private val supportStore: SupportStore,
+    /** What the plan allows (reasoning picker, message drafts); locked models are never sent. */
+    private val access: kotlinx.coroutines.flow.StateFlow<Access>,
     private val chatStore: ChatStore,
     /** Felt for each piece of an answer as it arrives; null where there is no motor (tests). */
     private val haptics: Haptics? = null,
@@ -252,8 +254,9 @@ class AssistantViewModel(
         val saved = identity.model
         val selected = when {
             !models.showSwitcher -> null
-            models.models.any { it.id == saved } -> saved
-            else -> models.defaultModel
+            models.models.any { it.id == saved && !it.locked } -> saved
+            else -> models.defaultModel?.takeIf { id -> models.models.none { it.id == id && it.locked } }
+                ?: models.models.firstOrNull { !it.locked }?.id
         }
         val savedEffort = identity.effort
         val effort = when {
@@ -338,6 +341,8 @@ class AssistantViewModel(
     }
 
     fun selectModel(id: String) {
+        // A model the plan does not include is greyed out in the picker; the screen shows the plans instead.
+        if (_state.value.models?.models?.any { it.id == id && it.locked } == true) return
         identity.model = id
         _state.update { it.copy(selectedModel = id) }
     }
@@ -418,9 +423,8 @@ class AssistantViewModel(
             val absencesNow = withTimeoutOrNull(HOMEWORK_WAIT_MS) { absences.await() }
             // One summary per question, so the follow-up rounds reuse the provider's prompt cache.
             val context = AssistantContext.build(timetable.cache.value, LocalDateTime.now(), homeworkNow, absencesNow)
-            val unlockCode = if (supportStore.paid.value) supportStore.unlockCode() else null
             repeat(MAX_ROUNDS) {
-                val calls = streamOneTurn(api, context, language, unlockCode) ?: return@launch
+                val calls = streamOneTurn(api, context, language) ?: return@launch
                 if (calls.isEmpty()) {
                     // The round is over, even when the model sent no text at all: the dots must go.
                     _state.update { it.turnFinished() }
@@ -435,7 +439,7 @@ class AssistantViewModel(
     }
 
     /** One request: streams the text into a new answer. Returns the tool calls, or null after a failure. */
-    private suspend fun streamOneTurn(api: AssistantApi, context: String, language: String, unlockCode: String?): List<ToolCall>? {
+    private suspend fun streamOneTurn(api: AssistantApi, context: String, language: String): List<ToolCall>? {
         val answerId = nextId++
         var calls: List<ToolCall> = emptyList()
         var failed = false
@@ -444,7 +448,7 @@ class AssistantViewModel(
         val liveNames = HashMap<Int, String>()
         val liveIds = HashMap<Int, String>()
         var lastLive = 0L
-        api.ask(_state.value.messages, context, language, _state.value.selectedModel, unlockCode, _state.value.selectedEffort).collect { event ->
+        api.ask(_state.value.messages, context, language, _state.value.selectedModel, _state.value.selectedEffort.takeIf { access.value.allows(Entitlement.DAWN_REASONING) }).collect { event ->
             when (event) {
                 is AssistantEvent.Text -> {
                     // Each piece of the answer is felt as it arrives.
@@ -596,6 +600,7 @@ class AssistantViewModel(
                 history = container.absenceLessonHistory,
                 schoolData = container.schoolData,
                 serverNotices = container.serverNotices,
+                planAllowsDrafts = { container.access.value.allows(Entitlement.DAWN_DRAFTS) },
             )
             return AssistantViewModel(
                 api = container.assistantApi,
@@ -605,7 +610,7 @@ class AssistantViewModel(
                 schoolData = container.schoolData,
                 tools = AssistantToolRunner(data, settings = container.assistantSettings),
                 settingsPort = container.assistantSettings,
-                supportStore = container.supportStore,
+                access = container.access,
                 chatStore = container.chatStore,
                 haptics = container.haptics,
             ) as T

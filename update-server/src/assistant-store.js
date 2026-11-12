@@ -86,7 +86,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   denyDataCollection: true,
   /** Daily budget per user in US cents (OpenRouter reports cost in credits, 1 credit = 1 USD). */
   freeCentsPerDay: 10,
+  /** The Plus budget (the name is from the days of one paid tier). */
   paidCentsPerDay: 20,
+  proCentsPerDay: 60,
+  /** The lowest plan that gets the reasoning-effort picker (when the picker is on at all). */
+  effortMinPlan: 'pro',
   /** Requests per IP address and minute. */
   assistantPerMinute: 10,
   updateChecksPerMinute: 30,
@@ -135,6 +139,15 @@ function cleanProvider(provider) {
   };
 }
 
+/** What a plan sees of a model: usable, shown but locked (greyed out, tapping opens the plans), or not shown at all. */
+export const TIER_STATES = ['available', 'locked', 'hidden'];
+export const TIER_PLANS = ['free', 'plus', 'pro'];
+
+function cleanTiers(tiers) {
+  const source = tiers && typeof tiers === 'object' ? tiers : {};
+  return Object.fromEntries(TIER_PLANS.map((plan) => [plan, TIER_STATES.includes(source[plan]) ? source[plan] : 'available']));
+}
+
 function cleanModel(model, providers) {
   if (!model || typeof model !== 'object') return null;
   const id = cleanText(model.id, 120);
@@ -150,6 +163,7 @@ function cleanModel(model, providers) {
     tagKind: model.tagKind === 'alarm' ? 'alarm' : 'info',
     inputPrice: cleanPrice(model.inputPrice),
     outputPrice: cleanPrice(model.outputPrice),
+    tiers: cleanTiers(model.tiers),
   };
 }
 
@@ -176,7 +190,8 @@ export function readSettings(value) {
   for (const key of ['allowFallbacks', 'denyDataCollection', 'logContent', 'showModelSwitcher', 'showEffortSelector', 'aiTitles', 'livePreviews']) {
     if (typeof stored[key] === 'boolean') settings[key] = stored[key];
   }
-  for (const key of ['freeCentsPerDay', 'paidCentsPerDay', 'assistantPerMinute', 'updateChecksPerMinute', 'downloadsPerHour', 'logRetentionDays']) {
+  if (TIER_PLANS.includes(stored.effortMinPlan)) settings.effortMinPlan = stored.effortMinPlan;
+  for (const key of ['freeCentsPerDay', 'paidCentsPerDay', 'proCentsPerDay', 'assistantPerMinute', 'updateChecksPerMinute', 'downloadsPerHour', 'logRetentionDays']) {
     const number = Number(stored[key]);
     if (stored[key] !== undefined && Number.isFinite(number) && number >= 0) settings[key] = number;
   }
@@ -239,6 +254,11 @@ export function parseSettingsForm(body, current = DEFAULT_SETTINGS) {
       tagKind: cell('modelTagKind', index) === 'alarm' ? 'alarm' : 'info',
       inputPrice: Number(cell('modelInputPrice', index) || 0),
       outputPrice: Number(cell('modelOutputPrice', index) || 0),
+      tiers: {
+        free: cell('modelTierFree', index),
+        plus: cell('modelTierPlus', index),
+        pro: cell('modelTierPro', index),
+      },
     });
   }
 
@@ -246,11 +266,17 @@ export function parseSettingsForm(body, current = DEFAULT_SETTINGS) {
   for (const [key, max] of [
     ['freeCentsPerDay', 100_000],
     ['paidCentsPerDay', 100_000],
+    ['proCentsPerDay', 100_000],
     ['assistantPerMinute', 10_000],
     ['updateChecksPerMinute', 10_000],
     ['downloadsPerHour', 10_000],
     ['logRetentionDays', 30],
   ]) {
+    // A form from before the Pro budget existed leaves it out: keep what is stored.
+    if (key === 'proCentsPerDay' && form[key] === undefined) {
+      numbers[key] = current.proCentsPerDay ?? DEFAULT_SETTINGS.proCentsPerDay;
+      continue;
+    }
     const number = Number(form[key]);
     if (!Number.isFinite(number) || number < 0 || number > max) return { error: 'bad_number' };
     numbers[key] = number;
@@ -266,6 +292,7 @@ export function parseSettingsForm(body, current = DEFAULT_SETTINGS) {
       efforts: String(form.efforts ?? '').split(/[\s,]+/).filter(Boolean),
       defaultEffort: String(form.defaultEffort ?? ''),
       hiddenRouting: form.hiddenRouting,
+      effortMinPlan: form.effortMinPlan ?? current.effortMinPlan,
       providers,
       models,
       defaultModel,

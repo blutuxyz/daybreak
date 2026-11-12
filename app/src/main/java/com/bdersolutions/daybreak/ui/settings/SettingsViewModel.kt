@@ -39,9 +39,8 @@ import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
 import com.bdersolutions.daybreak.data.branding.AppNamePreset
 import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
-import com.bdersolutions.daybreak.data.support.PaymentCheck
-import com.bdersolutions.daybreak.data.support.SupportApi
-import com.bdersolutions.daybreak.data.support.SupportStore
+import com.bdersolutions.daybreak.data.account.Access
+import com.bdersolutions.daybreak.data.account.Entitlement
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
 import com.bdersolutions.daybreak.data.update.UpdateManager
@@ -79,32 +78,13 @@ class SettingsViewModel(
     private val updateManager: UpdateManager,
     private val updateScheduler: UpdateScheduler,
     private val haptics: Haptics,
-    private val supportStore: SupportStore,
-    private val supportApi: SupportApi?,
+    /** What the plan allows; the extras below check it in one place ([Entitlement]). */
+    val access: StateFlow<Access>,
     private val launcherNameSwitcher: LauncherNameSwitcher,
     private val reminderScheduler: ReminderScheduler,
     private val reminderNotifier: ReminderNotificationManager,
     private val serverNotices: ServerNotices,
 ) : ViewModel() {
-    // ---- Support (Ko-fi) ----
-
-    /** True once a Ko-fi payment was confirmed; the Ko-fi button on the More page hides then. */
-    val supportPaid: StateFlow<Boolean> = supportStore.paid
-
-    /** Paying to hide the button needs a server to confirm it; without one the link is not offered. */
-    val canHideSupportButton: Boolean get() = supportApi != null
-
-    /** This phone's unlock code, to be written into the Ko-fi message. */
-    fun supportUnlockCode(): String = supportStore.unlockCode()
-
-    /** Asks the server whether the unlock code was paid for. A confirmed payment is remembered. */
-    suspend fun checkSupportPayment(): PaymentCheck {
-        val api = supportApi ?: return PaymentCheck.UNAVAILABLE
-        val result = api.check(supportStore.unlockCode())
-        if (result == PaymentCheck.PAID) supportStore.markPaid()
-        return result
-    }
-
     val settings: StateFlow<AppSettings> = settingsRepository.settings
     val session: StateFlow<DaybreakSession?> = sessionStore.session
     val syncStatus: StateFlow<TimetableSyncStatus> = repository.status
@@ -289,28 +269,28 @@ class SettingsViewModel(
 
     fun sendTestEveningReminder() = viewModelScope.launch { reminderNotifier.sendEveningPreview() }
 
-    /** Supporter extra: the name under the app icon. Ignored without a confirmed payment. */
+    /** Plus extra: the name under the app icon. Ignored while the plan does not include it. */
     fun setAppNamePreset(preset: AppNamePreset) {
-        if (!supportStore.paid.value) return
+        if (!access.value.allows(Entitlement.APP_NAME)) return
         // Only stored here. The launcher entry itself is switched by RestartActivity once the app has
         // exited (and by AppContainer.start() on the next start): switching it while the app is open
         // makes some phones close it without restarting.
         settingsRepository.setAppNamePreset(preset)
     }
 
-    /** Supporter extra: the picture of the app icon (Standard or Classic). Ignored without a payment. */
+    /** Plus extra: the picture of the app icon. Ignored while the plan does not include it. */
     fun setAppIconStyle(style: AppIconStyle) {
-        if (!supportStore.paid.value) return
+        if (!access.value.allows(Entitlement.APP_ICON)) return
         settingsRepository.setAppIconStyle(style)
     }
 
     /**
-     * Supporter extra: the timetable of this week and the next [weekCount] - 1 as iCalendar text.
+     * Plus extra: the timetable of this week and the next [weekCount] - 1 as iCalendar text.
      * Missing weeks are fetched first (fresh ones are not asked again). Fails when nothing could be
      * loaded; a week that is missing among others is simply left out.
      */
     suspend fun buildCalendar(weekCount: Int, labels: IcsExport.Labels): String {
-        check(supportStore.paid.value) { "Calendar export is a supporter extra." }
+        check(access.value.allows(Entitlement.CALENDAR_EXPORT)) { "Calendar export is part of Plus." }
         val first = repository.weekStartFor(LocalDate.now())
         val weeks = (0 until weekCount).map { first.plusWeeks(it.toLong()) }
         var failure: Throwable? = null
@@ -324,9 +304,9 @@ class SettingsViewModel(
         return IcsExport.build(lessons, cache.exams, labels, first, last)
     }
 
-    /** Supporter extra: the title shown in the app. Ignored without a confirmed payment. */
+    /** Plus extra: the title shown in the app. Ignored while the plan does not include it. */
     fun setCustomAppName(name: String) {
-        if (!supportStore.paid.value) return
+        if (!access.value.allows(Entitlement.APP_NAME)) return
         settingsRepository.setCustomAppName(name)
     }
 
@@ -400,8 +380,7 @@ class SettingsViewModel(
                 updateManager = container.updateManager,
                 updateScheduler = container.updateScheduler,
                 haptics = container.haptics,
-                supportStore = container.supportStore,
-                supportApi = container.supportApi,
+                access = container.access,
                 launcherNameSwitcher = container.launcherNameSwitcher,
                 reminderScheduler = container.reminderScheduler,
                 reminderNotifier = container.reminderNotifier,

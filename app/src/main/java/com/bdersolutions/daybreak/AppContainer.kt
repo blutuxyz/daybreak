@@ -3,6 +3,14 @@ package com.bdersolutions.daybreak
 import android.app.UiModeManager
 import android.content.Context
 import android.os.Build
+import com.bdersolutions.daybreak.data.account.AccountManager
+import com.bdersolutions.daybreak.data.account.AccountPrefs
+import com.bdersolutions.daybreak.data.account.Access
+import com.bdersolutions.daybreak.data.account.AndroidAccountStorage
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.data.account.HttpAccountApi
+import com.bdersolutions.daybreak.data.account.OfflineAccountApi
+import com.bdersolutions.daybreak.data.account.Plan
 import com.bdersolutions.daybreak.data.assistant.AssistantApi
 import com.bdersolutions.daybreak.data.assistant.AssistantIdentity
 import com.bdersolutions.daybreak.data.assistant.ChatStore
@@ -12,7 +20,12 @@ import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.haptics.VibratorHapticOutput
+import com.bdersolutions.daybreak.data.account.PlanPriceRepository
+import com.bdersolutions.daybreak.data.account.SharedPrefsPlanPriceCache
+import com.bdersolutions.daybreak.data.legal.LegalTextRepository
+import com.bdersolutions.daybreak.data.legal.SharedPrefsLegalTextCache
 import com.bdersolutions.daybreak.data.legal.TermsStore
+import com.bdersolutions.daybreak.data.permissions.PermissionIntroStore
 import com.bdersolutions.daybreak.data.notices.ServerNoticeStore
 import com.bdersolutions.daybreak.data.notices.ServerNotices
 import com.bdersolutions.daybreak.data.notifications.LessonNotificationManager
@@ -28,8 +41,6 @@ import com.bdersolutions.daybreak.data.reminders.ReminderNotificationManager
 import com.bdersolutions.daybreak.data.reminders.ReminderScheduler
 import com.bdersolutions.daybreak.data.reminders.ReminderStore
 import com.bdersolutions.daybreak.data.branding.LauncherNameSwitcher
-import com.bdersolutions.daybreak.data.support.SupportApi
-import com.bdersolutions.daybreak.data.support.SupportStore
 import com.bdersolutions.daybreak.data.sync.SyncScheduler
 import com.bdersolutions.daybreak.data.update.UpdateApi
 import com.bdersolutions.daybreak.data.update.UpdateManager
@@ -46,6 +57,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -72,25 +86,57 @@ class AppContainer(context: Context) {
         systemAllows = { VibratorHapticOutput.systemTouchFeedbackOn(appContext) },
     )
     val termsStore = TermsStore(appContext)
-    val supportStore = SupportStore(appContext)
+    val permissionIntroStore = PermissionIntroStore(appContext)
     val launcherNameSwitcher = LauncherNameSwitcher(appContext)
 
-    // Confirms a Ko-fi payment through the update server; null (no paid hide) without that address.
-    val supportApi: SupportApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { SupportApi(it) }
+
+    val secretVault = SecretVault(appContext)
 
     // The AI assistant asks the same server, which holds the API key; null without that address.
     val assistantIdentity = AssistantIdentity(appContext)
+
+    // The Daybreak account (docs/v2-spec.md): plan, bound WebUntis accounts, restore code. The plan is what
+    // unlocks features; every screen asks `access`, never the account itself. A build without an update
+    // server address cannot reach any server, so nothing is locked there (self-built apps and development).
+    val accountAvailable: Boolean = BuildConfig.UPDATE_API_URL.isNotBlank()
+    val accountStorage = AndroidAccountStorage(appContext, secretVault)
+    val accountPrefs = AccountPrefs(appContext)
+    val accountManager = AccountManager(
+        api = if (accountAvailable) {
+            HttpAccountApi(BuildConfig.UPDATE_API_URL, installId = { assistantIdentity.installId })
+        } else {
+            OfflineAccountApi
+        },
+        storage = accountStorage,
+    )
+
+    /** Lives as long as the process, for work that follows settings in the background. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** True while the full-screen "new version" page is up, so other pop-ups wait for it. */
+    val updatePageVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** What the plan allows right now, for the whole app. Read with `access.value.allows(Entitlement.X)`. */
+    val access: StateFlow<Access> = accountManager.snapshot
+        .map { if (accountAvailable) it.access else Access(Plan.PRO) }
+        .distinctUntilChanged()
+        .stateIn(appScope, SharingStarted.Eagerly, if (accountAvailable) accountManager.snapshot.value.access else Access(Plan.PRO))
+
     // Saved assistant chats, only on this device; deleted on logout.
     val chatStore = ChatStore(appContext)
     val assistantApi: AssistantApi? = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let {
-        AssistantApi(it, installId = { assistantIdentity.installId })
+        AssistantApi(
+            it,
+            installId = { assistantIdentity.installId },
+            accountToken = { accountStorage.credentials()?.token },
+        )
     }
 
     // The assistant's settings tools. Lazy, because the schedulers it uses are declared further down.
     val assistantSettings: com.bdersolutions.daybreak.data.settings.SettingsAssistantPort by lazy {
         com.bdersolutions.daybreak.data.settings.SettingsAssistantPort(
             settings = settingsRepository,
-            paid = { supportStore.paid.value },
+            paid = { access.value.allows(Entitlement.APP_NAME) },
             syncScheduler = syncScheduler,
             reminderScheduler = reminderScheduler,
             updateScheduler = updateScheduler,
@@ -101,7 +147,6 @@ class AppContainer(context: Context) {
     // Whether the introduction was finished (see TutorialStore). Kept apart from the session.
     val tutorialStore = TutorialStore(appContext)
     val dawnIntroStore = com.bdersolutions.daybreak.data.assistant.DawnIntroStore(appContext)
-    val secretVault = SecretVault(appContext)
     val sessionStore = SessionStore(preferences(SessionStore.PREFS_NAME), secretVault)
     val rawLogStore = RawLogStore(appContext)
     val untisApi = UntisApi(rawLogStore)
@@ -126,6 +171,27 @@ class AppContainer(context: Context) {
     // Updates come from the update server (update-server/). Without a configured address the
     // feature is off and the Updates screen is hidden.
     private val updateApi = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { UpdateApi(it) }
+
+    // The privacy policy and terms the app shows and asks to accept: the server's copy, or the shipped one.
+    // Debug builds always show the shipped copy (like the server notices), so a development build is not
+    // changed by a text that is live on the server. Declared after updateApi, which it reads.
+    // The prices of the paid plans, shown on the plans sheet (the last answer is kept for offline use).
+    val planPrices = PlanPriceRepository(
+        fetch = updateApi?.let { api ->
+            val fetchPlans: suspend () -> String = { api.plansBody() }
+            fetchPlans
+        },
+        cache = SharedPrefsPlanPriceCache(appContext),
+        enabled = BuildConfig.SERVER_NOTICES,
+    )
+    val legalTexts = LegalTextRepository(
+        fetch = updateApi?.let { api ->
+            val fetchLegal: suspend (String) -> String = { language -> api.legalBody(language) }
+            fetchLegal
+        },
+        cache = SharedPrefsLegalTextCache(appContext),
+        enabled = BuildConfig.SERVER_NOTICES,
+    )
     val updateManager = UpdateManager(
         context = appContext,
         api = updateApi,
@@ -161,8 +227,6 @@ class AppContainer(context: Context) {
         serverNotices = serverNotices,
     )
 
-    /** Lives as long as the process, for work that follows settings in the background. */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @OptIn(FlowPreview::class)
     fun start() {
@@ -194,12 +258,17 @@ class AppContainer(context: Context) {
                 .debounce(400)
                 .collect { widgetUpdater.update() }
         }
-        // The name under the icon follows the supporter extra: back to "Daybreak" without a payment.
+        // The name under the icon follows the plan: back to "Daybreak" without Plus (or supporter status).
         val chosen = settingsRepository.current()
         launcherNameSwitcher.apply(
-            AppNaming.effectivePreset(supportStore.paid.value, chosen.appNamePreset),
-            AppNaming.effectiveIconStyle(supportStore.paid.value, chosen.appIconStyle),
+            AppNaming.effectivePreset(access.value.allows(Entitlement.APP_NAME), chosen.appNamePreset),
+            AppNaming.effectiveIconStyle(access.value.allows(Entitlement.APP_ICON), chosen.appIconStyle),
         )
+        // The plan is read from the server again at every start (the cached one works until then, and offline).
+        if (accountAvailable) appScope.launch { accountManager.refresh() }
+        // The privacy policy and terms: the current text from the server (the shipped copy is used until then).
+        appScope.launch { legalTexts.refresh() }
+        appScope.launch { planPrices.refresh() }
         lessonNotificationManager.ensureChannel()
         reminderNotifier.ensureChannels()
         if (sessionStore.isLoggedIn()) {

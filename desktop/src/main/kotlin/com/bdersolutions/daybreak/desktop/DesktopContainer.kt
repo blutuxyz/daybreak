@@ -1,5 +1,8 @@
 package com.bdersolutions.daybreak.desktop
 
+import com.bdersolutions.daybreak.data.account.AccountManager
+import com.bdersolutions.daybreak.data.account.Access
+import com.bdersolutions.daybreak.data.account.Plan
 import com.bdersolutions.daybreak.data.cache.AbsenceLessonStore
 import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.repository.AbsenceLessonHistory
@@ -13,6 +16,13 @@ import com.bdersolutions.daybreak.desktop.platform.PropertiesStore
 import com.bdersolutions.daybreak.desktop.platform.WindowsSecretStore
 import com.bdersolutions.daybreak.untis.UntisApi
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * Builds the shared repositories for the desktop app, with files in %APPDATA%\Daybreak. The same
@@ -21,6 +31,9 @@ import java.io.File
 class DesktopContainer(
     val dataDirectory: File = defaultDataDirectory(),
 ) {
+    /** Lives as long as the app: the plan flow is shared from here. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     val settings = SettingsRepository(PropertiesStore(File(dataDirectory, "settings.properties")))
 
     /** Remembers the last day each reminder was sent, so nothing is announced twice. */
@@ -40,11 +53,29 @@ class DesktopContainer(
     /** Which privacy policy version was accepted on this computer. */
     val termsStore = DesktopTermsStore(PropertiesStore(File(dataDirectory, "terms.properties")))
 
-    /** The support popup's counters and whether a payment was confirmed. */
-    val supportStore = DesktopSupportStore(PropertiesStore(File(dataDirectory, "support.properties")))
+    /** What the account flow remembers: install id, migration and trial prompts, which login is in which slot. */
+    val accountPrefs = DesktopAccountPrefs(PropertiesStore(File(dataDirectory, "account_flow.properties")))
 
-    /** Asks the update server whether the unlock code was paid for. Null in builds without a server. */
-    val supportApi: DesktopSupportApi? = updater.build.updateApiUrl.takeIf { it.isNotBlank() }?.let { DesktopSupportApi(it) }
+    /** The 1.x Ko-fi data (`support.properties`) is read once to carry it over to the account, then cleared. */
+    val accountStorage = DesktopAccountStorage(
+        preferences = PropertiesStore(File(dataDirectory, "account.properties")),
+        vault = if (isWindows()) WindowsSecretStore(dataDirectory, "account.dpapi") else DesktopSecretStore(dataDirectory, "account"),
+        legacyPreferences = PropertiesStore(File(dataDirectory, "support.properties")),
+    )
+
+    /** A build without an update server cannot sell or check plans: everything is then unlocked. */
+    val accountAvailable: Boolean = updater.build.updateApiUrl.isNotBlank()
+
+    /** The Daybreak account: create or restore, plan, bound WebUntis accounts, the Pro trial. */
+    val accountManager = AccountManager(
+        api = if (accountAvailable) DesktopHttpAccountApi(updater.build.updateApiUrl, accountPrefs::installId) else DesktopOfflineAccountApi,
+        storage = accountStorage,
+    )
+
+    /** What the plan allows right now. Read with `access.value.allows(Entitlement.X)`. */
+    val access: StateFlow<Access> = accountManager.snapshot
+        .map { if (accountAvailable) it.access else Access(Plan.PRO) }
+        .stateIn(appScope, SharingStarted.Eagerly, if (accountAvailable) accountManager.snapshot.value.access else Access(Plan.PRO))
 
     /** Ten taps on the "System" theme unlock the debug page, as on Android. */
     val debugUnlock = DebugUnlock()

@@ -63,6 +63,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.ui.account.LockedArea
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.data.schedule.LessonRun
 import com.bdersolutions.daybreak.data.schedule.WidgetPlanner
@@ -148,6 +150,7 @@ fun WidgetSettingsScreen(
 
         item(key = "look_label") { SectionLabel(stringResource(R.string.widget_settings_look)) }
         item(key = "look") {
+            LockedArea(Entitlement.WIDGET_CUSTOMISATION) {
             SettingsGroup {
                 AppearanceOption(
                     icon = Icons.Outlined.DarkMode,
@@ -186,10 +189,12 @@ fun WidgetSettingsScreen(
                     )
                 }
             }
+            }
         }
 
         item(key = "content_label") { SectionLabel(stringResource(R.string.widget_settings_content)) }
         item(key = "content") {
+            LockedArea(Entitlement.WIDGET_CUSTOMISATION) {
             SettingsGroup {
                 WidgetSwitchRow(
                     icon = Icons.Outlined.Schedule,
@@ -233,6 +238,7 @@ fun WidgetSettingsScreen(
                     checked = widget.showSyncTime,
                     onCheckedChange = { value -> viewModel.updateWidget { it.copy(showSyncTime = value) } },
                 )
+            }
             }
         }
     }

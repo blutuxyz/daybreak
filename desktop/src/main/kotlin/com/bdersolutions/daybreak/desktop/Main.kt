@@ -67,6 +67,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,8 +78,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
-import java.time.LocalDate
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.data.account.TrialOfferPolicy
+import com.bdersolutions.daybreak.desktop.update.UpdateState
+import kotlinx.coroutines.launch
 import com.bdersolutions.daybreak.untis.UntisChild
 import com.bdersolutions.daybreak.untis.UntisLoginResult
 import com.bdersolutions.daybreak.untis.UntisSession
@@ -91,11 +94,11 @@ fun main() {
     DemoData.seedIfRequested(container)
     application {
         val settings by container.settings.settings.collectAsState()
-        val paid by container.supportStore.paid.collectAsState()
+        val access by container.access.collectAsState()
         Window(
             onCloseRequest = ::exitApplication,
             // The supporter extra "app name" also shows in the title bar.
-            title = appTitle(paid, settings.customAppName),
+            title = appTitle(access.allows(Entitlement.APP_NAME), settings.customAppName),
             // The taskbar and title bar icon. Without it the window shows the Java cup.
             icon = BitmapPainter(useResource("daybreak-icon.png", ::loadImageBitmap)),
             state = rememberWindowState(width = 1100.dp, height = 760.dp),
@@ -110,7 +113,7 @@ enum class MainTab { TIMETABLE, ABSENCES, MORE }
 
 /** Pages opened from a top bar or from the More list. Each one has a back arrow. */
 enum class SubRoute {
-    SEARCH, UPCOMING, NOTICES, MESSAGES,
+    SEARCH, UPCOMING, NOTICES, MESSAGES, DAYBREAK_ACCOUNT,
     APPEARANCE, TIMETABLE_SETTINGS, LESSON_COLORS, LANGUAGE, NOTIFICATIONS, SYNC_UPDATES,
     LEGAL, ABOUT, DEBUG,
     APP_NAME, CALENDAR_EXPORT,
@@ -132,9 +135,12 @@ private fun MainTab.icon(): ImageVector = when (this) {
 @Composable
 fun DesktopRoot(container: DesktopContainer, onQuit: () -> Unit) {
     val settings by container.settings.settings.collectAsState()
-    DaybreakDesktopTheme(settings.themeMode, settings.accent) {
+    val access by container.access.collectAsState()
+    // Accent palettes other than the first are part of Pro; without it the free one shows.
+    DaybreakDesktopTheme(settings.themeMode, access.apply(settings).accent) {
         val density = LocalDensity.current
         CompositionLocalProvider(
+            LocalAccess provides access,
             LocalLanguage provides settings.language,
             LocalLessonColorSettings provides settings.lessonColors,
             LocalDensity provides Density(density.density, density.fontScale * settings.textScale.multiplier),
@@ -190,23 +196,60 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
     // Back and forward like a browser: Escape, Alt+Left/Right and the mouse side buttons use it.
     val nav = remember { NavHistory() }
     val place = nav.current
-    var supportRequest by remember { mutableStateOf<SupportRequest?>(null) }
     val settings by container.settings.settings.collectAsState()
     val focus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
-    // The support popup: rare, after several days of use. Counted once per start, as on Android.
+    // The Daybreak account: ask the server for the plan now and then, and let a plan that has ended lapse.
     LaunchedEffect(Unit) {
-        val today = LocalDate.now().toEpochDay()
-        val state = container.supportStore.recordOpen(today)
-        if (SupportPromptPolicy.shouldShow(state, today)) {
-            container.supportStore.markShown(today)
-            supportRequest = SupportRequest
+        if (!container.accountAvailable) return@LaunchedEffect
+        container.accountManager.refresh()
+        var minutes = 0
+        while (isActive) {
+            delay(60_000)
+            container.accountManager.tick()
+            minutes++
+            if (minutes % 30 == 0) container.accountManager.refresh()
         }
     }
+    val account by container.accountManager.snapshot.collectAsState()
+    var plansFor by remember { mutableStateOf<PlansRequest?>(null) }
+    val plansLauncher = remember { PlansLauncher { feature -> plansFor = PlansRequest(feature) } }
 
-    SupportHost(container, supportRequest) { supportRequest = null }
+    // Someone who used Daybreak 1.x is asked once to move to an account; "Not now" holds it back for three days.
+    val legacyInstall = remember { container.accountPrefs.isLegacyInstall { container.accountStorage.hasLegacyTraces() } }
+    var migrationLater by remember { mutableStateOf(System.currentTimeMillis() < container.accountPrefs.migrationDeferredUntil) }
+    val migrationOpen = container.accountAvailable && legacyInstall && !account.signedIn && !migrationLater
+
+    // A newer version was found (on every start and every check): a full page asks whether to download it.
     val updateState by container.updater.state.collectAsState()
+    var updateLater by remember { mutableStateOf<UpdateState.Available?>(null) }
+    val updateOffer = (updateState as? UpdateState.Available)?.takeIf { it !== updateLater }
     UpdateReadyHost(container, updateState)
+
+    // Thank-you for old Ko-fi supporters: three months of Pro, offered once as a popup (then as a banner on More).
+    val trialDismissedAt by container.accountPrefs.trialDismissed.collectAsState()
+    val trialPrompt = TrialOfferPolicy.prompt(
+        offered = account.state?.proTrial?.offered == true,
+        dismissedAtMillis = trialDismissedAt,
+        nowMillis = System.currentTimeMillis(),
+    )
+    if (migrationOpen) {
+        MigrationDialog(container, onLater = {
+            container.accountPrefs.migrationDeferredUntil = System.currentTimeMillis() + MIGRATION_DEFER_MS
+            migrationLater = true
+        })
+    } else if (trialPrompt == TrialOfferPolicy.Prompt.POPUP && updateOffer == null) {
+        TrialOfferDialog(container, onDismiss = { container.accountPrefs.trialDismissedAt = System.currentTimeMillis() })
+    }
+    plansFor?.let { request ->
+        PlansDialog(
+            container = container,
+            feature = request.feature,
+            onDismiss = { plansFor = null },
+            onOpenAccount = { nav.open(Place(MainTab.MORE, SubRoute.DAYBREAK_ACCOUNT)) },
+        )
+    }
 
     // Background sync: refresh this week and the next on the chosen interval, while the app is open.
     LaunchedEffect(settings.syncEnabled, settings.syncIntervalMinutes) {
@@ -243,8 +286,8 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
     LaunchedEffect(settings.autoCheckUpdates, settings.updateCheckHours) {
         if (!settings.autoCheckUpdates || !container.updater.build.updatesEnabled) return@LaunchedEffect
         while (isActive) {
-            // Automatic checks also download a newer build, so it is ready when the person is asked.
-            container.updater.check(autoDownload = true)
+            // A newer build is offered on a full page; the download starts when the person agrees.
+            container.updater.check(autoDownload = false)
             delay(settings.updateCheckHours * 3_600_000L)
         }
     }
@@ -252,6 +295,8 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
     // The root takes keyboard focus so Escape and Alt+arrows work on every page, whatever is inside.
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
+    CompositionLocalProvider(LocalPlans provides plansLauncher) {
+    Box(modifier = Modifier.fillMaxSize()) {
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -300,7 +345,7 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
                 ) { target ->
                     val route = target.sub
                     if (route != null) {
-                        SubPage(container, route, onBack = { nav.back() })
+                        SubPage(container, session, route, onBack = { nav.back() })
                     } else {
                         when (target.tab) {
                             MainTab.TIMETABLE -> TimetableScreen(
@@ -320,6 +365,14 @@ private fun SignedInScreen(container: DesktopContainer, session: UntisSession, o
                 }
             }
         }
+    }
+    // Covers the whole window while a newer version waits for an answer.
+    UpdateAvailableOverlay(
+        release = updateOffer?.release,
+        onDownload = { updateOffer?.let { offer -> scope.launch { container.updater.download(offer.release) } } },
+        onLater = { updateLater = updateOffer },
+    )
+    }
     }
 }
 
@@ -417,7 +470,7 @@ private fun RailArrow(forward: Boolean, enabled: Boolean, description: String, o
 
 /** A page reached from the top bar or the More list: a back arrow and the page's content. */
 @Composable
-private fun SubPage(container: DesktopContainer, route: SubRoute, onBack: () -> Unit) {
+private fun SubPage(container: DesktopContainer, session: UntisSession, route: SubRoute, onBack: () -> Unit) {
     when (route) {
         SubRoute.SEARCH -> Column(modifier = Modifier.fillMaxSize()) {
             PageHeader(title = tr("Suche", "Search"), onBack = onBack)
@@ -435,6 +488,7 @@ private fun SubPage(container: DesktopContainer, route: SubRoute, onBack: () -> 
             PageHeader(title = tr("Nachrichten", "Messages"), onBack = onBack)
             MessagesScreen(container)
         }
+        SubRoute.DAYBREAK_ACCOUNT -> SettingsSubPage(tr("Daybreak-Konto", "Daybreak account"), onBack) { DaybreakAccountPage(container, session) }
         SubRoute.APP_NAME -> SettingsSubPage(tr("App-Name", "App name"), onBack) { AppNamePage(container) }
         SubRoute.CALENDAR_EXPORT -> SettingsSubPage(tr("Kalender-Export", "Calendar export"), onBack) { CalendarExportPage(container) }
         SubRoute.LEGAL -> SettingsSubPage(str("settings_legal"), onBack) { LegalPage() }
@@ -489,33 +543,11 @@ private fun SettingsSubPage(title: String, onBack: () -> Unit, content: @Composa
     }
 }
 
-/** The support dialog was opened by the rare popup. */
-private object SupportRequest
+/** The plans dialog was asked for, for [feature] or without one. */
+private class PlansRequest(val feature: Entitlement?)
 
-/** Shows the support popup when the policy asks for it. */
-@Composable
-private fun SupportHost(container: DesktopContainer, request: SupportRequest?, onClosed: () -> Unit) {
-    if (request == null) return
-    val api = container.supportApi
-    SupportDialog(
-        // Without an update server there is nothing to pay-check against, so the free opt-out stays.
-        unlockCode = if (api != null) container.supportStore.unlockCode() else null,
-        onSupport = { openSupportPage() },
-        onLater = {},
-        onNever = { container.supportStore.optOut() },
-        onCheckPayment = { checkSupportPayment(container) },
-        onPaid = {},
-        onClosed = onClosed,
-    )
-}
-
-/** Asks the server whether this computer's code was paid for; a confirmed payment is remembered. */
-suspend fun checkSupportPayment(container: DesktopContainer): com.bdersolutions.daybreak.data.support.PaymentCheck {
-    val api = container.supportApi ?: return com.bdersolutions.daybreak.data.support.PaymentCheck.UNAVAILABLE
-    val result = api.check(container.supportStore.unlockCode())
-    if (result == com.bdersolutions.daybreak.data.support.PaymentCheck.PAID) container.supportStore.markPaid()
-    return result
-}
+/** How long "Not now" holds the move to a Daybreak account back. */
+private const val MIGRATION_DEFER_MS = 3L * 24 * 60 * 60 * 1000
 
 /** Centres a page at a readable width on a wide window. */
 @Composable

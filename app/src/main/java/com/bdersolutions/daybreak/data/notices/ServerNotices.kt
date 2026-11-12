@@ -18,9 +18,106 @@ enum class NoticeLevel {
     }
 }
 
+/** How a message sheet looks: a plain one, or one with a glow behind the picture in the brand or a warning colour. */
+enum class NoticeSheetStyle {
+    PLAIN,
+    BRAND,
+    WARNING,
+    CRITICAL,
+
+    ;
+
+    companion object {
+        fun of(raw: String?): NoticeSheetStyle = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: PLAIN
+    }
+}
+
+enum class NoticeImageShape { ICON, BANNER }
+
+enum class NoticeButtonStyle {
+    FILLED,
+    TONAL,
+    TEXT,
+
+    ;
+
+    companion object {
+        fun of(raw: String?): NoticeButtonStyle = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: FILLED
+    }
+}
+
+/**
+ * The picture of a sheet: [kind] "preset" names a picture that ships inside the app ([value] "playstore"),
+ * "upload" names a picture the developer uploaded to the server ([value] is its id).
+ */
+data class NoticeImage(val kind: String, val value: String, val shape: NoticeImageShape) {
+    val isUpload: Boolean get() = kind == "upload"
+}
+
+/** One button of a sheet. A button with a [url] opens it in the browser; one without just closes the sheet. */
+data class NoticeButton(
+    val de: String,
+    val en: String,
+    val url: String?,
+    val style: NoticeButtonStyle,
+    /** Whether pressing it closes the sheet (and counts as read). */
+    val closes: Boolean,
+    /** A small note under the button, for example "Auto updates still work as usual". */
+    val infoDe: String,
+    val infoEn: String,
+) {
+    fun label(german: Boolean): String = pick(german, de, en)
+    fun info(german: Boolean): String = pick(german, infoDe, infoEn)
+}
+
+/** Which installs of the app may see a message. "play" and "sideloaded" are read from the installer of the app. */
+enum class InstallSource { SIDELOADED, PLAY }
+
+/** What this app is, for choosing the messages meant for it. */
+data class NoticeAudience(val platform: String = "android", val installSource: InstallSource = InstallSource.SIDELOADED)
+
+/**
+ * The part of a message that makes it a sheet from the bottom: a title, a picture, a look, who sees it and the
+ * buttons. A message without one is shown as a plain sheet with the text and an OK button.
+ */
+data class NoticeSheet(
+    val titleDe: String,
+    val titleEn: String,
+    val image: NoticeImage?,
+    val style: NoticeSheetStyle,
+    /** False: no swiping away, no tapping outside; a button has to close it. */
+    val dismissible: Boolean,
+    /** "all", "android" or "desktop". */
+    val platform: String,
+    /** "any", "sideloaded" or "play". */
+    val installSource: String,
+    val buttons: List<NoticeButton>,
+) {
+    fun title(german: Boolean): String = pick(german, titleDe, titleEn)
+
+    val hasTitle: Boolean get() = titleDe.isNotBlank() || titleEn.isNotBlank()
+
+    /** True when this app (the platform and where it was installed from) is meant to see it. */
+    fun isFor(audience: NoticeAudience): Boolean {
+        val platformOk = platform == "all" || platform.equals(audience.platform, ignoreCase = true)
+        val sourceOk = when (installSource) {
+            "sideloaded" -> audience.installSource == InstallSource.SIDELOADED
+            "play" -> audience.installSource == InstallSource.PLAY
+            else -> true
+        }
+        return platformOk && sourceOk
+    }
+}
+
+private fun pick(german: Boolean, de: String, en: String): String {
+    val preferred = if (german) de else en
+    val fallback = if (german) en else de
+    return preferred.ifBlank { fallback }
+}
+
 /**
  * A short message from the developer, for example "WebUntis is down". [de] and [en] may be blank,
- * but not both.
+ * but not both, unless the [sheet] has a title.
  */
 data class ServerMessage(
     val id: String,
@@ -29,13 +126,11 @@ data class ServerMessage(
     val en: String,
     /** When the message stops being shown, in epoch milliseconds; null for never. */
     val untilMillis: Long?,
+    /** The sheet part (title, picture, buttons, audience); null for a plain message. */
+    val sheet: NoticeSheet? = null,
 ) {
     /** The text in the app's language, or the other one when that is blank. */
-    fun textFor(german: Boolean): String {
-        val preferred = if (german) de else en
-        val fallback = if (german) en else de
-        return preferred.ifBlank { fallback }
-    }
+    fun textFor(german: Boolean): String = pick(german, de, en)
 }
 
 /**
@@ -69,7 +164,6 @@ data class RemoteSwitches(
 /** The ids of single app features the server can turn off. The app checks each one where it starts. */
 object RemoteFeatures {
     const val MESSAGES_SEND = "messages.send"
-    const val SUPPORT_POPUP = "support.popup"
     const val REMINDERS = "reminders"
     const val ASSISTANT = "assistant"
 }
@@ -115,7 +209,8 @@ object ServerStatusJson {
         val id = obj.string("id") ?: return null
         val de = obj.string("de").orEmpty()
         val en = obj.string("en").orEmpty()
-        if (de.isBlank() && en.isBlank()) return null
+        val sheet = (obj.get("sheet") as? JsonObject)?.let { sheetFrom(it) }
+        if (de.isBlank() && en.isBlank() && sheet?.hasTitle != true) return null
         val until = obj.string("until")?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
         return ServerMessage(
             id = id,
@@ -123,6 +218,51 @@ object ServerStatusJson {
             de = de,
             en = en,
             untilMillis = until,
+            sheet = sheet,
+        )
+    }
+
+    /** Reads the sheet part. Tolerant: unknown values fall back to plain defaults, a button without a label is skipped. */
+    private fun sheetFrom(obj: JsonObject): NoticeSheet {
+        val image = (obj.get("image") as? JsonObject)?.let { image ->
+            val kind = image.string("kind")
+            val value = image.string("value")
+            if ((kind == "preset" || kind == "upload") && value != null) {
+                NoticeImage(
+                    kind = kind,
+                    value = value,
+                    shape = if (image.string("shape").equals("banner", ignoreCase = true)) NoticeImageShape.BANNER else NoticeImageShape.ICON,
+                )
+            } else {
+                null
+            }
+        }
+        val buttons = obj.array("buttons").mapNotNull { element ->
+            val button = element as? JsonObject ?: return@mapNotNull null
+            val de = button.string("de").orEmpty()
+            val en = button.string("en").orEmpty()
+            if (de.isBlank() && en.isBlank()) return@mapNotNull null
+            // Only an https address ever opens; anything else just closes the sheet.
+            val url = button.string("url")?.takeIf { button.string("action") == "url" && it.startsWith("https://") }
+            NoticeButton(
+                de = de,
+                en = en,
+                url = url,
+                style = NoticeButtonStyle.of(button.string("style")),
+                closes = button.get("closes")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean ?: true,
+                infoDe = button.string("infoDe").orEmpty(),
+                infoEn = button.string("infoEn").orEmpty(),
+            )
+        }
+        return NoticeSheet(
+            titleDe = obj.string("titleDe").orEmpty(),
+            titleEn = obj.string("titleEn").orEmpty(),
+            image = image,
+            style = NoticeSheetStyle.of(obj.string("style")),
+            dismissible = obj.get("dismissible")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean ?: true,
+            platform = obj.string("platform") ?: "all",
+            installSource = obj.string("installSource") ?: "any",
+            buttons = buttons,
         )
     }
 
@@ -153,8 +293,18 @@ object UpdateGate {
 
 /** Chooses the messages to show: not dismissed, not over, the most serious first. */
 object MessageFilter {
-    fun pending(messages: List<ServerMessage>, dismissed: Set<String>, now: Long): List<ServerMessage> =
+    /**
+     * [audience] (what this app is) leaves out messages meant for another platform or another way of installing.
+     * Without it nothing is left out for that reason.
+     */
+    fun pending(
+        messages: List<ServerMessage>,
+        dismissed: Set<String>,
+        now: Long,
+        audience: NoticeAudience? = null,
+    ): List<ServerMessage> =
         messages
             .filter { it.id !in dismissed && (it.untilMillis == null || it.untilMillis > now) }
+            .filter { audience == null || it.sheet?.isFor(audience) != false }
             .sortedByDescending { it.level.ordinal }
 }

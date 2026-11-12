@@ -315,6 +315,16 @@ class UntisApi(
         return answer.asJsonObjectOrNull()?.intOrNull("numberOfRecipients") ?: 0
     }
 
+    /**
+     * Who this WebUntis account is for the school's own system: the school and the user id from the claims of a
+     * fresh token (see [TokenIdentity]). Nothing but `getAuthToken` is asked, and the token is not kept.
+     */
+    suspend fun fetchIdentity(session: UntisSession): UntisIdentity {
+        val safeServer = normalizeInputs(session.server, session.school, session.username)
+        return TokenIdentity.parse(restToken(session, safeServer))
+            ?: throw UntisParseException("The school's token does not say who this account is.")
+    }
+
     /** A short-lived token for the message REST API; `getAuthToken` hands it out for the mobile key. */
     private suspend fun restToken(session: UntisSession, safeServer: String): String {
         if (session.secret.isBlank()) throw UntisAuthException("The WebUntis key is missing.")

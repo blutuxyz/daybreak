@@ -49,6 +49,9 @@ interface AssistantData {
 
     /** False while the developer switched writing messages off (RemoteFeatures.MESSAGES_SEND). */
     val canSendMessages: Boolean
+
+    /** False while the student's plan does not include message drafts (Pro). */
+    val draftsInPlan: Boolean get() = true
 }
 
 /** A message the model drafted. Nothing is sent until the student confirms it in the chat. */
@@ -383,6 +386,7 @@ class AssistantToolRunner(
     }
 
     private suspend fun teachers(): ToolOutcome {
+        if (!data.draftsInPlan) return ToolOutcome.Result(PLAN_DRAFTS)
         if (!data.canSendMessages) return ToolOutcome.Result("Writing messages is switched off in this app right now.")
         val people = data.teachers().filter { it.group != RecipientGroup.OTHER }
         if (people.isEmpty()) return ToolOutcome.Result("The school lets this student write to no teacher.")
@@ -398,6 +402,7 @@ class AssistantToolRunner(
     }
 
     private suspend fun draft(callId: String, args: JsonObject): ToolOutcome {
+        if (!data.draftsInPlan) return ToolOutcome.Result(PLAN_DRAFTS)
         if (!data.canSendMessages) return ToolOutcome.Result("Writing messages is switched off in this app right now. Nothing was sent.")
         val userId = args.long("recipient_user_id") ?: return ToolOutcome.Result("Error: recipient_user_id is missing. Call list_teachers first.")
         val subject = args.string("subject")?.trim().orEmpty()
@@ -427,6 +432,7 @@ class AssistantToolRunner(
     }
 
     companion object {
+        private const val PLAN_DRAFTS = "Message drafts are part of the Pro plan, which this student does not have. Tell them so in one sentence and do not try again. Nothing was sent."
         private const val MAX_DAYS = 31L
 
         /** Ranges up to this many days get the class register topics (they cost one more request). */

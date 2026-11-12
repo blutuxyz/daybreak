@@ -87,30 +87,46 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bdersolutions.daybreak.AppContainer
+import com.bdersolutions.daybreak.BuildConfig
 import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.legal.TermsAcceptance
+import com.bdersolutions.daybreak.data.notices.InstallSource
 import com.bdersolutions.daybreak.data.notices.RemoteFeatures
 import com.bdersolutions.daybreak.data.notices.RemoteSwitches
 import com.bdersolutions.daybreak.data.notices.UpdateGate
-import com.bdersolutions.daybreak.ui.notices.ServerMessageDialog
+import com.bdersolutions.daybreak.data.assistant.DawnNotice
+import com.bdersolutions.daybreak.data.permissions.PermissionIntro
+import com.bdersolutions.daybreak.ui.notices.ServerMessageSheet
+import com.bdersolutions.daybreak.ui.notices.installSourceOf
+import com.bdersolutions.daybreak.ui.permissions.PermissionsIntroScreen
 import com.bdersolutions.daybreak.ui.update.UpdateRequiredRoute
 import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.branding.AppNaming
-import com.bdersolutions.daybreak.data.support.PaymentCheck
-import com.bdersolutions.daybreak.data.support.SupportPromptPolicy
-import com.bdersolutions.daybreak.ui.support.SupportSheet
-import com.bdersolutions.daybreak.ui.support.openSupportPage
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.data.account.TrialOfferPolicy
+import com.bdersolutions.daybreak.ui.account.LinkAccountScreen
+import com.bdersolutions.daybreak.ui.account.DaybreakAccountScreen
+import com.bdersolutions.daybreak.ui.account.DaybreakAccountViewModel
+import com.bdersolutions.daybreak.ui.account.LocalAccess
+import com.bdersolutions.daybreak.ui.account.LocalPlanPrices
+import com.bdersolutions.daybreak.ui.account.LocalPlans
+import com.bdersolutions.daybreak.ui.account.PlansLauncher
+import com.bdersolutions.daybreak.ui.account.PlansSheet
+import com.bdersolutions.daybreak.ui.account.TrialOfferSheet
+import com.bdersolutions.daybreak.ui.update.UpdateAvailableHost
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.CompositionLocalProvider
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
+import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.ui.absences.AbsencesScreen
 import com.bdersolutions.daybreak.ui.absences.AbsencesViewModel
 import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
+import com.bdersolutions.daybreak.ui.legal.LocalLegalText
 import com.bdersolutions.daybreak.ui.legal.TermsGateScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
@@ -119,9 +135,9 @@ import com.bdersolutions.daybreak.ui.account.AccountViewModel
 import com.bdersolutions.daybreak.ui.messages.MessagesScreen
 import com.bdersolutions.daybreak.ui.messages.MessagesViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsPage
+import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingScreen
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingViewModel
-import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
 import com.bdersolutions.daybreak.ui.settings.SettingsPageHost
 import com.bdersolutions.daybreak.ui.settings.SettingsScreen
 import com.bdersolutions.daybreak.ui.settings.SettingsViewModel
@@ -139,9 +155,11 @@ import java.util.Locale
 
 /**
  * What the app shows, in order: the terms first, then the update gate, then the introduction (once, for
- * everyone, also for users who were already signed in), then the app itself.
+ * everyone, also for users who were already signed in), then the required Daybreak account (after the WebUntis
+ * login, for everyone who has none or whose login is not linked yet), then the app itself. The full-screen
+ * "new version" page and the "Daybreak AI is now Dawn" page come on top of the app.
  */
-private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, APP }
+private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, PERMISSIONS, LINK_ACCOUNT, APP }
 
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
@@ -155,11 +173,18 @@ fun DaybreakApp(
     startMode: Int? = null,
     openSearch: Boolean = false,
 ) {
-    val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
+    val storedSettings by container.settingsRepository.settings.collectAsStateWithLifecycle()
+    // What the plan allows. Locked looks (accent palettes, AMOLED black) fall back to the free ones.
+    val access by container.access.collectAsStateWithLifecycle()
+    val settings = remember(storedSettings, access) { access.apply(storedSettings) }
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
-    val termsAccepted = TermsAcceptance.covers(acceptedVersion)
-    val supportPaid by container.supportStore.paid.collectAsStateWithLifecycle()
-    val appTitle = AppNaming.resolve(supportPaid, settings.appNamePreset, settings.customAppName)
+    // The text shown and accepted: the server's copy when it is at least as new as the shipped one, else the shipped copy.
+    val appLanguageCode = if (currentAppLanguage() == AppLanguage.GERMAN) "de" else "en"
+    remember(appLanguageCode) { container.legalTexts.setLanguage(appLanguageCode) }
+    val legal by container.legalTexts.current.collectAsStateWithLifecycle()
+    val planPrices by container.planPrices.current.collectAsStateWithLifecycle()
+    val termsAccepted = TermsAcceptance.covers(acceptedVersion, legal.version)
+    val appTitle = AppNaming.resolve(access.allows(Entitlement.APP_NAME), settings.appNamePreset, settings.customAppName)
     // The minimum version comes from the last answer of the update server, so it also holds offline.
     val serverStatus by container.serverNotices.status.collectAsStateWithLifecycle()
     // The developer's switches (see RemoteSwitches): each one can turn a part of the app off remotely.
@@ -170,10 +195,44 @@ fun DaybreakApp(
         switches = remote,
     )
     val tutorialVersion by container.tutorialStore.completedVersion.collectAsStateWithLifecycle()
+    // Every phone needs a Daybreak account, and the WebUntis login that is signed in is linked to it. The page
+    // waits for the WebUntis login (so it can connect it) and cannot be put off.
+    val session by container.sessionStore.session.collectAsStateWithLifecycle()
+    val account by container.accountManager.snapshot.collectAsStateWithLifecycle()
+    val sessionKey = session?.let { "${it.server}|${it.school}|${it.studentId}" }
+    // After the page says it is done, this run does not ask again; the stored marker covers the next starts.
+    var linkPassed by remember(sessionKey) { mutableStateOf(false) }
+    // Signing out of the Daybreak account makes it required again straight away, not only at the next start.
+    LaunchedEffect(account.signedIn) {
+        if (!account.signedIn) linkPassed = false
+    }
+    val linkKnown = account.signedIn && sessionKey != null && container.accountPrefs.isLinked(sessionKey)
+    val needsAccountLink = container.accountAvailable && session != null && !linkKnown && !linkPassed
+    // The permissions are asked once, at the first launch, before anything else (see PermissionsIntroScreen).
+    val permissionContext = LocalContext.current
+    var permissionSteps by remember {
+        mutableStateOf(
+            if (container.permissionIntroStore.isDone()) {
+                emptyList()
+            } else {
+                PermissionIntro.neededSteps(
+                    notificationsAllowed = Build.VERSION.SDK_INT < 33 ||
+                        ContextCompat.checkSelfPermission(permissionContext, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED,
+                    needsNotificationPermission = Build.VERSION.SDK_INT >= 33,
+                    sideloaded = installSourceOf(permissionContext) == InstallSource.SIDELOADED,
+                    updatesConfigured = container.updateManager.isConfigured,
+                    canInstallUnknownApps = container.updateManager.installer.canInstall(),
+                ).also { if (it.isEmpty()) container.permissionIntroStore.markDone() }
+            },
+        )
+    }
     val stage = when {
         !termsAccepted -> AppStage.TERMS
         updateRequired -> AppStage.UPDATE_REQUIRED
         !TutorialProgress.isDone(tutorialVersion) -> AppStage.TUTORIAL
+        permissionSteps.isNotEmpty() -> AppStage.PERMISSIONS
+        needsAccountLink -> AppStage.LINK_ACCOUNT
         else -> AppStage.APP
     }
 
@@ -192,14 +251,17 @@ fun DaybreakApp(
     CompositionLocalProvider(
         LocalHaptics provides container.haptics,
         LocalAppTitle provides appTitle,
+        LocalAccess provides access,
+        LocalLegalText provides legal,
+        LocalPlanPrices provides planPrices,
     ) {
         DaybreakTheme(settings = settings) {
             // Nothing of the app runs behind the gates: no login screen, no sync prompts, no update check.
             Crossfade(targetState = stage, label = "appStage") { current ->
                 when (current) {
                     AppStage.TERMS -> TermsGateScreen(
-                        isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
-                        onAccept = { container.termsStore.accept() },
+                        isUpdate = TermsAcceptance.isUpdate(acceptedVersion, legal.version),
+                        onAccept = { container.termsStore.accept(legal.version) },
                         onLanguageChange = { language ->
                             container.settingsRepository.setLanguage(language)
                             container.lessonNotificationManager.ensureChannel()
@@ -218,9 +280,30 @@ fun DaybreakApp(
                         settingsRepository = container.settingsRepository,
                         onFinish = {
                             container.tutorialStore.complete()
-                            // New users meet the new name in the introduction, so the notice is not needed for them.
-                            container.dawnIntroStore.markShown()
+                            // New installs meet the new name in the introduction, so they do not need the notice.
+                            // Everyone who had the app before (an updated install) still gets it.
+                            val info = permissionContext.packageManager.getPackageInfo(permissionContext.packageName, 0)
+                            val fresh = DawnNotice.isFreshInstall(info.firstInstallTime, info.lastUpdateTime) && !container.sessionStore.isLoggedIn()
+                            if (fresh) container.dawnIntroStore.markShown()
                         },
+                    )
+
+                    AppStage.PERMISSIONS -> PermissionsIntroScreen(
+                        steps = permissionSteps,
+                        canInstallUnknownApps = { container.updateManager.installer.canInstall() },
+                        onNotificationAnswered = { granted ->
+                            if (!granted) container.settingsRepository.setNotificationsEnabled(false)
+                        },
+                        onDone = {
+                            container.permissionIntroStore.markDone()
+                            permissionSteps = emptyList()
+                        },
+                    )
+
+                    AppStage.LINK_ACCOUNT -> LinkAccountScreen(
+                        session = session!!,
+                        viewModel = viewModel(factory = DaybreakAccountViewModel.Factory(container)),
+                        onDone = { linkPassed = true },
                     )
 
                     AppStage.APP -> DaybreakRoot(
@@ -232,7 +315,17 @@ fun DaybreakApp(
                     )
                 }
             }
-            if (stage == AppStage.APP && remote.messages) ServerMessageDialog(notices = container.serverNotices)
+            // A message waits while the "new version" page is up, so the two never cover each other.
+            val updateShowing by container.updatePageVisible.collectAsStateWithLifecycle()
+            if (stage == AppStage.APP && remote.messages && !updateShowing) ServerMessageSheet(notices = container.serverNotices)
+            // "A new version is available. Download it?" over the whole app, on every launch and every check.
+            val updatePageEnabled = stage == AppStage.APP && remote.updates
+            UpdateAvailableHost(
+                manager = container.updateManager,
+                enabled = updatePageEnabled,
+                checkAtLaunch = settings.autoCheckUpdates,
+                onVisibleChange = { container.updatePageVisible.value = it },
+            )
         }
     }
 }
@@ -317,48 +410,33 @@ private fun LoggedInContent(
     val haptics = LocalHaptics.current
     val settings by container.settingsRepository.settings.collectAsStateWithLifecycle()
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (!granted) {
-            container.settingsRepository.setNotificationsEnabled(false)
-        }
-    }
+    // The full-screen "new version" page is on top while it shows; the pop-ups below wait for it.
+    val updatePageVisible by container.updatePageVisible.collectAsStateWithLifecycle()
 
-    // After an update, show what changed; and look for a new version when it is time to.
-    var whatsNew by remember { mutableStateOf<ReleaseInfo?>(null) }
-    LaunchedEffect(Unit) {
-        val updates = container.updateManager
-        if (!updates.isConfigured || !container.serverNotices.switches.updates) return@LaunchedEffect
-        whatsNew = updates.whatsNew()
-        if (settings.autoCheckUpdates && updates.isCheckDue(settings.updateCheckHours)) updates.check()
+    // The Daybreak account: the plan (what is locked), the plans sheet, and the thank-you offer for people
+    // who paid through Ko-fi before 2.0 (three months of Pro).
+    val accountViewModel: DaybreakAccountViewModel = viewModel(factory = DaybreakAccountViewModel.Factory(container))
+    val account by accountViewModel.snapshot.collectAsStateWithLifecycle()
+    val accountFlow by accountViewModel.state.collectAsStateWithLifecycle()
+    var plansFor by remember { mutableStateOf<PlansRequest?>(null) }
+    val plansLauncher = remember { PlansLauncher { feature -> plansFor = PlansRequest(feature) } }
+    var trialDismissedAt by remember { mutableStateOf(container.accountPrefs.trialDismissedAt) }
+    val trialPrompt = TrialOfferPolicy.prompt(
+        offered = account.state?.proTrial?.offered == true,
+        dismissedAtMillis = trialDismissedAt,
+        nowMillis = System.currentTimeMillis(),
+    )
+    var trialSheetOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) { accountViewModel.refresh() }
+    LaunchedEffect(accountFlow.trialStarted) {
+        if (accountFlow.trialStarted) haptics.perform(HapticEvent.UPDATE_READY)
     }
-
-    // A rare, friendly request to support Daybreak on Ko-fi (see SupportPromptPolicy). It waits a few
-    // seconds so it never covers the timetable on opening, and never appears with the update notes.
-    var showSupport by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(session.studentId) {
-        val today = LocalDate.now().toEpochDay()
-        val state = container.supportStore.recordOpen(today)
-        val popupAllowed = container.serverNotices.featureOn(RemoteFeatures.SUPPORT_POPUP)
-        if (popupAllowed && SupportPromptPolicy.shouldShow(state, today)) {
-            delay(5_000)
-            if (whatsNew == null) {
-                container.supportStore.markShown(today)
-                showSupport = true
-            }
-        }
-    }
-
-    LaunchedEffect(session.studentId) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            container.settingsRepository.current().notificationsEnabled &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    val dismissTrial = {
+        trialSheetOpen = false
+        if (container.accountPrefs.trialDismissedAt == null) {
+            val now = System.currentTimeMillis()
+            container.accountPrefs.trialDismissedAt = now
+            trialDismissedAt = now
         }
     }
 
@@ -372,12 +450,21 @@ private fun LoggedInContent(
         scope.launch { assistantOffered = container.assistantApi?.models() != null }
     }
     val assistantShown = assistantOffered && container.serverNotices.featureOn(RemoteFeatures.ASSISTANT)
-    // The one-time notice "Daylight AI is now Dawn" for people who already used the app.
-    var showDawnIntro by remember { mutableStateOf(!container.dawnIntroStore.shown()) }
+    // The one-time full-screen page "Daybreak AI is now Dawn" for people who already used the app.
+    var showDawnIntro by remember { mutableStateOf(container.dawnIntroStore.needsNotice()) }
     val openAssistant: (() -> Unit)? = if (assistantShown) {
         { destination = Destination.Main(MainPage.ASSISTANT) }
     } else {
         null
+    }
+
+    // The thank-you popup comes up once, when nothing else is covering the app (and not under the Dawn page).
+    val dawnPageUp = showDawnIntro && assistantShown
+    LaunchedEffect(trialPrompt, dawnPageUp, updatePageVisible) {
+        if (trialPrompt == TrialOfferPolicy.Prompt.POPUP && !dawnPageUp && !updatePageVisible && !trialSheetOpen) {
+            delay(1_500)
+            trialSheetOpen = true
+        }
     }
 
     val timetableViewModel: TimetableViewModel = viewModel(
@@ -403,6 +490,7 @@ private fun LoggedInContent(
         if (selectedTab != MainTab.TIMETABLE) selectedTab = MainTab.TIMETABLE
         destination = null
     }
+    CompositionLocalProvider(LocalPlans provides plansLauncher) {
     Box(modifier = Modifier.fillMaxSize()) {
       PushHost(
         page = destination,
@@ -492,6 +580,11 @@ private fun LoggedInContent(
                         onOpenDebug = { destination = Destination.Debug },
                         onOpenPage = { destination = Destination.Settings(it) },
                         onOpenAccount = { destination = Destination.Main(MainPage.ACCOUNT) },
+                        onOpenDaybreakAccount = { destination = Destination.Main(MainPage.DAYBREAK_ACCOUNT) },
+                        showTrialBanner = trialPrompt == TrialOfferPolicy.Prompt.BANNER,
+                        trialBusy = accountFlow.busy,
+                        trialError = accountFlow.error,
+                        onAcceptTrial = accountViewModel::acceptTrial,
                         onOpenMessages = { destination = Destination.Main(MainPage.MESSAGES) },
                         onOpenAssistant = openAssistant,
                         onOpenTutorial = { destination = Destination.Tutorial },
@@ -538,6 +631,21 @@ private fun LoggedInContent(
                     onBack = closePage,
                 )
 
+                MainPage.DAYBREAK_ACCOUNT -> DaybreakAccountScreen(
+                    session = session,
+                    viewModel = accountViewModel,
+                    onBack = closePage,
+                    onOpenPlans = { plansFor = PlansRequest(null) },
+                    onManageSubscription = {
+                        scope.launch {
+                            when (val result = container.accountManager.portalUrl()) {
+                                is com.bdersolutions.daybreak.data.account.ApiResult.Ok -> com.bdersolutions.daybreak.ui.account.openUrl(context, result.value)
+                                is com.bdersolutions.daybreak.data.account.ApiResult.Fail -> plansFor = PlansRequest(null)
+                            }
+                        }
+                    },
+                )
+
                 MainPage.ASSISTANT -> AssistantScreen(
                     viewModel = viewModel(
                         key = "assistant_${session.studentId}",
@@ -558,38 +666,33 @@ private fun LoggedInContent(
         }
       }
 
-        if (showSupport) {
-            val supportApi = container.supportApi
-            SupportSheet(
-                // Hiding the popup is paid where there is a server to confirm it (see SupportSheet).
-                unlockCode = remember { supportApi?.let { container.supportStore.unlockCode() } },
-                onSupport = {
-                    // Going to Ko-fi does not hide the popup: only a confirmed payment does.
-                    showSupport = false
-                    openSupportPage(context)
+        plansFor?.let { request ->
+            PlansSheet(
+                feature = request.feature,
+                access = account.access,
+                signedIn = account.signedIn,
+                plansPageUrl = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { "$it/subscribe" },
+                onCheckout = { plan -> container.accountManager.checkoutUrl(plan) },
+                onPortal = { container.accountManager.portalUrl() },
+                onOpenAccount = {
+                    plansFor = null
+                    destination = Destination.Main(MainPage.DAYBREAK_ACCOUNT)
                 },
-                onLater = { showSupport = false },
-                onNever = {
-                    container.supportStore.optOut()
-                    showSupport = false
-                },
-                onCheckPayment = {
-                    supportApi?.check(container.supportStore.unlockCode()) ?: PaymentCheck.UNAVAILABLE
-                },
-                onPaid = { container.supportStore.markPaid() },
+                onDismiss = { plansFor = null },
             )
         }
 
-        whatsNew?.let { release ->
-            WhatsNewSheet(
-                release = release,
-                onDismiss = {
-                    container.updateManager.markWhatsNewSeen()
-                    whatsNew = null
-                },
+        if (trialSheetOpen && !updatePageVisible) {
+            TrialOfferSheet(
+                busy = accountFlow.busy,
+                error = accountFlow.error,
+                started = accountFlow.trialStarted,
+                onAccept = accountViewModel::acceptTrial,
+                onLater = dismissTrial,
             )
         }
-        if (showDawnIntro && assistantShown) {
+
+        if (showDawnIntro && assistantShown && !updatePageVisible) {
             DawnIntroOverlay(
                 onTry = {
                     container.dawnIntroStore.markShown()
@@ -603,10 +706,14 @@ private fun LoggedInContent(
             )
         }
     }
+    }
 }
 
 /** Pages that are not settings but open over the tabs the same way. */
-private enum class MainPage { UPCOMING, ACCOUNT, MESSAGES, ASSISTANT }
+private enum class MainPage { UPCOMING, ACCOUNT, DAYBREAK_ACCOUNT, MESSAGES, ASSISTANT }
+
+/** A locked feature the person tapped (null: just the plans), for the plans sheet. */
+private data class PlansRequest(val feature: Entitlement?)
 
 /** A full-screen page pushed over the tabs. */
 private sealed interface Destination {

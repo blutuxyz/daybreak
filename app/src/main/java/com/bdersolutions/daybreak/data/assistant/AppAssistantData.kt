@@ -28,6 +28,7 @@ class AppAssistantData(
     private val history: AbsenceLessonHistory,
     private val schoolData: SchoolDataRepository,
     private val serverNotices: ServerNotices,
+    private val planAllowsDrafts: () -> Boolean = { true },
 ) : AssistantData {
     override suspend fun lessons(from: LocalDate, to: LocalDate): List<UntisLesson>? {
         val loaded = history.lessons(from, to)
@@ -88,6 +89,9 @@ class AppAssistantData(
 
     override val canSendMessages: Boolean
         get() = serverNotices.featureOn(RemoteFeatures.MESSAGES_SEND)
+
+    override val draftsInPlan: Boolean
+        get() = planAllowsDrafts()
 }
 
 /**

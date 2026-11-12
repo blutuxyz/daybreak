@@ -147,11 +147,22 @@ import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.draw.alpha
 import com.bdersolutions.daybreak.ui.components.LocalAppTitle
-import com.bdersolutions.daybreak.ui.support.HideSupportButtonSheet
-import com.bdersolutions.daybreak.ui.support.KofiButton
-import com.bdersolutions.daybreak.ui.support.openSupportPage
+import com.bdersolutions.daybreak.data.account.AccountError
+import com.bdersolutions.daybreak.data.account.Entitlement
+import com.bdersolutions.daybreak.ui.account.LocalPlans
+import com.bdersolutions.daybreak.ui.account.LockIcon
+import com.bdersolutions.daybreak.ui.account.TrialBanner
+import com.bdersolutions.daybreak.ui.account.allowed
+import com.bdersolutions.daybreak.ui.account.label
+import com.bdersolutions.daybreak.ui.account.lockedAlpha
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import com.bdersolutions.daybreak.ui.theme.accentSwatchColors
 import com.bdersolutions.daybreak.ui.theme.resolveDarkTheme
 import com.bdersolutions.daybreak.ui.toUserMessage
@@ -168,7 +179,12 @@ fun SettingsScreen(
     onOpenDebug: () -> Unit,
     onOpenPage: (SettingsPage) -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenDaybreakAccount: () -> Unit,
     onOpenMessages: () -> Unit,
+    showTrialBanner: Boolean = false,
+    trialBusy: Boolean = false,
+    trialError: AccountError? = null,
+    onAcceptTrial: () -> Unit = {},
     onOpenAssistant: (() -> Unit)? = null,
     onOpenTutorial: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -186,9 +202,8 @@ fun SettingsScreen(
     }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var confirmingLogout by remember { mutableStateOf(false) }
-    val supportPaid by viewModel.supportPaid.collectAsStateWithLifecycle()
-    // The note shown in the support sheet; null while the sheet is closed.
-    var supportSheetNote by rememberSaveable { mutableStateOf<Int?>(null) }
+    val plans = LocalPlans.current
+    val access by viewModel.access.collectAsStateWithLifecycle()
     val appTitle = LocalAppTitle.current
     val listState = rememberLazyListState()
 
@@ -271,44 +286,38 @@ fun SettingsScreen(
                     username = session?.username.orEmpty(),
                 )
             }
-            // The Ko-fi button goes away once a payment is confirmed. "Hide this button" opens the
-            // sheet where that payment is made and checked.
-            if (!supportPaid) {
-                item {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        KofiButton(onClick = { openSupportPage(context) })
-                        if (viewModel.canHideSupportButton) {
-                            TextButton(onClick = { supportSheetNote = R.string.settings_support_hide_note }) {
-                                Text(
-                                    text = stringResource(R.string.settings_support_hide),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
+            // The thank-you offer for old Ko-fi supporters stays pinned here for two weeks after the popup was dismissed.
+            item(key = "trialBanner") {
+                AnimatedVisibility(
+                    visible = showTrialBanner,
+                    enter = fadeIn() + expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                    exit = fadeOut() + shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                ) {
+                    TrialBanner(busy = trialBusy, error = trialError, onAccept = onAcceptTrial, modifier = Modifier.padding(bottom = 4.dp))
                 }
             }
 
-            // Supporter extras: unlocked after a Ko-fi payment, shown locked before. Without a server
-            // to confirm payments (a build without an update address) they could never unlock, so they
-            // stay hidden there.
-            if (supportPaid || viewModel.canHideSupportButton) {
-                item {
-                    SupporterExtras(
-                        paid = supportPaid,
-                        appTitle = appTitle,
-                        onOpenAppName = { onOpenPage(SettingsPage.APP_NAME) },
-                        onOpenAppIcon = { onOpenPage(SettingsPage.APP_ICON) },
-                        onOpenCalendarExport = { onOpenPage(SettingsPage.CALENDAR_EXPORT) },
-                        onLocked = { supportSheetNote = R.string.settings_extras_locked_note },
-                    )
-                }
+            // The plan extras: unlocked by Plus (and kept for old supporters), shown locked before.
+            item {
+                PlanExtras(
+                    appTitle = appTitle,
+                    onOpenAppName = { onOpenPage(SettingsPage.APP_NAME) },
+                    onOpenAppIcon = { onOpenPage(SettingsPage.APP_ICON) },
+                    onOpenCalendarExport = { onOpenPage(SettingsPage.CALENDAR_EXPORT) },
+                    onLocked = { plans.show(it) },
+                )
             }
 
             item { GroupLabel(stringResource(R.string.more_group_profile)) }
             item {
                 SettingsGroup {
+                    NavigationRow(
+                        icon = Icons.Outlined.WorkspacePremium,
+                        title = stringResource(R.string.v2_account_row),
+                        subtitle = stringResource(R.string.v2_account_row_desc, access.plan.label()),
+                        onClick = onOpenDaybreakAccount,
+                    )
+                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.AccountCircle,
                         title = stringResource(R.string.settings_account),
@@ -391,11 +400,13 @@ fun SettingsScreen(
                         onClick = { onOpenPage(SettingsPage.WIDGET) },
                     )
                     SettingsDivider()
-                    NavigationRow(
+                    LockableNavigationRow(
+                        entitlement = Entitlement.HAPTICS_STUDIO,
                         icon = Icons.Outlined.Vibration,
                         title = stringResource(R.string.settings_haptics),
                         subtitle = hapticsSummary,
                         onClick = { onOpenPage(SettingsPage.HAPTICS) },
+                        onLocked = { plans.show(it) },
                     )
                 }
             }
@@ -422,13 +433,6 @@ fun SettingsScreen(
                         )
                         SettingsDivider()
                     }
-                    NavigationRow(
-                        icon = Icons.Outlined.Favorite,
-                        title = stringResource(R.string.settings_support),
-                        subtitle = stringResource(R.string.settings_support_desc),
-                        onClick = { openSupportPage(context) },
-                    )
-                    SettingsDivider()
                     NavigationRow(
                         icon = Icons.Outlined.School,
                         title = stringResource(R.string.settings_tutorial),
@@ -470,32 +474,23 @@ fun SettingsScreen(
         }
     }
 
-    // Outside the list, so the thank-you stays up after the button above has gone.
-    supportSheetNote?.let { noteRes ->
-        HideSupportButtonSheet(
-            unlockCode = remember { viewModel.supportUnlockCode() },
-            note = stringResource(noteRes),
-            onDismiss = { supportSheetNote = null },
-            onCheckPayment = { viewModel.checkSupportPayment() },
-        )
-    }
 }
 
 /**
- * The supporter extras on the More page, drawn to stand out from the plain settings: a tinted card
- * with a star heading. Paid, each row opens its page and carries a "New" badge. Unpaid, the rows are
- * dimmed with a lock and open the support sheet instead, so nothing in them works.
+ * The plan extras on the More page, drawn to stand out from the plain settings: a tinted card with a star
+ * heading. Where the plan includes an extra, its row opens its page and carries a "New" badge. Where it does
+ * not, the row is dimmed with a lock and opens the plans sheet, so nothing in it works.
  */
 @Composable
-private fun SupporterExtras(
-    paid: Boolean,
+private fun PlanExtras(
     appTitle: String,
     onOpenAppName: () -> Unit,
     onOpenAppIcon: () -> Unit,
     onOpenCalendarExport: () -> Unit,
-    onLocked: () -> Unit,
+    onLocked: (Entitlement) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val anyUnlocked = Entitlement.APP_NAME.allowed() || Entitlement.APP_ICON.allowed() || Entitlement.CALENDAR_EXPORT.allowed()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.padding(start = 8.dp, top = 8.dp),
@@ -509,122 +504,93 @@ private fun SupporterExtras(
             )
             Spacer(Modifier.size(6.dp))
             Text(
-                text = stringResource(R.string.more_group_extras),
+                text = stringResource(R.string.v2_extras_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = scheme.tertiary,
             )
         }
+        val borderAlpha by animateFloatAsState(if (anyUnlocked) 0.7f else 0.35f, label = "extrasBorder")
         Surface(
             shape = MaterialTheme.shapes.large,
             color = scheme.tertiaryContainer.copy(alpha = 0.35f),
-            border = BorderStroke(1.dp, scheme.tertiary.copy(alpha = if (paid) 0.7f else 0.35f)),
+            border = BorderStroke(1.dp, scheme.tertiary.copy(alpha = borderAlpha)),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
-                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
-                    SettingsRow(
-                        icon = Icons.Outlined.DriveFileRenameOutline,
-                        title = stringResource(R.string.settings_app_name),
-                        subtitle = if (paid) {
-                            appTitle
-                        } else {
-                            stringResource(R.string.settings_extras_locked)
-                        },
-                        subtitleMaxLines = 1,
-                        onClick = if (paid) onOpenAppName else onLocked,
-                        trailing = {
-                            if (paid) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    NewBadge()
-                                    Icon(
-                                        Icons.Outlined.ChevronRight,
-                                        contentDescription = null,
-                                        tint = scheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    Icons.Outlined.Lock,
-                                    contentDescription = stringResource(R.string.settings_extras_locked),
-                                    tint = scheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                    )
-                }
+                ExtraRow(
+                    entitlement = Entitlement.APP_NAME,
+                    icon = Icons.Outlined.DriveFileRenameOutline,
+                    title = stringResource(R.string.settings_app_name),
+                    unlockedSubtitle = appTitle,
+                    onOpen = onOpenAppName,
+                    onLocked = onLocked,
+                )
                 HorizontalDivider(
                     modifier = Modifier.padding(start = 66.dp, end = 16.dp),
                     color = scheme.tertiary.copy(alpha = 0.25f),
                 )
-                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
-                    SettingsRow(
-                        icon = Icons.Outlined.Apps,
-                        title = stringResource(R.string.settings_app_icon),
-                        subtitle = if (paid) {
-                            stringResource(R.string.settings_app_icon_desc)
-                        } else {
-                            stringResource(R.string.settings_extras_locked)
-                        },
-                        subtitleMaxLines = 1,
-                        onClick = if (paid) onOpenAppIcon else onLocked,
-                        trailing = {
-                            if (paid) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    NewBadge()
-                                    Icon(
-                                        Icons.Outlined.ChevronRight,
-                                        contentDescription = null,
-                                        tint = scheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    Icons.Outlined.Lock,
-                                    contentDescription = stringResource(R.string.settings_extras_locked),
-                                    tint = scheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                    )
-                }
+                ExtraRow(
+                    entitlement = Entitlement.APP_ICON,
+                    icon = Icons.Outlined.Apps,
+                    title = stringResource(R.string.settings_app_icon),
+                    unlockedSubtitle = stringResource(R.string.settings_app_icon_desc),
+                    onOpen = onOpenAppIcon,
+                    onLocked = onLocked,
+                )
                 HorizontalDivider(
                     modifier = Modifier.padding(start = 66.dp, end = 16.dp),
                     color = scheme.tertiary.copy(alpha = 0.25f),
                 )
-                Box(modifier = Modifier.alpha(if (paid) 1f else 0.6f)) {
-                    SettingsRow(
-                        icon = Icons.Outlined.Event,
-                        title = stringResource(R.string.settings_calendar_export),
-                        subtitle = if (paid) {
-                            stringResource(R.string.settings_calendar_export_desc)
-                        } else {
-                            stringResource(R.string.settings_extras_locked)
-                        },
-                        subtitleMaxLines = 1,
-                        onClick = if (paid) onOpenCalendarExport else onLocked,
-                        trailing = {
-                            if (paid) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    NewBadge()
-                                    Icon(
-                                        Icons.Outlined.ChevronRight,
-                                        contentDescription = null,
-                                        tint = scheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    Icons.Outlined.Lock,
-                                    contentDescription = stringResource(R.string.settings_extras_locked),
-                                    tint = scheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                    )
-                }
+                ExtraRow(
+                    entitlement = Entitlement.CALENDAR_EXPORT,
+                    icon = Icons.Outlined.Event,
+                    title = stringResource(R.string.settings_calendar_export),
+                    unlockedSubtitle = stringResource(R.string.settings_calendar_export_desc),
+                    onOpen = onOpenCalendarExport,
+                    onLocked = onLocked,
+                )
             }
         }
+    }
+}
+
+/** One row of [PlanExtras]: open when the plan has it, dimmed with a lock (and the plans sheet) when not. */
+@Composable
+private fun ExtraRow(
+    entitlement: Entitlement,
+    icon: ImageVector,
+    title: String,
+    unlockedSubtitle: String,
+    onOpen: () -> Unit,
+    onLocked: (Entitlement) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val allowed = entitlement.allowed()
+    Box(modifier = Modifier.lockedAlpha(!allowed)) {
+        SettingsRow(
+            icon = icon,
+            title = title,
+            subtitle = if (allowed) unlockedSubtitle else stringResource(R.string.v2_locked_plan, entitlement.minPlan.label()),
+            subtitleMaxLines = 1,
+            onClick = if (allowed) onOpen else ({ onLocked(entitlement) }),
+            trailing = {
+                AnimatedContent(targetState = allowed, label = "extraTrailing") { open ->
+                    if (open) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            NewBadge()
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = null,
+                                tint = scheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        LockIcon()
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -778,6 +744,37 @@ private fun LogoutConfirmation(
                 Text(stringResource(R.string.settings_logout_confirm))
             }
         }
+    }
+}
+
+/** A [NavigationRow] for a feature of a plan: dimmed with a lock, and the plans sheet instead of the page, where the plan lacks it. */
+@Composable
+internal fun LockableNavigationRow(
+    entitlement: Entitlement,
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    onLocked: (Entitlement) -> Unit,
+) {
+    val allowed = entitlement.allowed()
+    Box(modifier = Modifier.lockedAlpha(!allowed)) {
+        SettingsRow(
+            icon = icon,
+            title = title,
+            subtitle = if (allowed) subtitle else stringResource(R.string.v2_locked_plan, entitlement.minPlan.label()),
+            subtitleMaxLines = 1,
+            onClick = if (allowed) onClick else ({ onLocked(entitlement) }),
+            trailing = {
+                AnimatedContent(targetState = allowed, label = "lockableTrailing") { open ->
+                    if (open) {
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        LockIcon()
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -936,15 +933,28 @@ internal fun SpringSwitch(
     )
 }
 
+/**
+ * The rounded container of settings rows. [animateSize] is off for groups that animate their own height
+ * (an [AnimatedVisibility] inside), so only one animation drives the size and nothing lags behind.
+ */
 @Composable
-internal fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsGroup(
+    animateSize: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .animateContentSize(
-                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            .then(
+                if (animateSize) {
+                    Modifier.animateContentSize(
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    )
+                } else {
+                    Modifier
+                },
             ),
         content = content,
     )
