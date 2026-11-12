@@ -66,6 +66,12 @@ private class BarTab(val icon: ImageVector, val selectedIcon: ImageVector, val l
 
 private val SlotHeight = 56.dp
 private val SlotPadding = 16.dp
+
+/**
+ * Icons carry 2 to 4 dp of empty space inside their 24 dp box (the dots of "More" far more), so with 16 dp
+ * on both sides the open pill looked pushed to the right. The label gets 4 dp more at its end.
+ */
+private val LabelEndPadding = 20.dp
 private val IconSize = 24.dp
 private val LabelGap = 8.dp
 
@@ -119,13 +125,15 @@ internal fun DaybreakBottomBar(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val collapsedPx = with(density) { SlotHeight.toPx() }
-    val chromePx = with(density) { (SlotPadding * 2 + IconSize + LabelGap).toPx() }
+    val insetPx = with(density) { ((SlotHeight - IconSize) / 2).toPx() }
+    val chromePx = with(density) { (SlotPadding + IconSize + LabelGap + LabelEndPadding).toPx() }
     val expandedPx = FloatArray(tabs.size) { i ->
         chromePx + measurer.measure(tabs[i].label, labelStyle, maxLines = 1, softWrap = false).size.width
     }
     fun frame(width: Float) = pillBarFrame(
         width = width,
         collapsed = collapsedPx,
+        inset = insetPx,
         expanded = expandedPx,
         expansion = FloatArray(tabs.size) { expansion[it].value },
     )
@@ -246,7 +254,7 @@ private fun BarSlot(
             modifier = Modifier
                 .fillMaxHeight()
                 .wrapContentWidth(Alignment.Start, unbounded = true)
-                .padding(horizontal = SlotPadding),
+                .padding(start = SlotPadding, end = LabelEndPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(IconSize)) {
