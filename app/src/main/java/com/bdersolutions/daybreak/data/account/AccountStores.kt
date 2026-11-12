@@ -65,12 +65,6 @@ class AndroidAccountStorage(context: Context, private val vault: SecretVault) : 
         appContext.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }
 
-    /** What a launch before 2.0 left behind, to tell an updated install from a fresh one. */
-    fun hasLegacyTraces(): Boolean {
-        val old = appContext.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
-        return old.contains("first_seen_day") || old.contains("unlock_code") || old.contains("paid")
-    }
-
     // Plain classes for Gson (the shared models have no no-arg constructors).
     private class StoredSlot(val id: String = "", val label: String = "")
 
@@ -114,25 +108,24 @@ class AndroidAccountStorage(context: Context, private val vault: SecretVault) : 
 }
 
 /**
- * What the app remembers around the account flow, in plain values: whether this install is an update from 1.x
- * (decided once, at the first start of 2.0), when the person put the migration off, and when they dismissed the
- * Pro-trial popup (the reminder at the top of More runs two weeks from then, see [TrialOfferPolicy]).
+ * What the app remembers around the account flow, in plain values: which WebUntis logins this phone has linked
+ * to a Daybreak account (linking is required, see `DaybreakApp`) and when the person dismissed the Pro-trial
+ * popup (the reminder at the top of More runs two weeks from then, see [TrialOfferPolicy]).
  */
 class AccountPrefs(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** Decided once: true for an install that has been used before 2.0. */
-    fun isLegacyInstall(detect: () -> Boolean): Boolean {
-        if (preferences.contains(KEY_LEGACY)) return preferences.getBoolean(KEY_LEGACY, false)
-        val value = detect()
-        preferences.edit().putBoolean(KEY_LEGACY, value).apply()
-        return value
-    }
+    /**
+     * Whether the WebUntis login behind [key] was linked to a Daybreak account from this phone. The server
+     * keeps only a hash, so it cannot tell which login a slot belongs to; this phone remembers it.
+     */
+    fun isLinked(key: String): Boolean = preferences.getBoolean(KEY_LINKED + key, false)
 
-    /** Epoch millis until which "Not now" holds the migration page back; 0 when it was not put off. */
-    var migrationDeferredUntil: Long
-        get() = preferences.getLong(KEY_DEFERRED, 0L)
-        set(value) = preferences.edit().putLong(KEY_DEFERRED, value).apply()
+    fun setLinked(key: String, linked: Boolean) {
+        preferences.edit().apply {
+            if (linked) putBoolean(KEY_LINKED + key, true) else remove(KEY_LINKED + key)
+        }.apply()
+    }
 
     var trialDismissedAt: Long?
         get() = preferences.getLong(KEY_TRIAL_DISMISSED, 0L).takeIf { it > 0L }
@@ -142,6 +135,13 @@ class AccountPrefs(context: Context) {
      * The server never says which WebUntis login a slot belongs to (it keeps only a hash), so this phone
      * remembers which slot it bound for which login ([key] is server, school and student id).
      */
+    /** Whether the person has confirmed that the restore code of [accountId] is saved somewhere safe. */
+    fun codeConfirmed(accountId: String): Boolean = preferences.getBoolean(KEY_CODE + accountId, false)
+
+    fun confirmCode(accountId: String) {
+        preferences.edit().putBoolean(KEY_CODE + accountId, true).apply()
+    }
+
     fun slotFor(key: String): String? = preferences.getString(KEY_SLOT + key, null)
 
     fun setSlot(key: String, slotId: String?) {
@@ -150,9 +150,9 @@ class AccountPrefs(context: Context) {
 
     private companion object {
         const val KEY_SLOT = "slot:"
+        const val KEY_CODE = "code_confirmed:"
+        const val KEY_LINKED = "linked:"
         const val PREFS_NAME = "daybreak_account_flow"
-        const val KEY_LEGACY = "legacy_install"
-        const val KEY_DEFERRED = "migration_deferred_until"
         const val KEY_TRIAL_DISMISSED = "trial_dismissed_at"
     }
 }

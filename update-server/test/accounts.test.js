@@ -275,3 +275,27 @@ test('the plans page shows the prices and an https donate link, and nothing else
   assert.ok(de.body.includes('Danke!'));
   assert.ok(!/update-server|stripe-signature/i.test(en.body));
 });
+
+test('deleting an account cancels its subscription first and removes its sign-in, restore code and data', async () => {
+  const fetchImpl = fakeFetch({ 'https://api.stripe.com/v1/subscriptions/sub_1': () => jsonResponse({ status: 'canceled' }) });
+  const { app, accounts } = await setup({ fetchImpl });
+  const { token, accountId, restoreCode } = await create(app);
+  await accounts.setStripe(accountId, { customerId: 'cus_1', subscriptionId: 'sub_1' });
+
+  const response = await call(app, 'DELETE', '/v1/account', { token });
+  assert.equal(response.statusCode, 204);
+  assert.equal(fetchImpl.calls[0].init.method, 'DELETE');
+  assert.equal(await accounts.get(accountId), undefined);
+  assert.equal(await accounts.authenticate(token), undefined);
+  assert.equal((await call(app, 'POST', '/v1/account/restore', { body: { restoreCode } })).statusCode, 404);
+});
+
+test('a failed Stripe cancellation keeps the account', async () => {
+  const fetchImpl = fakeFetch({ 'https://api.stripe.com/v1/subscriptions/sub_2': () => jsonResponse({ error: {} }, { status: 500 }) });
+  const { app, accounts } = await setup({ fetchImpl });
+  const { token, accountId } = await create(app);
+  await accounts.setStripe(accountId, { subscriptionId: 'sub_2' });
+
+  assert.equal((await call(app, 'DELETE', '/v1/account', { token })).statusCode, 502);
+  assert.ok(await accounts.get(accountId));
+});

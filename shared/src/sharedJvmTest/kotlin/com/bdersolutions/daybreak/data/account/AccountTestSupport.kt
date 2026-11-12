@@ -96,6 +96,13 @@ class FakeAccountApi : AccountApi {
         if (hasSubscription) ApiResult.Ok("https://pay.example/portal") else ApiResult.Fail(AccountError.NO_SUBSCRIPTION)
     }
 
+    var deleted = false
+
+    override suspend fun deleteAccount(token: String) = guarded(token) {
+        deleted = true
+        ApiResult.Ok(Unit)
+    }
+
     override suspend fun acceptTrial(token: String) = guarded(token) {
         if (!trialOffered) {
             ApiResult.Fail(AccountError.NOT_OFFERED)

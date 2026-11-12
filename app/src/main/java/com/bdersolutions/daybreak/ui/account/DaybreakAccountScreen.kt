@@ -20,11 +20,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddLink
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bdersolutions.daybreak.R
+import com.bdersolutions.daybreak.data.account.AccountError
 import com.bdersolutions.daybreak.data.account.AccountState
 import com.bdersolutions.daybreak.data.account.Plan
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
@@ -76,6 +79,7 @@ fun DaybreakAccountScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptics = LocalHaptics.current
     var confirmingSignOut by rememberSaveable { mutableStateOf(false) }
+    var confirmingDelete by rememberSaveable { mutableStateOf(false) }
     var binding by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(snapshot.signedIn) {
@@ -124,6 +128,44 @@ fun DaybreakAccountScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
+                    // Accounts made before the code was confirmed at creation (or restored on a device) are asked once.
+                    var codeConfirmed by rememberSaveable(credentials.accountId) {
+                        mutableStateOf(viewModel.codeConfirmed(credentials.accountId))
+                    }
+                    if (code != null && !codeConfirmed) {
+                        Spacer(Modifier.height(12.dp))
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    text = stringResource(R.string.v2_account_unsaved_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = stringResource(R.string.v2_account_unsaved_body),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Button(
+                                    onClick = {
+                                        haptics.perform(HapticEvent.TAP)
+                                        viewModel.confirmCodeSaved()
+                                        codeConfirmed = true
+                                    },
+                                    shape = CircleShape,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(stringResource(R.string.v2_account_unsaved_confirm))
+                                }
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(R.string.v2_account_code_hint),
@@ -158,6 +200,20 @@ fun DaybreakAccountScreen(
                     modifier = Modifier.animateItem(),
                 )
             }
+            item(key = "delete") {
+                AnimatedDeleteAccount(
+                    confirming = confirmingDelete,
+                    error = state.error,
+                    busy = state.busy,
+                    onAsk = { confirmingDelete = true },
+                    onCancel = { confirmingDelete = false },
+                    onConfirm = {
+                        haptics.perform(HapticEvent.TAP)
+                        viewModel.deleteAccount()
+                    },
+                    modifier = Modifier.animateItem(),
+                )
+            }
         }
     }
 
@@ -174,6 +230,8 @@ fun DaybreakAccountScreen(
                         onValueChange = { label = it.take(40) },
                         label = { Text(stringResource(R.string.v2_account_bind_label)) },
                         singleLine = true,
+                        shape = CircleShape,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             },
@@ -341,8 +399,10 @@ private fun AnimatedSignOut(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    SettingsGroup {
-        Column(modifier = modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+    // The confirmation grows the group itself: one height animation, anchored at the row above, so the
+    // panel unrolls downwards instead of the group and the panel fighting over the height.
+    SettingsGroup(animateSize = false) {
+        Column(modifier = modifier) {
             SettingsRow(
                 icon = Icons.AutoMirrored.Outlined.Logout,
                 title = stringResource(R.string.v2_account_signout),
@@ -352,8 +412,10 @@ private fun AnimatedSignOut(
             )
             AnimatedVisibility(
                 visible = confirming,
-                enter = fadeIn() + expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
-                exit = fadeOut() + shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                    expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Top),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                    shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec(), shrinkTowards = Alignment.Top),
             ) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                     Text(
@@ -369,6 +431,66 @@ private fun AnimatedSignOut(
                             Text(stringResource(R.string.v2_account_signout))
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Deleting the account: a second confirmation row under sign-out, with the consequences spelled out. The
+ * account stays if the server refuses or is offline; the error shows under the buttons.
+ */
+@Composable
+private fun AnimatedDeleteAccount(
+    confirming: Boolean,
+    error: AccountError?,
+    busy: Boolean,
+    onAsk: () -> Unit,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SettingsGroup(animateSize = false) {
+        Column(modifier = modifier) {
+            SettingsRow(
+                icon = Icons.Outlined.DeleteOutline,
+                title = stringResource(R.string.v2_account_delete),
+                subtitle = stringResource(R.string.v2_account_delete_desc),
+                onClick = if (confirming) null else onAsk,
+                destructive = true,
+            )
+            AnimatedVisibility(
+                visible = confirming,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                    expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Top),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                    shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec(), shrinkTowards = Alignment.Top),
+            ) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.v2_account_delete_confirm),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onCancel, enabled = !busy, shape = CircleShape, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        Button(
+                            onClick = onConfirm,
+                            enabled = !busy,
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.v2_account_delete_now))
+                        }
+                    }
+                    ErrorLine(error)
                 }
             }
         }

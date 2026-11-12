@@ -99,7 +99,7 @@ import com.bdersolutions.daybreak.data.session.DaybreakSession
 import com.bdersolutions.daybreak.data.branding.AppNaming
 import com.bdersolutions.daybreak.data.account.Entitlement
 import com.bdersolutions.daybreak.data.account.TrialOfferPolicy
-import com.bdersolutions.daybreak.ui.account.AccountMigrationScreen
+import com.bdersolutions.daybreak.ui.account.LinkAccountScreen
 import com.bdersolutions.daybreak.ui.account.DaybreakAccountScreen
 import com.bdersolutions.daybreak.ui.account.DaybreakAccountViewModel
 import com.bdersolutions.daybreak.ui.account.LocalAccess
@@ -113,12 +113,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.CompositionLocalProvider
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.haptics.LocalHaptics
+import com.bdersolutions.daybreak.data.settings.AppLanguage
 import com.bdersolutions.daybreak.data.settings.StartView
 import com.bdersolutions.daybreak.ui.absences.AbsencesScreen
 import com.bdersolutions.daybreak.ui.absences.AbsencesViewModel
 import com.bdersolutions.daybreak.ui.debug.DebugScreen
 import com.bdersolutions.daybreak.ui.debug.DebugViewModel
 import com.bdersolutions.daybreak.ui.login.LoginScreen
+import com.bdersolutions.daybreak.ui.legal.LocalLegalText
 import com.bdersolutions.daybreak.ui.legal.TermsGateScreen
 import com.bdersolutions.daybreak.ui.login.LoginViewModel
 import com.bdersolutions.daybreak.data.update.ReleaseInfo
@@ -127,6 +129,7 @@ import com.bdersolutions.daybreak.ui.account.AccountViewModel
 import com.bdersolutions.daybreak.ui.messages.MessagesScreen
 import com.bdersolutions.daybreak.ui.messages.MessagesViewModel
 import com.bdersolutions.daybreak.ui.settings.SettingsPage
+import com.bdersolutions.daybreak.ui.settings.currentAppLanguage
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingScreen
 import com.bdersolutions.daybreak.ui.upcoming.UpcomingViewModel
 import com.bdersolutions.daybreak.ui.settings.WhatsNewSheet
@@ -147,11 +150,11 @@ import java.util.Locale
 
 /**
  * What the app shows, in order: the terms first, then the update gate, then the introduction (once, for
- * everyone, also for users who were already signed in), then the move to a Daybreak account (once, for installs
- * that were used before 2.0), then the app itself. The full-screen "new version" page and the "Daybreak AI is now
- * Dawn" page come on top of the app.
+ * everyone, also for users who were already signed in), then the required Daybreak account (after the WebUntis
+ * login, for everyone who has none or whose login is not linked yet), then the app itself. The full-screen
+ * "new version" page and the "Daybreak AI is now Dawn" page come on top of the app.
  */
-private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, ACCOUNT, APP }
+private enum class AppStage { TERMS, UPDATE_REQUIRED, TUTORIAL, LINK_ACCOUNT, APP }
 
 /**
  * Entry point of the Compose tree. Settings are observed here so that theme, accent,
@@ -170,7 +173,11 @@ fun DaybreakApp(
     val access by container.access.collectAsStateWithLifecycle()
     val settings = remember(storedSettings, access) { access.apply(storedSettings) }
     val acceptedVersion by container.termsStore.acceptedVersion.collectAsStateWithLifecycle()
-    val termsAccepted = TermsAcceptance.covers(acceptedVersion)
+    // The text shown and accepted: the server's copy when it is at least as new as the shipped one, else the shipped copy.
+    val appLanguageCode = if (currentAppLanguage() == AppLanguage.GERMAN) "de" else "en"
+    remember(appLanguageCode) { container.legalTexts.setLanguage(appLanguageCode) }
+    val legal by container.legalTexts.current.collectAsStateWithLifecycle()
+    val termsAccepted = TermsAcceptance.covers(acceptedVersion, legal.version)
     val appTitle = AppNaming.resolve(access.allows(Entitlement.APP_NAME), settings.appNamePreset, settings.customAppName)
     // The minimum version comes from the last answer of the update server, so it also holds offline.
     val serverStatus by container.serverNotices.status.collectAsStateWithLifecycle()
@@ -182,23 +189,24 @@ fun DaybreakApp(
         switches = remote,
     )
     val tutorialVersion by container.tutorialStore.completedVersion.collectAsStateWithLifecycle()
-    // Installs used before 2.0 are asked once to move to a Daybreak account (decided at the first start of 2.0).
-    val legacyInstall = remember {
-        container.accountPrefs.isLegacyInstall {
-            container.accountStorage.hasLegacyTraces() ||
-                container.sessionStore.isLoggedIn() ||
-                container.tutorialStore.completedVersion.value != TutorialProgress.NONE
-        }
+    // Every phone needs a Daybreak account, and the WebUntis login that is signed in is linked to it. The page
+    // waits for the WebUntis login (so it can connect it) and cannot be put off.
+    val session by container.sessionStore.session.collectAsStateWithLifecycle()
+    val account by container.accountManager.snapshot.collectAsStateWithLifecycle()
+    val sessionKey = session?.let { "${it.server}|${it.school}|${it.studentId}" }
+    // After the page says it is done, this run does not ask again; the stored marker covers the next starts.
+    var linkPassed by remember(sessionKey) { mutableStateOf(false) }
+    // Signing out of the Daybreak account makes it required again straight away, not only at the next start.
+    LaunchedEffect(account.signedIn) {
+        if (!account.signedIn) linkPassed = false
     }
-    var migrationLater by rememberSaveable { mutableStateOf(System.currentTimeMillis() < container.accountPrefs.migrationDeferredUntil) }
-    // The page stays until it says it is done: after "create" it first shows the restore code.
-    var migrationDone by rememberSaveable { mutableStateOf(container.accountManager.snapshot.value.signedIn) }
-    val needsMigration = container.accountAvailable && legacyInstall && !migrationDone && !migrationLater
+    val linkKnown = account.signedIn && sessionKey != null && container.accountPrefs.isLinked(sessionKey)
+    val needsAccountLink = container.accountAvailable && session != null && !linkKnown && !linkPassed
     val stage = when {
         !termsAccepted -> AppStage.TERMS
         updateRequired -> AppStage.UPDATE_REQUIRED
         !TutorialProgress.isDone(tutorialVersion) -> AppStage.TUTORIAL
-        needsMigration -> AppStage.ACCOUNT
+        needsAccountLink -> AppStage.LINK_ACCOUNT
         else -> AppStage.APP
     }
 
@@ -218,14 +226,15 @@ fun DaybreakApp(
         LocalHaptics provides container.haptics,
         LocalAppTitle provides appTitle,
         LocalAccess provides access,
+        LocalLegalText provides legal,
     ) {
         DaybreakTheme(settings = settings) {
             // Nothing of the app runs behind the gates: no login screen, no sync prompts, no update check.
             Crossfade(targetState = stage, label = "appStage") { current ->
                 when (current) {
                     AppStage.TERMS -> TermsGateScreen(
-                        isUpdate = TermsAcceptance.isUpdate(acceptedVersion),
-                        onAccept = { container.termsStore.accept() },
+                        isUpdate = TermsAcceptance.isUpdate(acceptedVersion, legal.version),
+                        onAccept = { container.termsStore.accept(legal.version) },
                         onLanguageChange = { language ->
                             container.settingsRepository.setLanguage(language)
                             container.lessonNotificationManager.ensureChannel()
@@ -249,13 +258,10 @@ fun DaybreakApp(
                         },
                     )
 
-                    AppStage.ACCOUNT -> AccountMigrationScreen(
+                    AppStage.LINK_ACCOUNT -> LinkAccountScreen(
+                        session = session!!,
                         viewModel = viewModel(factory = DaybreakAccountViewModel.Factory(container)),
-                        onDone = { migrationDone = true },
-                        onLater = {
-                            container.accountPrefs.migrationDeferredUntil = System.currentTimeMillis() + MIGRATION_DEFER_MS
-                            migrationLater = true
-                        },
+                        onDone = { linkPassed = true },
                     )
 
                     AppStage.APP -> DaybreakRoot(
@@ -696,9 +702,6 @@ private fun LoggedInContent(
     }
     }
 }
-
-/** How long "Not now" holds the account page back. */
-private const val MIGRATION_DEFER_MS = 3L * 24 * 60 * 60 * 1000
 
 /** Pages that are not settings but open over the tabs the same way. */
 private enum class MainPage { UPCOMING, ACCOUNT, DAYBREAK_ACCOUNT, MESSAGES, ASSISTANT }

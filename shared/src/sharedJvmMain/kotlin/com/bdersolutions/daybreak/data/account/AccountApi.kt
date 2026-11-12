@@ -101,10 +101,16 @@ interface AccountApi {
 
     /** `POST /v1/billing/portal`: the Stripe page where a subscriber changes the card or cancels. */
     suspend fun portal(token: String): ApiResult<String>
+
+    /** `DELETE /v1/account`: removes the account and cancels its subscription. Nothing is kept on the server. */
+    suspend fun deleteAccount(token: String): ApiResult<Unit>
 }
 
 /** Reads the answers of the account endpoints. Tolerant: a missing field gets its free default. */
 object AccountParser {
+    /** A `204 No Content` answer: nothing to read, only that the call worked. */
+    fun noContent(@Suppress("UNUSED_PARAMETER") body: String?): Unit = Unit
+
     fun state(body: String?): AccountState? = obj(body)?.let(::stateFrom)
 
     fun created(body: String?): CreatedAccount? {

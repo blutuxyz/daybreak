@@ -166,6 +166,21 @@ class AccountManager(
     /** Signs this device out. The account and its plan stay on the server; the restore code signs in again. */
     suspend fun signOut() = lock.withLock { signOutLocked() }
 
+    /**
+     * Deletes the account on the server (its subscription is cancelled there first) and then signs this device
+     * out. If the server refuses or is offline, nothing is changed here, so the user can try again.
+     */
+    suspend fun deleteAccount(): ApiResult<Unit> = lock.withLock {
+        val credentials = storage.credentials() ?: return@withLock ApiResult.Fail(AccountError.UNAUTHORIZED)
+        when (val result = api.deleteAccount(credentials.token)) {
+            is ApiResult.Ok -> {
+                signOutLocked()
+                result
+            }
+            is ApiResult.Fail -> result
+        }
+    }
+
     private fun signOutLocked() {
         storage.saveCredentials(null)
         storage.saveState(null)

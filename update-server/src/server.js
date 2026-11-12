@@ -9,6 +9,7 @@ import { renderAdmin, renderLogEntry } from './admin.js';
 import { MAX_SYNC_BYTES, PLANS, effectivePlan } from './accounts.js';
 import { parseUntil, renderAccounts } from './admin-accounts.js';
 import { handleStripeEvent, verifyStripeSignature } from './billing.js';
+import { legalAnswer, loadLegalTexts } from './legal.js';
 import { renderSubscribe } from './subscribe-page.js';
 import { MESSAGE_NOTICES, playStoreMessage, renderPreviewPage } from './admin-messages.js';
 import { IMAGE_ID, MAX_IMAGE_BYTES, MessageImageStore, parseSingleFile } from './message-images.js';
@@ -40,6 +41,8 @@ import { isSafeTag } from './version.js';
  *   GET  /v1/account        the account's plan, bound WebUntis accounts and trial (Bearer token)
  *   POST /v1/account/webuntis, DELETE /v1/account/webuntis/:id   bind (at most 3) or unbind a WebUntis account
  *   POST /v1/account/trial/accept   the 3 months of Pro for old supporters
+ *   GET /v1/legal            the privacy policy and terms (legal.js), German or English, no identifier
+ *   DELETE /v1/account       deletes the account; a running subscription is cancelled first (accounts.js, billing.js)
  *   POST /v1/billing/checkout, /v1/billing/portal   a Stripe Checkout or customer portal address (billing.js)
  *   POST /v1/stripe/webhook Stripe's webhook, signature checked (needs STRIPE_WEBHOOK_SECRET)
  *   GET/PUT /v1/sync        the account's synced document (Plus and Pro)
@@ -507,6 +510,24 @@ export function buildServer({
     }
   }));
 
+  /**
+   * Deletes the account and everything kept with it. A running subscription is cancelled first; if Stripe
+   * cannot cancel it, nothing is deleted and the user is told so (they must not be billed without an account).
+   */
+  app.delete('/v1/account', accountRoute(async (account, request, reply) => {
+    if (account.stripe?.subscriptionId) {
+      if (!stripe?.configured) return reply.code(503).send({ error: 'payments_off' });
+      try {
+        await stripe.cancelSubscription(account.stripe.subscriptionId);
+      } catch (error) {
+        request.log.error(error);
+        return reply.code(502).send({ error: 'payments_unavailable' });
+      }
+    }
+    await accounts.delete(account.id);
+    return reply.code(204).send();
+  }));
+
   // Stripe signs the raw body, so this route (alone) keeps the body as text.
   app.register(async (scope) => {
     scope.removeAllContentTypeParsers();
@@ -579,6 +600,17 @@ export function buildServer({
 
   /** A picture of a message sheet; the app asks for it by the id in the message. */
   app.get('/v1/message-image/:id', async (request, reply) => sendImage(reply, await images.get(request.params.id)));
+
+  /** The privacy policy and terms of use (German or English). Public and without any identifier. */
+  app.get('/v1/legal', async (request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=3600');
+    try {
+      return legalAnswer(await loadLegalTexts(), request.query?.lang);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: 'unavailable' });
+    }
+  });
 
   app.get('/v1/status', async (request, reply) => {
     reply.header('Cache-Control', 'no-cache');

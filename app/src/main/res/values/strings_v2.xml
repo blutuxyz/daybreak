@@ -49,17 +49,26 @@
     <string name="v2_error_rate_limited">Zu viele Versuche. Warte kurz und versuche es dann noch einmal.</string>
     <string name="v2_error_unavailable">Gerade nicht erreichbar. Versuche es später noch einmal.</string>
 
-    <!-- Wechsel zum Daybreak-Konto (nach dem Update) -->
-    <string name="v2_migrate_title">Willkommen bei Daybreak 2</string>
-    <string name="v2_migrate_body">Mit einem Daybreak-Konto gehört dein Tarif dir und nicht diesem einen Handy. Du brauchst weder E-Mail noch Passwort: Du bekommst einen Wiederherstellungscode, mit dem du dich auf jedem Gerät anmeldest.</string>
+    <!-- Pflichtseite: Daybreak-Konto erstellen und WebUntis verbinden -->
+    <string name="v2_link_title">Konto erstellen und verknüpfen</string>
+    <string name="v2_link_title_existing">Daybreak-Konto verknüpfen</string>
+    <string name="v2_link_body">Ein Daybreak-Konto gehört dir, nicht diesem Handy: Tarif und verknüpfte WebUntis-Konten bleiben dir. Keine E-Mail, kein Passwort. %1$s wird gleich mit verbunden.</string>
+    <string name="v2_link_terms">Die Nutzungsbedingungen und die Datenschutzerklärung, die du akzeptiert hast, gelten auch für dein Daybreak-Konto.</string>
+    <string name="v2_link_create">Erstellen und verknüpfen</string>
+    <string name="v2_link_link">Dieses Konto verknüpfen</string>
+    <string name="v2_link_creating">Konto wird erstellt</string>
+    <string name="v2_link_creating_hint">Einen Moment, dein Daybreak-Konto wird angelegt.</string>
+    <string name="v2_link_linking">Konto wird verknüpft</string>
+    <string name="v2_link_linking_hint">%1$s wird mit deinem Daybreak-Konto verbunden. Gespeichert wird nur ein Hash.</string>
+    <string name="v2_link_retry">Erneut versuchen</string>
     <string name="v2_migrate_supporter">Danke, dass du Daybreak über Ko-fi unterstützt hast. Deine Extras bleiben dir erhalten, und für dich liegt noch etwas bereit.</string>
-    <string name="v2_migrate_later">Jetzt nicht</string>
     <string name="v2_migrate_privacy">Dein WebUntis-Passwort und dein Stundenplan werden nie an dein Daybreak-Konto gesendet.</string>
     <string name="v2_created_title">Dein Konto ist da</string>
     <string name="v2_created_body">Das ist dein Wiederherstellungscode. Mit ihm meldest du dich auf einem neuen Handy oder nach einer Neuinstallation wieder an.</string>
     <string name="v2_created_warning">Bewahre ihn sicher auf, zum Beispiel in deinem Passwortmanager. Wer ihn kennt, kommt in dein Konto, und wir können ihn nicht zurücksetzen. Du findest ihn jederzeit unter Mehr → Daybreak-Konto.</string>
     <string name="v2_created_thanks">Deine Supporter-Extras (App-Name, Symbol, Kalenderexport) sind für immer freigeschaltet.</string>
     <string name="v2_created_continue">Weiter</string>
+    <string name="v2_created_saved">Ich habe meinen Wiederherstellungscode gespeichert</string>
 
     <!-- Konto-Seite -->
     <string name="v2_account_row">Daybreak-Konto</string>
@@ -95,6 +104,10 @@
     <string name="v2_account_signout">Von diesem Gerät abmelden</string>
     <string name="v2_account_signout_desc">Das Konto und der Tarif bleiben erhalten</string>
     <string name="v2_account_signout_confirm">Danach gilt auf diesem Gerät wieder Free, bis du dich mit deinem Wiederherstellungscode anmeldest. Hast du ihn noch?</string>
+    <string name="v2_account_delete">Konto löschen</string>
+    <string name="v2_account_delete_desc">Konto, Tarif und Sync-Daten werden endgültig entfernt</string>
+    <string name="v2_account_delete_confirm">Dein Konto, deine WebUntis-Verknüpfungen und die synchronisierten Daten werden auf dem Server gelöscht und ein laufendes Abo wird gekündigt. Das lässt sich nicht rückgängig machen; ohne Konto hilft auch der Wiederherstellungscode nicht mehr.</string>
+    <string name="v2_account_delete_now">Endgültig löschen</string>
 
     <!-- Dankeschön für frühere Ko-fi-Unterstützer -->
     <string name="v2_trial_title">Danke für deine Unterstützung</string>
@@ -121,4 +134,7 @@
     <string name="v2_update_question">Daybreak %1$s steht bereit. Möchtest du sie herunterladen?</string>
     <string name="v2_update_download">Jetzt herunterladen</string>
     <string name="v2_update_later">Später</string>
+    <string name="v2_account_unsaved_title">Wiederherstellungscode sichern</string>
+    <string name="v2_account_unsaved_body">Bewahre den Code an einem sicheren Ort auf, zum Beispiel in deinem Passwortmanager. Ohne ihn kommst du auf einem neuen Gerät nicht in dein Konto zurück.</string>
+    <string name="v2_account_unsaved_confirm">Ich habe ihn gespeichert</string>
 </resources>

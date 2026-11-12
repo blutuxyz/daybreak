@@ -82,6 +82,9 @@ class DesktopHttpAccountApi(
     override suspend fun portal(token: String): ApiResult<String> =
         call("POST", "/v1/billing/portal", token, JsonObject(), AccountParser::url)
 
+    override suspend fun deleteAccount(token: String): ApiResult<Unit> =
+        call("DELETE", "/v1/account", token, null, AccountParser::noContent)
+
     private suspend fun <T> call(
         method: String,
         path: String,
@@ -123,6 +126,7 @@ object DesktopOfflineAccountApi : AccountApi {
     override suspend fun bind(token: String, server: String, school: String, studentId: Long, label: String) = none
     override suspend fun unbind(token: String, slotId: String) = none
     override suspend fun acceptTrial(token: String) = none
+    override suspend fun deleteAccount(token: String) = none
     override suspend fun checkout(token: String, plan: Plan) = none
     override suspend fun portal(token: String) = none
 }

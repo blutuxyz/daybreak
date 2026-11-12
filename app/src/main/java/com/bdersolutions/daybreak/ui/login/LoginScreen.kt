@@ -84,6 +84,7 @@ import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -673,6 +674,7 @@ private fun QrFields(
             singleLine = false,
             minLines = 2,
             maxLines = 4,
+            shape = RoundedCornerShape(28.dp),
             visualTransformation = if (state.showQrSecret) {
                 VisualTransformation.None
             } else {
@@ -875,6 +877,8 @@ private fun LoginField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     maxLines: Int = 1,
+    // Every single-line field is a pill; a tall field cannot be one, so it gets a large radius instead.
+    shape: Shape = CircleShape,
 ) {
     OutlinedTextField(
         value = value,
@@ -893,7 +897,7 @@ private fun LoginField(
         singleLine = singleLine,
         minLines = minLines,
         maxLines = maxLines,
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
     )
 }
 

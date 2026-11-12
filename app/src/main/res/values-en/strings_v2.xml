@@ -49,17 +49,26 @@
     <string name="v2_error_rate_limited">Too many tries. Wait a moment and try again.</string>
     <string name="v2_error_unavailable">Not reachable right now. Please try again later.</string>
 
-    <!-- Moving to a Daybreak account (after the update) -->
-    <string name="v2_migrate_title">Welcome to Daybreak 2</string>
-    <string name="v2_migrate_body">With a Daybreak account your plan belongs to you, not to this one phone. You need no email and no password: you get a restore code that signs you in on any device.</string>
+    <!-- Required page: create a Daybreak account and link WebUntis -->
+    <string name="v2_link_title">Create and link your Daybreak account</string>
+    <string name="v2_link_title_existing">Link your Daybreak account</string>
+    <string name="v2_link_body">A Daybreak account belongs to you, not this phone: your plan and linked WebUntis accounts stay with you. No email, no password. %1$s is connected right after.</string>
+    <string name="v2_link_terms">The terms of use and privacy policy you accepted also apply to your Daybreak account.</string>
+    <string name="v2_link_create">Create and link</string>
+    <string name="v2_link_link">Link this account</string>
+    <string name="v2_link_creating">Creating your account</string>
+    <string name="v2_link_creating_hint">One moment while we set up your Daybreak account.</string>
+    <string name="v2_link_linking">Linking your account</string>
+    <string name="v2_link_linking_hint">%1$s is being connected to your Daybreak account. Only a hash is stored.</string>
+    <string name="v2_link_retry">Try again</string>
     <string name="v2_migrate_supporter">Thank you for supporting Daybreak on Ko-fi. Your extras stay with you, and there is something waiting for you.</string>
-    <string name="v2_migrate_later">Not now</string>
     <string name="v2_migrate_privacy">Your WebUntis password and your timetable are never sent to your Daybreak account.</string>
     <string name="v2_created_title">Your account is ready</string>
     <string name="v2_created_body">This is your restore code. It signs you in again on a new phone or after a reinstall.</string>
     <string name="v2_created_warning">Keep it safe, for example in your password manager. Anyone who knows it can get into your account, and we cannot reset it. You can always find it under More → Daybreak account.</string>
     <string name="v2_created_thanks">Your supporter extras (app name, icon, calendar export) are unlocked for good.</string>
     <string name="v2_created_continue">Continue</string>
+    <string name="v2_created_saved">I have saved my restore code</string>
 
     <!-- Account page -->
     <string name="v2_account_row">Daybreak account</string>
@@ -95,6 +104,10 @@
     <string name="v2_account_signout">Sign out of this device</string>
     <string name="v2_account_signout_desc">The account and plan are kept</string>
     <string name="v2_account_signout_confirm">After that this device is back on Free until you sign in with your restore code. Do you still have it?</string>
+    <string name="v2_account_delete">Delete account</string>
+    <string name="v2_account_delete_desc">The account, plan and synced data are removed for good</string>
+    <string name="v2_account_delete_confirm">Your account, its WebUntis links and the synced data are deleted on the server, and any running subscription is cancelled. This cannot be undone; without the account, the restore code no longer helps.</string>
+    <string name="v2_account_delete_now">Delete permanently</string>
 
     <!-- Thank-you for former Ko-fi supporters -->
     <string name="v2_trial_title">Thank you for your support</string>
@@ -121,4 +134,7 @@
     <string name="v2_update_question">Daybreak %1$s is ready. Do you want to download it?</string>
     <string name="v2_update_download">Download now</string>
     <string name="v2_update_later">Later</string>
+    <string name="v2_account_unsaved_title">Keep your restore code safe</string>
+    <string name="v2_account_unsaved_body">Store the code somewhere safe, for example in your password manager. Without it you cannot get back into your account on a new device.</string>
+    <string name="v2_account_unsaved_confirm">I have saved it</string>
 </resources>

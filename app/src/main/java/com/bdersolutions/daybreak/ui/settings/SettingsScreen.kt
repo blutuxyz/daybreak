@@ -933,15 +933,28 @@ internal fun SpringSwitch(
     )
 }
 
+/**
+ * The rounded container of settings rows. [animateSize] is off for groups that animate their own height
+ * (an [AnimatedVisibility] inside), so only one animation drives the size and nothing lags behind.
+ */
 @Composable
-internal fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsGroup(
+    animateSize: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .animateContentSize(
-                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            .then(
+                if (animateSize) {
+                    Modifier.animateContentSize(
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    )
+                } else {
+                    Modifier
+                },
             ),
         content = content,
     )

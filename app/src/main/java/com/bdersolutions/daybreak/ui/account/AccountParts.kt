@@ -177,6 +177,7 @@ fun CreateOrRestorePanel(
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { if (code.isNotBlank() && !busy) onRestore(code) }),
                         isError = error == AccountError.UNKNOWN_CODE,
+                        shape = CircleShape,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedButton(

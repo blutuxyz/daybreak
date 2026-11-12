@@ -12,4 +12,5 @@ object OfflineAccountApi : AccountApi {
     override suspend fun acceptTrial(token: String) = none
     override suspend fun checkout(token: String, plan: Plan) = none
     override suspend fun portal(token: String) = none
+    override suspend fun deleteAccount(token: String) = none
 }

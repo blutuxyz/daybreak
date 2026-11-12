@@ -72,6 +72,19 @@ export class StripeClient {
     return session.url;
   }
 
+  /**
+   * Cancels a subscription at once (used when an account is deleted). A subscription Stripe no longer knows
+   * (404) counts as cancelled. Any other failure throws, so the account is not deleted while still billed.
+   */
+  async cancelSubscription(subscriptionId) {
+    const response = await this.fetch(`${this.baseUrl}/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${this.secretKey}` },
+    });
+    if (response.ok || response.status === 404) return true;
+    throw new Error(`stripe cancel ${response.status}`);
+  }
+
   /** The Stripe page where a customer changes the card or cancels. */
   async portal({ customerId, returnUrl }) {
     const session = await this.#post('/v1/billing_portal/sessions', { customer: customerId, return_url: returnUrl });

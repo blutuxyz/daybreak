@@ -195,7 +195,8 @@ The debug APK is written to `app\build\outputs\apk\debug\app-debug.apk`. The ser
   OpenRouter and the model's provider. No name, password or access key is sent. Daybreak can see a request log for at
   most 30 days (attachments only by name and size). Messages to teachers are sent only after you confirm them.
 - The privacy policy and terms of use are part of the app (German and English) and must be accepted once; the app
-  asks again only when the text changes (`LegalTerms.VERSION`). They stay readable under More → Privacy and terms.
+  asks again only when the text changes. The app ships the text and fetches the current version from Daybreak's
+  server without sending an identifier (the server sees the IP address). They stay readable under More → Privacy and terms.
 - Signing out removes the key, the session, the cache and the debug log.
 
 ## Licence and disclaimer

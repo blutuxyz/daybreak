@@ -34,6 +34,18 @@ class UpdateApi(
      * The server's status answer as it came: the minimum app version and the messages. Read it with
      * [com.bdersolutions.daybreak.data.notices.ServerStatusJson].
      */
+    /**
+     * The privacy policy and terms (GET /v1/legal) in German or English; any other language gets German.
+     * Only the language is sent, no identifier. Read it with [com.bdersolutions.daybreak.data.legal.RemoteLegalJson].
+     */
+    suspend fun legalBody(language: String): String = withContext(Dispatchers.IO) {
+        val lang = if (language == "en") "en" else "de"
+        get("/v1/legal?lang=$lang").use { response ->
+            if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
+
     suspend fun statusBody(): String = withContext(Dispatchers.IO) {
         get("/v1/status").use { response ->
             if (!response.isSuccessful) throw UpdateException("The update server answered ${response.code}")

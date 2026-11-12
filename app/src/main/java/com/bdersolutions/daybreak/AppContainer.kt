@@ -20,6 +20,8 @@ import com.bdersolutions.daybreak.data.cache.TimetableCacheStore
 import com.bdersolutions.daybreak.data.debug.RawLogStore
 import com.bdersolutions.daybreak.data.haptics.Haptics
 import com.bdersolutions.daybreak.data.haptics.VibratorHapticOutput
+import com.bdersolutions.daybreak.data.legal.LegalTextRepository
+import com.bdersolutions.daybreak.data.legal.SharedPrefsLegalTextCache
 import com.bdersolutions.daybreak.data.legal.TermsStore
 import com.bdersolutions.daybreak.data.notices.ServerNoticeStore
 import com.bdersolutions.daybreak.data.notices.ServerNotices
@@ -165,6 +167,18 @@ class AppContainer(context: Context) {
     // Updates come from the update server (update-server/). Without a configured address the
     // feature is off and the Updates screen is hidden.
     private val updateApi = BuildConfig.UPDATE_API_URL.takeIf { it.isNotBlank() }?.let { UpdateApi(it) }
+
+    // The privacy policy and terms the app shows and asks to accept: the server's copy, or the shipped one.
+    // Debug builds always show the shipped copy (like the server notices), so a development build is not
+    // changed by a text that is live on the server. Declared after updateApi, which it reads.
+    val legalTexts = LegalTextRepository(
+        fetch = updateApi?.let { api ->
+            val fetchLegal: suspend (String) -> String = { language -> api.legalBody(language) }
+            fetchLegal
+        },
+        cache = SharedPrefsLegalTextCache(appContext),
+        enabled = BuildConfig.SERVER_NOTICES,
+    )
     val updateManager = UpdateManager(
         context = appContext,
         api = updateApi,
@@ -239,6 +253,8 @@ class AppContainer(context: Context) {
         )
         // The plan is read from the server again at every start (the cached one works until then, and offline).
         if (accountAvailable) appScope.launch { accountManager.refresh() }
+        // The privacy policy and terms: the current text from the server (the shipped copy is used until then).
+        appScope.launch { legalTexts.refresh() }
         lessonNotificationManager.ensureChannel()
         reminderNotifier.ensureChannels()
         if (sessionStore.isLoggedIn()) {

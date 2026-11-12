@@ -24,13 +24,13 @@ class TermsStore(context: Context) {
 
     fun isAccepted(): Boolean = TermsAcceptance.covers(_acceptedVersion.value)
 
-    /** Records the current version as accepted. */
-    fun accept(now: Long = System.currentTimeMillis()) {
+    /** Records [version], the version of the text the user has just read, as accepted. */
+    fun accept(version: Int = LegalTerms.VERSION, now: Long = System.currentTimeMillis()) {
         preferences.edit()
-            .putInt(KEY_VERSION, LegalTerms.VERSION)
+            .putInt(KEY_VERSION, version)
             .putLong(KEY_AT, now)
             .apply()
-        _acceptedVersion.value = LegalTerms.VERSION
+        _acceptedVersion.value = version
     }
 
     private companion object {

@@ -320,6 +320,21 @@ export class AccountStore {
     });
   }
 
+  /**
+   * Deletes an account with its sign-in tokens, restore code, WebUntis bindings and synced document.
+   * The Ko-fi unlock-code claims stay: a code that grandfathered one account must never grandfather another.
+   */
+  delete(accountId) {
+    return this.#mutate((data) => {
+      const account = data.accounts[accountId];
+      if (!account) return { save: false, value: false };
+      for (const token of account.tokens) this.byToken.delete(token.hash);
+      this.byRestore.delete(account.restoreHash);
+      delete data.accounts[accountId];
+      return { save: true, value: true };
+    });
+  }
+
   /** Remembers the Stripe ids of an account, so later subscription events can find it. */
   setStripe(accountId, stripe) {
     return this.#mutate((data) => {

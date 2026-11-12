@@ -79,6 +79,7 @@ class LegalTermsVersionTest {
             6 to "26bdc60406356787173800ef11ab4e9d520e02caca2a45cfb795b868c3b87837",
             7 to "af1c7b81d67690d3ce29926d7c46092372f9867c454a82114b600e44cf4bf1a7",
             8 to "fbdee6f7205367e54d7991414100f64eeaacc23db67b87791170d05b69fb3586",
+            9 to "1d3fa52bf32eaf57c975c0f40c734ffc93ce1735bbbb5f3b41c860d7280e5270",
         )
     }
 }

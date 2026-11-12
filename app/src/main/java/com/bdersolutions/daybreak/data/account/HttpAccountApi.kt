@@ -62,6 +62,9 @@ class HttpAccountApi(
     override suspend fun portal(token: String): ApiResult<String> =
         call("POST", "/v1/billing/portal", token, JsonObject(), AccountParser::url)
 
+    override suspend fun deleteAccount(token: String): ApiResult<Unit> =
+        call("DELETE", "/v1/account", token, null, AccountParser::noContent)
+
     private suspend fun <T> call(
         method: String,
         path: String,

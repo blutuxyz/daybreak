@@ -53,6 +53,27 @@ class AccountManagerTest {
     }
 
     @Test
+    fun `deleting the account removes it on the server and signs this device out`() = runBlocking {
+        manager.restore("DA-K7M2-9QXP-4HTR")
+        assertTrue(manager.snapshot.value.signedIn)
+
+        assertTrue(manager.deleteAccount() is ApiResult.Ok)
+        assertTrue(api.deleted)
+        assertFalse(manager.snapshot.value.signedIn)
+        assertNull(storage.stored)
+    }
+
+    @Test
+    fun `a failed deletion keeps the device signed in`() = runBlocking {
+        manager.restore("DA-K7M2-9QXP-4HTR")
+        api.offline = true
+
+        assertTrue(manager.deleteAccount() is ApiResult.Fail)
+        assertFalse(api.deleted)
+        assertTrue(manager.snapshot.value.signedIn)
+    }
+
+    @Test
     fun `restoring signs in with a code typed in any form`() = runBlocking {
         val result = manager.restore("da k7m2 9qxp 4htr")
         assertTrue(result is ApiResult.Ok)
