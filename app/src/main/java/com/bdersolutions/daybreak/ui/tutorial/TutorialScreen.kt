@@ -133,6 +133,7 @@ import com.bdersolutions.daybreak.R
 import com.bdersolutions.daybreak.data.haptics.HapticEvent
 import com.bdersolutions.daybreak.ui.components.motionAnimationsEnabled
 import com.bdersolutions.daybreak.ui.components.DaybreakBottomBar
+import com.bdersolutions.daybreak.ui.components.MainTab
 import com.bdersolutions.daybreak.ui.assistant.DaybreakMark
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.History
@@ -249,7 +250,15 @@ internal enum class TutorialStep(val scene: Scene, val target: Target?) {
     APPEARANCE(Scene.APPEARANCE, null),
 }
 
-internal enum class Scene(val tab: Int) { WELCOME(-1), DAY(0), WEEK(0), ABSENCES(1), ASSISTANT(0), MORE(2), APPEARANCE(-1) }
+internal enum class Scene(val tab: Int) {
+    WELCOME(-1),
+    DAY(MainTab.TIMETABLE),
+    WEEK(MainTab.TIMETABLE),
+    ABSENCES(MainTab.ABSENCES),
+    ASSISTANT(MainTab.TIMETABLE),
+    MORE(MainTab.MORE),
+    APPEARANCE(-1),
+}
 
 internal enum class Target { NOW_NEXT, DAY_STRIP, DAY_AREA, SUB_LESSON, SHEET, WEEK_GRID, ABSENCE_TOTAL, CHAT, TUTORIAL_ROW }
 
